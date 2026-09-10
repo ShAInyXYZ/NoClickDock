@@ -19,7 +19,7 @@ Data sources (auto-detected):
   Hardware   → /proc/cpuinfo, lsusb, xrandr, EDID
 """
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 import argparse
 import csv
@@ -163,7 +163,11 @@ def _save_config():
 
 # -- widget coordination --------------------------------------------------
 WIDGET_NAME = "power"
-WIDGET_DIR = os.path.join(os.path.expanduser("~"), ".config", "status-widgets")
+WIDGET_DIR = (os.path.join(os.environ.get("APPDATA")
+                           or os.path.join(os.path.expanduser("~"), "AppData", "Roaming"),
+                           "NoClickDock")
+              if platform.system() == "Windows" else
+              os.path.join(os.path.expanduser("~"), ".config", "status-widgets"))
 CORNER_FILE = os.path.join(WIDGET_DIR, "corner.json")
 STACK_GAP = 50
 

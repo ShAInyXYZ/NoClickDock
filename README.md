@@ -69,11 +69,23 @@ Zero pip dependencies. Python 3 plus the system GTK3, and the CLI of whatever ea
 
 ## Install
 
+**Linux**
+
 ```bash
 git clone https://github.com/ShAInyXYZ/NoClickDock ~/Documents/GitHub/NoClickDock
 cd ~/Documents/GitHub/NoClickDock
 ./install.sh
 ```
+
+**Windows**
+
+```powershell
+git clone https://github.com/ShAInyXYZ/NoClickDock $HOME\Documents\GitHub\NoClickDock
+cd $HOME\Documents\GitHub\NoClickDock
+.\install.ps1
+```
+
+Both installers behave the same way and print the same table.
 
 The installer shows a table of what is installed, at which version, and what this checkout offers, and you pick — nothing happens to a widget you did not select:
 
@@ -88,7 +100,16 @@ The installer shows a table of what is installed, at which version, and what thi
   then:   i=install/upgrade selected   r=remove selected   q=quit
 ```
 
-*Install* copies the widget (and the shared core) to `~/.local/share/noclickdock/` and writes an autostart entry pointing there, so a later `git pull` changes nothing until you choose to upgrade; the dock is installed with the first widget. *Upgrade* is the same operation on a widget whose installed version is behind, or that still runs from an old per-widget repo. *Remove* stops the widget, deletes its copy and its autostart entry, and keeps your config. Non-interactive: `--list`, `--all`, `--upgrade`, `--install docker tailscale`, `--remove comfyui`, with `--start` / `--no-start`.
+*Install* copies the widget (and the shared core) out of the checkout and writes an autostart entry pointing at the copy, so a later `git pull` changes nothing until you choose to upgrade; the dock is installed with the first widget. *Upgrade* is the same operation on a widget whose installed version is behind, or that still runs from an old per-widget repo. *Remove* stops the widget, deletes its copy and its autostart entry, and keeps your config.
+
+| | Linux | Windows |
+|---|---|---|
+| copies to | `~/.local/share/noclickdock/` | `%LOCALAPPDATA%\NoClickDock\` |
+| autostarts via | `~/.config/autostart/*.desktop` | a shortcut in the Startup folder |
+| non-interactive | `--list` `--all` `--upgrade` `--install docker tailscale` `--remove comfyui` | `-List` `-All` `-Upgrade` `-Install docker,tailscale` `-Remove comfyui` |
+| and | `--start` / `--no-start` | `-Start` / `-NoStart` |
+
+Override the destination with `NCD_HOME`, and the interpreter with `PYTHON`.
 
 Run anything by hand with the system interpreter (conda/pyenv Pythons don't see the system GTK bindings):
 
@@ -103,6 +124,20 @@ Run anything by hand with the system interpreter (conda/pyenv Pythons don't see 
 - A compositing window manager, X11 session (the dock moves the dots directly through X; on Wayland they fall back to following a file, a little behind the pill)
 - Per widget: the `docker`, `tailscale`, `nvidia-smi` CLIs as applicable, reachable as your user (`docker info` must work)
 - Fonts: JetBrains Mono and Inter, with DejaVu fallbacks
+
+### Windows
+
+GTK3 on Windows comes from [MSYS2](https://www.msys2.org/), so the Python that can draw these widgets is usually not the one on `PATH`. Install MSYS2, then in its **UCRT64** terminal:
+
+```bash
+pacman -S mingw-w64-ucrt-x86_64-python-gobject mingw-w64-ucrt-x86_64-gtk3
+```
+
+`install.ps1` finds that interpreter itself and says so in the table; if MSYS2 is not at `C:\msys64`, point at it with `$env:PYTHON = "D:\msys64\ucrt64\bin\python3.exe"`. Widgets are launched with `pythonw.exe` so no console window appears.
+
+Not everything runs there. **Power** reads `/proc`, `lm-sensors` and `lsusb`, so it is listed as *not on Windows* and cannot be selected. **ComfyUI** works, but its CPU temperature and utilisation come from Linux interfaces and stay blank; the queue and every CUDA device still report. **Disk** enumerates drive letters instead of `/proc/mounts`. Claude, Codex, Docker and Tailscale need only their own CLI or config directory and behave the same on both platforms.
+
+The dock repositions its dots by moving their X11 windows directly, which Windows has no equivalent for. It falls back to the same file-based path Wayland uses, so the dots follow the pill a poll behind rather than in the same frame.
 
 ### Optional: VRAM junction temperatures
 

@@ -21,7 +21,7 @@ instead of shadows, and colour reserved for meaning rather than decoration.
 Zero pip dependencies — Python standard library plus system GTK3.
 """
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 import json
 import math
@@ -65,7 +65,11 @@ except (ImportError, ValueError):
     sys.exit(1)
 
 WIDGET_NAME = "claude"
-WIDGET_DIR = os.path.join(os.path.expanduser("~"), ".config", "status-widgets")
+WIDGET_DIR = (os.path.join(os.environ.get("APPDATA")
+                           or os.path.join(os.path.expanduser("~"), "AppData", "Roaming"),
+                           "NoClickDock")
+              if platform.system() == "Windows" else
+              os.path.join(os.path.expanduser("~"), ".config", "status-widgets"))
 CORNER_FILE = os.path.join(WIDGET_DIR, "corner.json")
 STACK_GAP = 50  # vertical pixels between stacked widgets
 

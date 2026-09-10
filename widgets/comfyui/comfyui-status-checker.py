@@ -7,7 +7,7 @@ Hover to see full status panel with queue, GPU/VRAM, and system info.
 Drag to reposition. Right-click to quit.
 """
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 import argparse
 import webbrowser
@@ -63,7 +63,11 @@ except (ImportError, ValueError) as e:
 
 # -- widget coordination (shared across status-checker widgets) -----------
 WIDGET_NAME = "comfyui"
-WIDGET_DIR = os.path.join(os.path.expanduser("~"), ".config", "status-widgets")
+WIDGET_DIR = (os.path.join(os.environ.get("APPDATA")
+                           or os.path.join(os.path.expanduser("~"), "AppData", "Roaming"),
+                           "NoClickDock")
+              if platform.system() == "Windows" else
+              os.path.join(os.path.expanduser("~"), ".config", "status-widgets"))
 CORNER_FILE = os.path.join(WIDGET_DIR, "corner.json")
 STACK_GAP = 50  # vertical pixels between stacked widgets
 

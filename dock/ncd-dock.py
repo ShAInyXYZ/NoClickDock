@@ -11,10 +11,11 @@ and density. Closing the bar releases the dots where they stand.
 Emberdeck surface: warm charcoal, hairline border, no shadow, no glow.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 import json
 import os
+import platform
 import sys
 import time
 
@@ -33,7 +34,11 @@ try:
 except (ImportError, ValueError):
     GdkX11 = None   # Wayland: dots fall back to following bar.json
 
-WIDGET_DIR = os.path.join(os.path.expanduser("~"), ".config", "status-widgets")
+WIDGET_DIR = (os.path.join(os.environ.get("APPDATA")
+                           or os.path.join(os.path.expanduser("~"), "AppData", "Roaming"),
+                           "NoClickDock")
+              if platform.system() == "Windows" else
+              os.path.join(os.path.expanduser("~"), ".config", "status-widgets"))
 BAR_FILE = os.path.join(WIDGET_DIR, "bar.json")
 # Settings live outside *.json: the dots prune any .json whose pid is dead,
 # which is exactly what a closed bar's config would look like.

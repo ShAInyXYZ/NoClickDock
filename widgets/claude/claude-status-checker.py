@@ -8,7 +8,7 @@ Hover to see full status panel. Drag to reposition. Right-click to quit.
 Monitors https://status.claude.com
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 import json
 import math
@@ -58,7 +58,11 @@ except (ImportError, ValueError) as e:
 
 # -- widget coordination (shared across status-checker widgets) -----------
 WIDGET_NAME = "claude"
-WIDGET_DIR = os.path.join(os.path.expanduser("~"), ".config", "status-widgets")
+WIDGET_DIR = (os.path.join(os.environ.get("APPDATA")
+                           or os.path.join(os.path.expanduser("~"), "AppData", "Roaming"),
+                           "NoClickDock")
+              if platform.system() == "Windows" else
+              os.path.join(os.path.expanduser("~"), ".config", "status-widgets"))
 CORNER_FILE = os.path.join(WIDGET_DIR, "corner.json")
 STACK_GAP = 50  # vertical pixels between stacked widgets
 

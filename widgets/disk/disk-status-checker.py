@@ -9,7 +9,7 @@ installs and image pulls in confusing ways; this is the warning before that.
 Monitors every real mounted filesystem plus `docker system df`.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 import os
 import sys
@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from shinywidget import (
     WidgetApp, Section, Row, Meter, Note, Grid,
     OK, WARN, CRIT, IDLE, AMBER, FG_DIM,
-    fmt_bytes, ratio_color, run_cmd, run,
+    fmt_bytes, ratio_color, run_cmd, run, IS_WINDOWS,
 )
 
 # Thresholds are on *used* fraction. Disks misbehave well before 100%:
@@ -41,8 +41,42 @@ SKIP_PREFIXES = ("/snap", "/var/snap", "/run", "/sys", "/proc", "/dev")
 DOCKER_REFRESH_SECS = 300   # `docker system df` walks the graph; keep it rare
 
 
+def _mounts_windows():
+    """Fixed and network drives, as (root, fstype). Windows has no
+    /proc/mounts; the drive letters come from the volume API."""
+    import ctypes
+    import string
+    out = []
+    try:
+        mask = ctypes.windll.kernel32.GetLogicalDrives()
+    except Exception:
+        return []
+    for i, letter in enumerate(string.ascii_uppercase):
+        if not (mask >> i) & 1:
+            continue
+        root = f"{letter}:\\"
+        try:
+            kind = ctypes.windll.kernel32.GetDriveTypeW(ctypes.c_wchar_p(root))
+        except Exception:
+            continue
+        if kind not in (3, 4):          # DRIVE_FIXED, DRIVE_REMOTE
+            continue
+        name = ctypes.create_unicode_buffer(256)
+        fsname = ctypes.create_unicode_buffer(256)
+        try:
+            ctypes.windll.kernel32.GetVolumeInformationW(
+                ctypes.c_wchar_p(root), name, 256, None, None, None, fsname, 256)
+        except Exception:
+            pass
+        out.append((root, (fsname.value or "").lower() or
+                    ("network" if kind == 4 else "disk")))
+    return out
+
+
 def _mounts():
     """Real mounted filesystems, as (mountpoint, fstype)."""
+    if IS_WINDOWS:
+        return _mounts_windows()
     out = []
     try:
         with open("/proc/mounts") as f:
