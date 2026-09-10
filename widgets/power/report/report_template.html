@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Power Monitor — Consumption Report</title>
+<style>
+  /* Emberdeck: warm charcoal, one accent for signal, hairlines for depth. */
+  :root{
+    --bg:#0e0d0b; --s2:#161411; --s3:#1e1b17; --line:#2b2722;
+    --fg:#efece6; --dim:#918b80; --mute:#6f6a62;
+    --amber:#e8873a; --ok:#6da46a; --warn:#d9a53d; --crit:#cf5347;
+    --cpu:#7b9bd1; --gpu:#6da46a; --other:#6f6a62;
+    --mono:"JetBrains Mono","DejaVu Sans Mono",monospace;
+    --sans:"Inter","DejaVu Sans",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{color-scheme:dark}
+  body{font-family:var(--sans);background:var(--bg);color:var(--fg);line-height:1.5;padding:40px 20px}
+  .page{max-width:1040px;margin:0 auto}
+  header{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:28px;
+         display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap}
+  header h1{font-size:22px;font-weight:600;letter-spacing:.2px}
+  header .k{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.6px;text-transform:uppercase;margin-bottom:6px}
+  header .meta{font-family:var(--mono);font-size:12px;color:var(--dim);text-align:right;line-height:1.7}
+  h2{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--dim);margin:0 0 4px}
+  .sub{font-size:13.5px;color:var(--dim);margin-bottom:14px;max-width:78ch}
+  .sub b{color:var(--fg);font-weight:500}
+  section{margin-bottom:34px}
+  .tiles{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .tile{background:var(--s2);border:1px solid var(--line);padding:12px 14px}
+  .tile .l{font-family:var(--mono);font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim)}
+  .tile .v{font-family:var(--mono);font-size:22px;font-weight:500;margin-top:4px}
+  .tile .n{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:2px}
+  .tile .v.amber{color:var(--amber)}
+  .card{background:var(--s2);border:1px solid var(--line);padding:18px 20px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  @media (max-width:820px){.row2{grid-template-columns:1fr}}
+  svg{display:block;width:100%;height:auto;font-family:var(--mono)}
+  .ax{fill:var(--dim);font-size:10px}
+  .gl{stroke:var(--line);stroke-width:1}
+  .legend{display:flex;gap:16px;font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:8px;flex-wrap:wrap}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:10px;height:10px;display:inline-block}
+  table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12.5px}
+  th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  th{font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);font-weight:500}
+  tr:last-child td{border-bottom:none}
+  td.dim{color:var(--dim)}
+  .findings{border-left:2px solid var(--amber);background:var(--s2);padding:16px 20px;font-size:14.5px}
+  .findings p{margin-bottom:8px}
+  .findings p:last-child{margin-bottom:0}
+  .findings b{font-weight:500}
+  .note{font-size:12.5px;color:var(--dim);line-height:1.6}
+  .gap-list{font-family:var(--mono);font-size:11.5px;color:var(--dim);columns:2;column-gap:24px}
+  .gap-list div{break-inside:avoid;padding:2px 0}
+  #tip{position:fixed;pointer-events:none;background:var(--s3);border:1px solid var(--line);color:var(--fg);
+       font-family:var(--mono);font-size:11px;padding:5px 8px;opacity:0;transition:opacity .08s;z-index:10;white-space:nowrap}
+  footer{font-family:var(--mono);font-size:11px;color:var(--mute);margin:30px 0 10px;border-top:1px solid var(--line);padding-top:14px}
+  @media print{body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}section,.tile{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div>
+      <div class="k">Power Monitor · ShinyWidgets</div>
+      <h1>Workstation electricity report</h1>
+    </div>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <section>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section class="findings" id="findings"></section>
+
+  <section>
+    <h2>Last 30 days</h2>
+    <div class="sub" id="recentSub"></div>
+    <div class="tiles" id="recentTiles"></div>
+  </section>
+
+  <section class="card">
+    <h2>Daily energy</h2>
+    <div class="sub" id="dailySub"></div>
+    <div id="dailyChart"></div>
+    <div class="legend">
+      <span><i class="sw" style="background:#4a4640"></i>kWh per day</span>
+      <span><i class="sw" style="background:var(--amber)"></i>peak-tariff share</span>
+      <span><i class="sw" style="background:var(--fg);height:2px"></i>7-day average</span>
+      <span><i class="sw" style="background:transparent;border:1px dashed var(--dim)"></i>partial day (&lt;20 h logged)</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Monthly</h2>
+    <div class="sub" id="monthlySub"></div>
+    <div id="monthlyChart"></div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--gpu)"></i>GPU</span>
+      <span><i class="sw" style="background:var(--cpu)"></i>CPU</span>
+      <span><i class="sw" style="background:var(--other)"></i>board, drives, peripherals</span>
+    </div>
+    <table id="monthlyTable" style="margin-top:14px"></table>
+  </section>
+
+  <div class="row2">
+    <section class="card">
+      <h2>Typical day</h2>
+      <div class="sub" id="hourlySub"></div>
+      <div id="hourlyChart"></div>
+      <div class="legend">
+        <span><i class="sw" style="background:#3a3631"></i>max seen</span>
+        <span><i class="sw" style="background:var(--fg)"></i>average</span>
+        <span id="peakLegend" hidden><i class="sw" style="background:rgba(232,135,58,.18)"></i>peak tariff hours</span>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Weekly rhythm</h2>
+      <div class="sub" id="weekdaySub"></div>
+      <div id="weekdayChart"></div>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:8px">
+    <h2>When the machine works</h2>
+    <div class="sub">Average draw for every hour of every weekday. Brighter is busier; the amber cells are the hottest tenth of all hours.</div>
+    <div id="heatChart"></div>
+  </section>
+
+  <section class="card" id="tariffCard">
+    <h2>Tariff</h2>
+    <div class="sub" id="tariffSub"></div>
+    <table id="tariffTable"></table>
+  </section>
+
+  <section class="card">
+    <h2>Temperatures</h2>
+    <div class="sub" id="tempSub"></div>
+    <div id="tempChart"></div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--gpu)"></i>GPU average</span>
+      <span><i class="sw" style="background:var(--cpu)"></i>CPU average</span>
+      <span><i class="sw" style="background:transparent;border:1px solid var(--dim)"></i>monthly maximum</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>In context</h2>
+    <div class="sub">What the machine's daily energy would run instead.</div>
+    <table id="contextTable"></table>
+  </section>
+
+  <section class="card">
+    <h2>Data quality</h2>
+    <div class="sub" id="qualitySub"></div>
+    <div class="gap-list" id="gapList"></div>
+  </section>
+
+  <section class="card">
+    <h2>Method</h2>
+    <p class="note" id="method"></p>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+<div id="tip"></div>
+
+<script>
+const DATA = /*__DATA__*/;
+const $ = s => document.querySelector(s);
+const CUR = DATA.cfg.currency || "";
+const money = (n, d = 2) => `${n.toLocaleString("en-GB", {minimumFractionDigits: d, maximumFractionDigits: d})}${CUR ? " " + CUR : ""}`;
+const num = (n, d = 1) => n.toLocaleString("en-GB", {minimumFractionDigits: d, maximumFractionDigits: d});
+const NS = "http://www.w3.org/2000/svg";
+const tip = $("#tip");
+const showTip = (html, e) => { tip.innerHTML = html; tip.style.opacity = 1; tip.style.left = (e.clientX + 12) + "px"; tip.style.top = (e.clientY + 12) + "px"; };
+const hideTip = () => tip.style.opacity = 0;
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function svg(container, w, h) {
+  const s = el("svg", {viewBox: `0 0 ${w} ${h}`, preserveAspectRatio: "none"});
+  s.style.aspectRatio = `${w} / ${h}`;
+  document.getElementById(container).appendChild(s);
+  return s;
+}
+function text(s, x, y, str, cls = "ax", anchor = "start") {
+  const t = el("text", {x, y, class: cls, "text-anchor": anchor}, s);
+  t.textContent = str; return t;
+}
+const S = DATA.stats, R = DATA.recent, P = DATA.period, C = DATA.cfg;
+const WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WDL = ["Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays", "Sundays"];
+const fmtDay = d => new Date(d + "T12:00:00").toLocaleDateString("en-GB", {day: "numeric", month: "short"});
+const fmtMon = m => new Date(m + "-15T12:00:00").toLocaleDateString("en-GB", {month: "short", year: "numeric"});
+
+/* ---- header ---- */
+$("#meta").innerHTML = `${P.first} → ${P.last} · ${P.nDays} days<br>generated ${P.generated}<br>coverage ${P.coverage}%`;
+
+/* ---- headline tiles ---- */
+const tiles = [
+  ["Total energy", `${num(S.totalKwh, 0)} kWh`, `${P.fullDays} full days logged`],
+  ["Total cost", money(S.totalCost, 0), `${num(S.effRate, 2)}${CUR ? " " + CUR : ""}/kWh effective`],
+  ["Per day", `${num(S.avgDayKwh)} kWh`, `${money(S.avgDayCost)} · median ${num(S.medianDayKwh)}`],
+  ["Average draw", `${S.avgW} W`, `min ${S.minW} · max ${S.maxW} W`],
+  ["Projected year", money(R.yearCost, 0), `${num(R.yearKwh, 0)} kWh at the last-30-day rate`, "amber"],
+];
+$("#tiles").innerHTML = tiles.map(([l, v, n, c]) =>
+  `<div class="tile"><div class="l">${l}</div><div class="v ${c || ""}">${v}</div><div class="n">${n}</div></div>`).join("");
+
+/* ---- findings: every sentence conditional on the data ---- */
+const f = [];
+f.push(`Over <b>${P.nDays} days</b> the workstation used <b>${num(S.totalKwh, 0)} kWh</b>, costing <b>${money(S.totalCost, 0)}</b> — <b>${num(S.avgDayKwh)} kWh</b> (${money(S.avgDayCost)}) on a typical day, an average draw of <b>${S.avgW} W</b>.`);
+if (S.cv <= 25) f.push(`Day-to-day use is <b>steady</b> (±${S.cv}% around the mean): this is a machine with a constant baseline, not one that spikes.`);
+else if (S.cv <= 50) f.push(`Day-to-day use <b>varies moderately</b> (±${S.cv}%): busy days like ${fmtDay(S.worstDay)} (${num(S.worstKwh)} kWh) sit against quiet ones like ${fmtDay(S.bestDay)} (${num(S.bestKwh)} kWh).`);
+else f.push(`Day-to-day use <b>swings widely</b> (±${S.cv}%): ${fmtDay(S.worstDay)} used ${num(S.worstKwh)} kWh, ${fmtDay(S.bestDay)} only ${num(S.bestKwh)} kWh — the bill depends on what the machine is asked to do, not on it being on.`);
+if (Math.abs(S.drift) >= 15) f.push(`Consumption has <b>${S.drift > 0 ? "risen" : "fallen"} ${Math.abs(S.drift)}%</b> between the first and second half of the record.`);
+else f.push(`There is <b>no upward drift</b> across the record (${S.drift >= 0 ? "+" : ""}${S.drift}% first half to second half).`);
+if (Math.abs(R.trend) >= 15) f.push(`The last ${R.days} days run <b>${R.trend > 0 ? "above" : "below"} the long-run average by ${Math.abs(R.trend)}%</b> (${num(R.avgDayKwh)} kWh/day); at that rate the year costs about <b>${money(R.yearCost, 0)}</b>.`);
+else f.push(`The last ${R.days} days are in line with the long-run average (${num(R.avgDayKwh)} kWh/day); the year projects to about <b>${money(R.yearCost, 0)}</b>.`);
+f.push(`The GPUs account for <b>${S.gpuShare}%</b> of the energy, the CPU ${S.cpuShare}%, and the board, drives and peripherals the remaining ${S.otherShare}%.`);
+if (S.maxW < 1000) f.push(`The highest hourly average ever logged is <b>${S.maxW} W</b> — the machine has never come close to 1 kW sustained.`);
+else f.push(`The highest hourly average logged is <b>${S.maxW} W</b>.`);
+if (C.tou) f.push(`<b>${S.peakShare}%</b> of the energy was drawn in peak-tariff hours, which is ${Math.round(S.peakCost / S.totalCost * 100)}% of the cost.`);
+$("#findings").innerHTML = f.map(s => `<p>${s}</p>`).join("");
+
+/* ---- recent ---- */
+$("#recentSub").innerHTML = `${num(R.kwh, 0)} kWh and ${money(R.cost)} in the last ${R.days} days, averaging <b>${R.avgW} W</b>.`;
+$("#recentTiles").innerHTML = [
+  ["Per day", `${num(R.avgDayKwh)} kWh`, `${R.trend >= 0 ? "+" : ""}${R.trend}% vs all-time`],
+  ["Per month", money(R.monthCost), "at this rate"],
+  ["Per year", money(R.yearCost, 0), `${num(R.yearKwh, 0)} kWh`],
+].map(([l, v, n]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div><div class="n">${n}</div></div>`).join("");
+
+/* ---- daily chart ---- */
+(function () {
+  const D = DATA.daily, W = 1000, H = 220, L = 40, Rm = 10, T = 12, B = 26;
+  const s = svg("dailyChart", W, H);
+  const mx = Math.max(...D.map(d => d.kwh)) * 1.08 || 1;
+  const cw = (W - L - Rm) / D.length, ih = H - T - B;
+  const y = v => T + ih - ih * v / mx;
+  for (let i = 0; i <= 4; i++) {
+    const v = mx * i / 4; el("line", {x1: L, x2: W - Rm, y1: y(v), y2: y(v), class: "gl"}, s);
+    text(s, L - 6, y(v) + 3, num(v, 1), "ax", "end");
+  }
+  D.forEach((d, i) => {
+    const x = L + i * cw, bw = Math.max(1, cw - 1);
+    const partial = d.hours < 20;
+    const g = el("g", {}, s);
+    el("rect", {x, y: y(d.kwh), width: bw, height: ih - (y(d.kwh) - T), fill: partial ? "transparent" : "#4a4640",
+                stroke: partial ? "#5a5650" : "none", "stroke-dasharray": partial ? "2 2" : ""}, g);
+    if (d.peak > 0 && !partial) el("rect", {x, y: y(d.peak), width: bw, height: ih - (y(d.peak) - T), fill: "#e8873a", opacity: .85}, g);
+    g.addEventListener("mousemove", e => showTip(`${fmtDay(d.d)} · ${num(d.kwh)} kWh · ${money(d.cost)} · max ${d.maxw} W${partial ? ` · ${d.hours} h logged` : ""}`, e));
+    g.addEventListener("mouseleave", hideTip);
+  });
+  const pts = DATA.rolling.map((v, i) => `${L + i * cw + cw / 2},${y(v)}`).join(" ");
+  el("polyline", {points: pts, fill: "none", stroke: "#efece6", "stroke-width": 1.5}, s);
+  const step = Math.ceil(D.length / 10);
+  D.forEach((d, i) => { if (i % step === 0) text(s, L + i * cw, H - 8, fmtDay(d.d)); });
+  $("#dailySub").innerHTML = `Bars are kWh per day; the amber part of each bar was used in peak-tariff hours. Busiest day <b>${fmtDay(S.worstDay)}</b> (${num(S.worstKwh)} kWh, ${money(S.worstCost)}), quietest <b>${fmtDay(S.bestDay)}</b> (${num(S.bestKwh)} kWh).`;
+})();
+
+/* ---- monthly chart + table ---- */
+(function () {
+  const M = DATA.monthly, W = 1000, H = 200, L = 40, Rm = 10, T = 12, B = 26;
+  const s = svg("monthlyChart", W, H);
+  const mx = Math.max(...M.map(m => m.kwh)) * 1.1 || 1;
+  const cw = (W - L - Rm) / M.length, ih = H - T - B, y = v => T + ih - ih * v / mx;
+  for (let i = 0; i <= 4; i++) { const v = mx * i / 4; el("line", {x1: L, x2: W - Rm, y1: y(v), y2: y(v), class: "gl"}, s); text(s, L - 6, y(v) + 3, num(v, 0), "ax", "end"); }
+  M.forEach((m, i) => {
+    const x = L + i * cw + cw * 0.18, bw = cw * 0.64;
+    let base = 0;
+    [["gpu", "#6da46a"], ["cpu", "#7b9bd1"], ["other", "#6f6a62"]].forEach(([k, c]) => {
+      const v = m[k]; if (!v) return;
+      el("rect", {x, y: y(base + v), width: bw, height: y(base) - y(base + v), fill: c}, s);
+      base += v;
+    });
+    text(s, x + bw / 2, y(m.kwh) - 5, `${num(m.kwh, 0)}`, "ax", "middle");
+    text(s, x + bw / 2, H - 8, fmtMon(m.m) + (m.days < 26 ? "*" : ""), "ax", "middle");
+  });
+  const full = M.filter(m => m.days >= 26);
+  $("#monthlySub").innerHTML = full.length
+    ? `Energy per calendar month, split by where it went. A full month costs about <b>${money(full.reduce((a, m) => a + m.cost, 0) / full.length, 0)}</b>${M.some(m => m.days < 26) ? " (* partial month)" : ""}.`
+    : `Energy per calendar month, split by where it went (* partial month).`;
+  $("#monthlyTable").innerHTML = `<thead><tr><th>Month</th><th>Days</th><th>kWh</th><th>kWh/day</th><th>Avg W</th><th>GPU</th><th>CPU</th>${C.tou ? "<th>Peak kWh</th>" : ""}<th>Cost</th></tr></thead><tbody>` +
+    M.map(m => `<tr><td>${fmtMon(m.m)}${m.days < 26 ? " *" : ""}</td><td class="dim">${m.days}</td><td>${num(m.kwh, 0)}</td><td class="dim">${num(m.avg)}</td><td class="dim">${m.avgW}</td><td class="dim">${Math.round(m.gpu / m.kwh * 100)}%</td><td class="dim">${Math.round(m.cpu / m.kwh * 100)}%</td>${C.tou ? `<td class="dim">${num(m.peak, 0)}</td>` : ""}<td>${money(m.cost)}</td></tr>`).join("") +
+    `</tbody><tfoot><tr><td>Total</td><td class="dim">${M.reduce((a, m) => a + m.days, 0)}</td><td>${num(S.totalKwh, 0)}</td><td class="dim">${num(S.avgDayKwh)}</td><td class="dim">${S.avgW}</td><td class="dim">${S.gpuShare}%</td><td class="dim">${S.cpuShare}%</td>${C.tou ? `<td class="dim">${num(S.peakKwh, 0)}</td>` : ""}<td>${money(S.totalCost)}</td></tr></tfoot>`;
+})();
+
+/* ---- hourly profile ---- */
+(function () {
+  const A = DATA.hourly, X = DATA.hourlyMax, W = 500, H = 190, L = 36, Rm = 8, T = 12, B = 24;
+  const s = svg("hourlyChart", W, H);
+  const mx = Math.max(...X) * 1.08 || 1, cw = (W - L - Rm) / 24, ih = H - T - B, y = v => T + ih - ih * v / mx;
+  if (C.tou) { $("#peakLegend").hidden = false;
+    DATA.hourlyPeak.forEach((p, h) => { if (p) el("rect", {x: L + h * cw, y: T, width: cw, height: ih, fill: "rgba(232,135,58,.18)"}, s); }); }
+  for (let i = 0; i <= 3; i++) { const v = mx * i / 3; el("line", {x1: L, x2: W - Rm, y1: y(v), y2: y(v), class: "gl"}, s); text(s, L - 5, y(v) + 3, num(v, 0), "ax", "end"); }
+  A.forEach((v, h) => {
+    const x = L + h * cw + 1, bw = cw - 2;
+    el("rect", {x, y: y(X[h]), width: bw, height: ih - (y(X[h]) - T), fill: "#3a3631"}, s);
+    el("rect", {x, y: y(v), width: bw, height: ih - (y(v) - T), fill: "#efece6"}, s);
+    if (h % 3 === 0) text(s, x + bw / 2, H - 7, `${h}h`, "ax", "middle");
+  });
+  $("#hourlySub").innerHTML = `Average and maximum draw by hour of day. Busiest around <b>${S.busiestHour}:00</b> (${A[S.busiestHour]} W), quietest around <b>${S.quietestHour}:00</b> (${A[S.quietestHour]} W).`;
+})();
+
+/* ---- weekday ---- */
+(function () {
+  const Wd = DATA.weekday, W = 500, H = 190, L = 36, Rm = 8, T = 12, B = 24;
+  const s = svg("weekdayChart", W, H);
+  const mx = Math.max(...Wd) * 1.15 || 1, cw = (W - L - Rm) / 7, ih = H - T - B, y = v => T + ih - ih * v / mx;
+  for (let i = 0; i <= 3; i++) { const v = mx * i / 3; el("line", {x1: L, x2: W - Rm, y1: y(v), y2: y(v), class: "gl"}, s); text(s, L - 5, y(v) + 3, num(v, 1), "ax", "end"); }
+  const hi = Wd.indexOf(Math.max(...Wd)), lo = Wd.indexOf(Math.min(...Wd));
+  Wd.forEach((v, i) => {
+    const x = L + i * cw + cw * 0.2, bw = cw * 0.6;
+    el("rect", {x, y: y(v), width: bw, height: ih - (y(v) - T), fill: i === hi ? "#efece6" : "#4a4640"}, s);
+    text(s, x + bw / 2, y(v) - 5, num(v, 1), "ax", "middle");
+    text(s, x + bw / 2, H - 7, WD[i], "ax", "middle");
+  });
+  const spread = Wd[hi] && Wd[lo] ? Math.round((Wd[hi] - Wd[lo]) / Wd[lo] * 100) : 0;
+  $("#weekdaySub").innerHTML = spread <= 15
+    ? `Average kWh per weekday (full days only). Essentially uniform — <b>${WDL[hi]}</b> are only ${spread}% above <b>${WDL[lo]}</b>.`
+    : `Average kWh per weekday (full days only). <b>${WDL[hi]}</b> use ${spread}% more than <b>${WDL[lo]}</b>.`;
+})();
+
+/* ---- heatmap ---- */
+(function () {
+  const Hm = DATA.heat, W = 1000, H = 190, L = 40, T = 8, cw = (W - L - 8) / 24, ch = (H - T - 22) / 7;
+  const s = svg("heatChart", W, H);
+  const vals = Hm.flat().filter(v => v !== null), lo = Math.min(...vals), hi = Math.max(...vals);
+  Hm.forEach((row, wd) => {
+    text(s, L - 8, T + wd * ch + ch / 2 + 4, WD[wd], "ax", "end");
+    row.forEach((v, h) => {
+      const t = v === null ? 0 : (v - lo) / Math.max(1, hi - lo);
+      // neutral ramp; the accent is reserved for the hottest tenth of hours
+      const fill = v === null ? "#161411" : t >= 0.9 ? "#e8873a" : `rgba(239,236,230,${(0.05 + 0.6 * t).toFixed(2)})`;
+      const r = el("rect", {x: L + h * cw + 1, y: T + wd * ch + 1, width: cw - 2, height: ch - 2, fill}, s);
+      r.addEventListener("mousemove", e => showTip(`${WD[wd]} ${h}:00 · ${v === null ? "no data" : v + " W"}`, e));
+      r.addEventListener("mouseleave", hideTip);
+    });
+  });
+  for (let h = 0; h < 24; h += 3) text(s, L + h * cw + cw / 2, H - 6, `${h}h`, "ax", "middle");
+})();
+
+/* ---- tariff ---- */
+(function () {
+  if (!C.tou) {
+    $("#tariffSub").innerHTML = `Flat rate of <b>${num(C.flat, 2)}${CUR ? " " + CUR : ""}/kWh</b> applied to every hour.`;
+    $("#tariffTable").hidden = true; return;
+  }
+  $("#tariffSub").innerHTML = `Time-of-use: <b>${num(C.peak, 2)}</b> in peak hours (${C.peak_hours.replace(/,/g, ", ")}${C.weekend_off ? ", weekdays only" : ""}) and <b>${num(C.off, 2)}</b>${CUR ? " " + CUR : ""}/kWh otherwise. Effective average paid: <b>${num(S.effRate, 3)}</b>.`;
+  $("#tariffTable").innerHTML = `<thead><tr><th>Window</th><th>kWh</th><th>Share</th><th>Cost</th><th>Share of cost</th></tr></thead><tbody>
+    <tr><td>Peak</td><td>${num(S.peakKwh, 0)}</td><td class="dim">${S.peakShare}%</td><td>${money(S.peakCost)}</td><td class="dim">${Math.round(S.peakCost / S.totalCost * 100)}%</td></tr>
+    <tr><td>Off-peak</td><td>${num(S.offKwh, 0)}</td><td class="dim">${100 - S.peakShare}%</td><td>${money(S.offCost)}</td><td class="dim">${100 - Math.round(S.peakCost / S.totalCost * 100)}%</td></tr></tbody>`;
+})();
+
+/* ---- temperatures ---- */
+(function () {
+  const M = DATA.monthly.filter(m => m.gpuT !== null || m.cpuT !== null), W = 1000, H = 190, L = 40, Rm = 10, T = 14, B = 26;
+  const s = svg("tempChart", W, H);
+  const allv = M.flatMap(m => [m.gpuTmax, m.cpuTmax, m.gpuT, m.cpuT]).filter(v => v);
+  const mx = Math.max(...allv, 60) * 1.1, cw = (W - L - Rm) / Math.max(1, M.length), ih = H - T - B, y = v => T + ih - ih * v / mx;
+  for (let i = 0; i <= 4; i++) { const v = mx * i / 4; el("line", {x1: L, x2: W - Rm, y1: y(v), y2: y(v), class: "gl"}, s); text(s, L - 6, y(v) + 3, `${Math.round(v)}°`, "ax", "end"); }
+  M.forEach((m, i) => {
+    const x0 = L + i * cw;
+    [["gpuT", "gpuTmax", "#6da46a", 0.14], ["cpuT", "cpuTmax", "#7b9bd1", 0.52]].forEach(([k, kx, c, off]) => {
+      const x = x0 + cw * off, bw = cw * 0.3;
+      if (m[kx]) el("rect", {x, y: y(m[kx]), width: bw, height: ih - (y(m[kx]) - T), fill: "none", stroke: "#6f6a62"}, s);
+      if (m[k]) el("rect", {x, y: y(m[k]), width: bw, height: ih - (y(m[k]) - T), fill: c}, s);
+    });
+    text(s, x0 + cw / 2, H - 8, fmtMon(m.m), "ax", "middle");
+  });
+  const gw = S.gpuTmax >= 80 ? `The hottest hourly GPU average on record is <b>${S.gpuTmax} °C</b> — worth watching on cards with aged thermal pads.` : `The hottest hourly GPU average on record is <b>${S.gpuTmax} °C</b>.`;
+  $("#tempSub").innerHTML = `Monthly average and maximum of the hourly GPU and CPU temperatures. ${gw} CPU maximum <b>${S.cpuTmax} °C</b>.`;
+})();
+
+/* ---- context ---- */
+$("#contextTable").innerHTML = `<thead><tr><th>Compared with</th><th>Equivalent</th><th></th></tr></thead><tbody>` +
+  DATA.context.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="dim" style="text-align:left">${r[2]}</td></tr>`).join("") + `</tbody>`;
+
+/* ---- data quality ---- */
+$("#qualitySub").innerHTML = `${P.nRecords.toLocaleString("en-GB")} hourly records from ${P.samples.toLocaleString("en-GB")} two-second samples cover <b>${P.coverage}%</b> of the ${P.nDays}-day span. ${P.nGaps ? `There are <b>${P.nGaps} gaps</b> longer than 3 hours (machine off, or the monitor not running); totals count only what was logged, and per-day averages use full days only.` : "No gaps longer than 3 hours."}`;
+$("#gapList").innerHTML = P.gaps.map(g => `<div>${g.from} → ${g.to} · ${g.hours} h</div>`).join("") + (P.nGaps > P.gaps.length ? `<div>… and ${P.nGaps - P.gaps.length} shorter</div>` : "");
+
+/* ---- method ---- */
+$("#method").innerHTML = `The Power Monitor widget samples the machine every 2 seconds: CPU package power from the kernel's RAPL interface, every GPU from nvidia-smi, drives from their thermal sensors, plus a fixed allowance for the motherboard and peripherals (monitors are on their own supply and excluded). Each hour it writes one row with the hour's average draw and energy. This report re-prices every hour with the current tariff${C.tou ? ", including the peak/off-peak windows," : ""} so months logged under an older rate are comparable. Energy is attributed to GPU and CPU by their share of the measured draw in each hour.`;
+$("#foot").textContent = `Power Monitor · ShinyWidgets · report generated ${P.generated} from ~/Documents/PM-Log · rebuilt automatically after every hourly log write and on click.`;
+</script>
+</body>
+</html>
