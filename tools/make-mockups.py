@@ -478,33 +478,44 @@ def dock():
         print("  dock: no logos found")
         return None
 
-    pad, gap, dot = 10, 6, WIN_SIZE
-    w = dot + pad * 2
-    h = pad * 2 + len(names) * dot + (len(names) - 1) * gap + 16
+    # Geometry straight out of dock/ncd-dock.py: a vertical pill whose ends
+    # are true semicircles (radius = half the width), a grip zone before the
+    # first dot, and the "s" density preset the screenshots use.
+    dot = WIN_SIZE
+    gap, pad_end, pad_cross = 0, 10, 4          # SIZES["s"]
+    grip = 14
+    n = len(names)
+    w = dot + 2 * pad_cross
+    h = pad_end * 2 + grip + n * dot + (n - 1) * gap
     surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
     cr = cairo.Context(surf)
 
-    r = 22                                        # the pill
-    cr.new_sub_path()
-    cr.arc(w - r, r, r, -math.pi / 2, 0)
-    cr.arc(w - r, h - r, r, 0, math.pi / 2)
-    cr.arc(r, h - r, r, math.pi / 2, math.pi)
-    cr.arc(r, r, r, math.pi, 3 * math.pi / 2)
-    cr.close_path()
+    r = min(w, h) / 2                            # the pill: semicircular ends
+
+    def pill(inset):
+        rr = r - inset
+        cr.new_path()
+        cr.arc(r, r, rr, math.pi, 2 * math.pi)
+        cr.arc(r, h - r, rr, 0, math.pi)
+        cr.close_path()
+
     cr.set_source_rgba(*BG_PANEL, 0.96)
-    cr.fill_preserve()
-    cr.set_source_rgba(*BORDER_CLR, 1)
+    pill(0.5)
+    cr.fill()
+    cr.set_source_rgb(*BORDER_CLR)
     cr.set_line_width(1)
+    pill(0.5)
     cr.stroke()
 
-    for i in range(3):                            # the grip
-        cr.set_source_rgba(*FG_DIM, 0.5)
-        cr.arc(w / 2 - 7 + i * 7, 11, 1.6, 0, 2 * math.pi)
+    gx = pad_end + grip // 2 - 2                 # grip: three dim dots
+    cr.set_source_rgba(*FG_DIM, 0.7)
+    for i in range(3):
+        cr.arc(w / 2 + (i - 1) * 6, gx, 1.6, 0, 2 * math.pi)
         cr.fill()
 
     for idx, name in enumerate(names):
-        x = pad
-        y = pad + 16 + idx * (dot + gap)
+        x = pad_cross
+        y = pad_end + grip + idx * (dot + gap)
         cr.save()
         cr.translate(x, y)
         Rsvg.Handle.new_from_file(
