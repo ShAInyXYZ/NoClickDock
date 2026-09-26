@@ -16,7 +16,7 @@ use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 /// The only messages a page may send; anything else never reaches the core.
-const ALLOWED: [&str; 3] = ["action", "refresh", "config.patch"];
+const ALLOWED: [&str; 4] = ["action", "refresh", "config.patch", "ask"];
 /// A core that has not said hello this long after starting is reported.
 const HELLO_WITHIN: Duration = Duration::from_secs(8);
 

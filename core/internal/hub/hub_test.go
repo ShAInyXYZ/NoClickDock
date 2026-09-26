@@ -634,3 +634,101 @@ func TestNoticesToastAfterIssuesAndRefreshForces(t *testing.T) {
 		t.Fatalf("refresh forces slow sources: %v %d", err, c.forced)
 	}
 }
+
+// Settings: a patch with an id is answered, with the field the core refused.
+func TestSettingsHearWhichFieldWasRefused(t *testing.T) {
+	h := newHub(t)
+	_, sub := h.Subscribe()
+	h.Handle(context.Background(), []byte(`{"type":"config.patch","id":"s1","patch":{"widgets":{"comfyui":{"port":0}}}}`))
+	msgs := drain(sub)
+	if len(msgs) != 2 || msgs[1]["type"] != "config.result" || msgs[1]["ok"] != false ||
+		msgs[1]["field"] != "widgets.comfyui.port" || msgs[1]["message"] == "" || msgs[1]["id"] != "s1" {
+		t.Fatalf("got %v", msgs)
+	}
+	h.Handle(context.Background(), []byte(`{"type":"config.patch","id":"s2","patch":{"widgets":{"comfyui":{"port":8000}}}}`))
+	msgs = drain(sub)
+	if len(msgs) != 2 || msgs[1]["ok"] != true || msgs[1]["field"] != nil {
+		t.Fatalf("got %v", msgs)
+	}
+}
+
+// A disabled widget is not collected; the config's order is the rail's.
+func TestDisabledWidgetsDoNotRunAndOrderFollowsTheConfig(t *testing.T) {
+	collected := make(chan struct{}, 16)
+	c := &counting{meta: Meta{ID: "docker", Order: 50, PollSecs: 1}, n: collected}
+	h := newHub(t, c)
+	if err := h.Handle(context.Background(), []byte(`{"type":"config.patch","patch":{"widgets":{"docker":{"enabled":false,"order":5}}}}`)); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go h.Run(ctx)
+	select {
+	case <-collected:
+		t.Fatal("a disabled widget was collected")
+	case <-time.After(300 * time.Millisecond):
+	}
+	_, sub := h.Subscribe()
+	h.Handle(context.Background(), []byte(`{"type":"config.patch","patch":{"widgets":{"docker":{"enabled":true}}}}`))
+	select {
+	case <-collected: // turned on: polled at once, not at its next tick
+	case <-time.After(2 * time.Second):
+		t.Fatal("never collected once enabled")
+	}
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case raw := <-sub.C:
+			var m struct {
+				Type   string
+				Widget model.Snapshot
+			}
+			json.Unmarshal(raw, &m)
+			if m.Type == "snapshot" {
+				if m.Widget.Order != 5 {
+					t.Errorf("order %d, want the config's 5", m.Widget.Order)
+				}
+				cancel()
+				return
+			}
+		case <-deadline:
+			cancel()
+			t.Fatal("no snapshot")
+		}
+	}
+}
+
+type counting struct {
+	meta Meta
+	n    chan struct{}
+}
+
+func (c *counting) Meta() Meta { return c.meta }
+func (c *counting) Collect(context.Context) (model.Snapshot, error) {
+	c.n <- struct{}{}
+	return snap(model.StateOK, "fine"), nil
+}
+
+type asking struct{ scripted }
+
+func (asking) Ask(_ context.Context, what string, args map[string]string) (string, []string, error) {
+	if what != "peers" {
+		return "", nil, errors.New("no such question")
+	}
+	return "2 peers seen", []string{"fileserver", "build-agent"}, nil
+}
+
+func TestAsksAreAnswered(t *testing.T) {
+	h := newHub(t, &asking{scripted{meta: Meta{ID: "tailscale"}}}, &scripted{meta: Meta{ID: "disk"}})
+	_, sub := h.Subscribe()
+	h.Handle(context.Background(), []byte(`{"type":"ask","id":"a1","widget":"tailscale","what":"peers"}`))
+	if m := send2(t, sub); m["type"] != "answer" || m["id"] != "a1" || m["ok"] != true || len(m["items"].([]any)) != 2 {
+		t.Errorf("answer %v", m)
+	}
+	h.Handle(context.Background(), []byte(`{"type":"ask","id":"a2","widget":"disk","what":"peers"}`))
+	if m := send2(t, sub); m["ok"] != false || m["message"] == "" {
+		t.Errorf("a widget that cannot answer: %v", m)
+	}
+	if err := h.Handle(context.Background(), []byte(`{"type":"ask","widget":"disk"}`)); err == nil {
+		t.Error("an ask without an id")
+	}
+}

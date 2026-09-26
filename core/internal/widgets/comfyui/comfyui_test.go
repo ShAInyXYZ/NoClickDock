@@ -444,3 +444,38 @@ func TestWebsocketFrames(t *testing.T) {
 		t.Errorf("client ids %q", ids)
 	}
 }
+
+// Settings' Test button: the address asked, and what answered there.
+func TestProbeSaysWhatWasAsked(t *testing.T) {
+	srv := (&server{queue: "queue-running.json", stats: "stats-two.json"}).start(t)
+	ep := endpointOf(t, srv)
+	w := New(func() config.ComfyUI { return config.ComfyUI{Host: "127.0.0.1", Port: 1} })
+	defer w.Close()
+	ctx := context.Background()
+	msg, _, err := w.Ask(ctx, "probe", map[string]string{"host": ep.Host, "port": fmt.Sprint(ep.Port)})
+	want := fmt.Sprintf("http://%s:%d answered · ComfyUI 0.3.60 · 2 devices (RTX 3060, RTX 4090) · generating, 2 pending", ep.Host, ep.Port)
+	if err != nil || msg != want {
+		t.Errorf("probe: %q %v\nwant %q", msg, err, want)
+	}
+	// A closed port on this machine: refused, and the address is named.
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	closed := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	_, _, err = w.Ask(ctx, "probe", map[string]string{"host": "127.0.0.1", "port": fmt.Sprint(closed)})
+	if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("http://127.0.0.1:%d did not answer: connection refused", closed)) {
+		t.Errorf("closed port: %v", err)
+	}
+	// Not ComfyUI: a server with no /queue.
+	other := httptest.NewServer(http.NotFoundHandler())
+	defer other.Close()
+	u, _ := url.Parse(other.URL)
+	h, p, _ := net.SplitHostPort(u.Host)
+	if _, _, err := w.Ask(ctx, "probe", map[string]string{"host": h, "port": p}); err == nil || !strings.Contains(err.Error(), "HTTP 404 Not Found on /queue — is it ComfyUI?") {
+		t.Errorf("not ComfyUI: %v", err)
+	}
+	for _, bad := range []map[string]string{{"host": "http://x", "port": "8188"}, {"host": "x", "port": "0"}, {"host": "", "port": "1"}} {
+		if _, _, err := w.Ask(ctx, "probe", bad); err == nil {
+			t.Errorf("%v accepted", bad)
+		}
+	}
+}

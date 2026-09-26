@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Power Monitor — Consumption Report</title>
+<title>NoClickDock — Power report</title>
 <style>
   /* Emberdeck: warm charcoal, one accent for signal, hairlines for depth. */
   :root{
@@ -65,7 +65,7 @@
 <div class="page">
   <header>
     <div>
-      <div class="k">Power Monitor · ShinyWidgets</div>
+      <div class="k">NoClickDock · Power</div>
       <h1>Workstation electricity report</h1>
     </div>
     <div class="meta" id="meta"></div>
@@ -391,7 +391,7 @@ $("#gapList").innerHTML = P.gaps.map(g => `<div>${g.from} → ${g.to} · ${g.hou
 
 /* ---- method ---- */
 $("#method").innerHTML = `The Power Monitor widget samples the machine every 2 seconds: CPU package power from the kernel's RAPL interface, every GPU from nvidia-smi, drives from their thermal sensors, plus a fixed allowance for the motherboard and peripherals (monitors are on their own supply and excluded). Each hour it writes one row with the hour's average draw and energy. This report re-prices every hour with the current tariff${C.tou ? ", including the peak/off-peak windows," : ""} so months logged under an older rate are comparable. Energy is attributed to GPU and CPU by their share of the measured draw in each hour.`;
-$("#foot").textContent = `Power Monitor · ShinyWidgets · report generated ${P.generated} from ~/Documents/PM-Log · rebuilt automatically after every hourly log write and on click.`;
+$("#foot").textContent = `Power report · NoClickDock · generated ${P.generated} from ~/Documents/PM-Log · rebuilt after every hourly log row and from the menu (Open power report).`;
 </script>
 </body>
 </html>

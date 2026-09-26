@@ -64,14 +64,15 @@ func main() {
 	if err != nil {
 		log.Print(err) // defaults are in use; keep running
 	}
-	// The Python widgets' settings come over once, on the real config's
-	// first run only: development never reads them.
+	// The Python generation's settings come over once, on the real
+	// config's first run only (read, never written): development never
+	// reads them.
 	if *configDir == "" && !scratch && *once == "" && runtime.GOOS == "linux" {
-		if legacy, err := config.LegacyDir(); err == nil {
-			if moved, err := cfg.MigrateLegacy(legacy); err != nil {
+		if legacy, err := config.LegacyDirs(); err == nil {
+			if brought, err := cfg.Migrate(legacy); err != nil {
 				log.Printf("legacy settings: %v", err)
-			} else if moved {
-				log.Printf("brought the Tailscale watch list over from %s", legacy)
+			} else if len(brought) > 0 {
+				log.Printf("brought over from the Python widgets: %s", strings.Join(brought, "; "))
 			}
 		}
 	}

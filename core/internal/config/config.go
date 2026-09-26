@@ -18,18 +18,74 @@ import (
 
 type Config struct {
 	Dock    Dock    `json:"dock"`
+	Start   Start   `json:"start"`
 	Widgets Widgets `json:"widgets"`
 }
 
-// Widgets holds each widget's own options.
+// Start is what happens at login.
+type Start struct {
+	LaunchAtLogin bool `json:"launchAtLogin"`
+}
+
+// Widgets holds each widget's place on the rail and its own options.
 type Widgets struct {
+	Claude    Widget    `json:"claude"`
+	Codex     Widget    `json:"codex"`
 	ComfyUI   ComfyUI   `json:"comfyui"`
+	Disk      Widget    `json:"disk"`
+	Docker    Widget    `json:"docker"`
 	Power     Power     `json:"power"`
 	Tailscale Tailscale `json:"tailscale"`
 }
 
+// Widget is what every widget has: whether it runs (a disabled widget has
+// no dial and its collector does not run) and its place on the rail.
+type Widget struct {
+	Enabled bool `json:"enabled"`
+	Order   int  `json:"order"`
+}
+
+// Of is a widget's common part, by id.
+func (w Widgets) Of(id string) (Widget, bool) {
+	switch id {
+	case "claude":
+		return w.Claude, true
+	case "codex":
+		return w.Codex, true
+	case "comfyui":
+		return w.ComfyUI.Widget, true
+	case "disk":
+		return w.Disk, true
+	case "docker":
+		return w.Docker, true
+	case "power":
+		return w.Power.Widget, true
+	case "tailscale":
+		return w.Tailscale.Widget, true
+	}
+	return Widget{}, false
+}
+
+// Section is a widget's whole section, for noticing what a patch changed.
+func (w Widgets) Section(id string) any {
+	switch id {
+	case "comfyui":
+		return w.ComfyUI
+	case "power":
+		return w.Power
+	case "tailscale":
+		return w.Tailscale
+	}
+	c, _ := w.Of(id)
+	return c
+}
+
+// IDs is every widget, in the default rail order.
+var IDs = []string{"claude", "codex", "comfyui", "disk", "docker", "power", "tailscale"}
+
 // ComfyUI is the server the ComfyUI widget watches.
 type ComfyUI struct {
+	Widget
 	Host string `json:"host"`
 	Port int    `json:"port"`
 }
@@ -37,6 +93,7 @@ type ComfyUI struct {
 // Power is the tariff and the estimates every Power figure derives from
 // (docs/rewrite/specs/power.md).
 type Power struct {
+	Widget
 	PricePerKWh     float64 `json:"price_per_kwh"`
 	Currency        string  `json:"currency"`
 	OverheadWatts   float64 `json:"overhead_watts"`   // board, fans, PSU losses
@@ -54,6 +111,7 @@ type Power struct {
 }
 
 type Tailscale struct {
+	Widget
 	// Watch pins the peers whose absence matters, by host name. Null (the
 	// default) watches every peer seen online since the core started; an
 	// empty list watches none.
@@ -81,37 +139,69 @@ type Position struct {
 }
 
 func Default() Config {
+	on := func(order int) Widget { return Widget{Enabled: true, Order: order} }
 	return Config{
-		Dock: Dock{Orientation: "vertical", Density: "normal", Readouts: true},
+		Dock:  Dock{Orientation: "vertical", Density: "normal", Readouts: true},
+		Start: Start{LaunchAtLogin: true},
 		Widgets: Widgets{
-			ComfyUI: ComfyUI{Host: "127.0.0.1", Port: 8188},
+			Claude:  on(10),
+			Codex:   on(20),
+			ComfyUI: ComfyUI{Widget: on(30), Host: "127.0.0.1", Port: 8188},
+			Disk:    on(40),
+			Docker:  on(50),
 			Power: Power{
+				Widget:      on(60),
 				PricePerKWh: 0.30, Currency: "EUR", OverheadWatts: 30, PeripheralWatts: 5,
 				PollInterval: 2, LogInterval: "hourly", PeakHours: "6-13,15-22", TOUWeekendOffPeak: true,
 			},
+			Tailscale: Tailscale{Widget: on(70)},
 		},
 	}
+}
+
+// FieldError is a value the config refuses, with the field it belongs to
+// ("widgets.comfyui.port"), so Settings can say it beside that field.
+type FieldError struct {
+	Field   string
+	Message string // a sentence, without the field's path
+}
+
+func (e *FieldError) Error() string {
+	if e.Field == "" {
+		return e.Message
+	}
+	return e.Field + ": " + e.Message
+}
+
+func refuse(field, format string, args ...any) error {
+	return &FieldError{Field: field, Message: fmt.Sprintf(format, args...)}
 }
 
 func (c Config) validate() error {
 	switch c.Dock.Orientation {
 	case "vertical", "horizontal":
 	default:
-		return fmt.Errorf("dock.orientation must be vertical or horizontal, not %q", c.Dock.Orientation)
+		return refuse("dock.orientation", "Choose vertical or horizontal, not %q.", c.Dock.Orientation)
 	}
 	switch c.Dock.Density {
 	case "compact", "normal", "large":
 	default:
-		return fmt.Errorf("dock.density must be compact, normal or large, not %q", c.Dock.Density)
+		return refuse("dock.density", "Choose compact, normal or large, not %q.", c.Dock.Density)
 	}
 	if p := c.Dock.Position; p != nil {
 		switch p.Edge {
 		case "", "left", "right", "top", "bottom":
 		default:
-			return fmt.Errorf("dock.position.edge must be left, right, top, bottom or empty, not %q", p.Edge)
+			return refuse("dock.position.edge", "Choose left, right, top or bottom, not %q.", p.Edge)
 		}
 		if p.Along != nil && (*p.Along < 0 || *p.Along > 1) {
-			return fmt.Errorf("dock.position.along must be between 0 and 1")
+			return refuse("dock.position.along", "It must be between 0 and 1.")
+		}
+	}
+	for _, id := range IDs {
+		w, _ := c.Widgets.Of(id)
+		if w.Order < 0 || w.Order > 999 {
+			return refuse("widgets."+id+".order", "The order must be between 0 and 999, not %d.", w.Order)
 		}
 	}
 	if err := c.Widgets.ComfyUI.validate(); err != nil {
@@ -121,22 +211,30 @@ func (c Config) validate() error {
 		return err
 	}
 	if w := c.Widgets.Tailscale.Watch; w != nil {
+		if len(*w) > 256 {
+			return refuse("widgets.tailscale.watch", "At most 256 peers can be watched.")
+		}
 		for _, host := range *w {
 			if strings.TrimSpace(host) == "" || len(host) > 253 {
-				return fmt.Errorf("widgets.tailscale.watch holds host names, not %q", host)
+				return refuse("widgets.tailscale.watch", "%q is not a host name.", host)
 			}
 		}
 	}
 	return nil
 }
 
+// ValidHost is a host name or address to put in a URL: no scheme, path,
+// user or spaces.
+func ValidHost(h string) bool {
+	return h != "" && len(h) <= 253 && !strings.ContainsAny(h, " /?#@\t\\")
+}
+
 func (c ComfyUI) validate() error {
-	h := c.Host
-	if h == "" || len(h) > 253 || strings.ContainsAny(h, " /?#@\t") {
-		return fmt.Errorf("widgets.comfyui.host must be a host name or address, not %q", h)
+	if !ValidHost(c.Host) {
+		return refuse("widgets.comfyui.host", "Enter a host name or an address, like 127.0.0.1 — not %q.", c.Host)
 	}
 	if c.Port < 1 || c.Port > 65535 {
-		return fmt.Errorf("widgets.comfyui.port must be between 1 and 65535, not %d", c.Port)
+		return refuse("widgets.comfyui.port", "The port must be between 1 and 65535, not %d.", c.Port)
 	}
 	return nil
 }
@@ -144,7 +242,7 @@ func (c ComfyUI) validate() error {
 func (p Power) validate() error {
 	positive := func(key string, v float64) error {
 		if v < 0 || v > 1e6 {
-			return fmt.Errorf("widgets.power.%s must be a positive number, not %v", key, v)
+			return refuse("widgets.power."+key, "It must be a positive number, not %v.", v)
 		}
 		return nil
 	}
@@ -156,28 +254,38 @@ func (p Power) validate() error {
 			return err
 		}
 	}
-	for key, v := range map[string]*float64{"peak_rate": p.PeakRate, "off_peak_rate": p.OffPeakRate} {
-		if v != nil {
-			if err := positive(key, *v); err != nil {
+	for _, f := range []struct {
+		key string
+		v   *float64
+	}{{"peak_rate", p.PeakRate}, {"off_peak_rate", p.OffPeakRate}} {
+		if f.v != nil {
+			if err := positive(f.key, *f.v); err != nil {
 				return err
 			}
 		}
 	}
 	if n := len([]rune(p.Currency)); n > 5 {
-		return fmt.Errorf("widgets.power.currency is at most 5 characters, not %q", p.Currency)
+		return refuse("widgets.power.currency", "At most 5 characters, not %q.", p.Currency)
 	}
 	if p.PollInterval < 1 || p.PollInterval > 60 {
-		return fmt.Errorf("widgets.power.poll_interval must be 1 to 60 seconds, not %d", p.PollInterval)
+		return refuse("widgets.power.poll_interval", "Between 1 and 60 seconds, not %d.", p.PollInterval)
 	}
 	switch p.LogInterval {
 	case "off", "hourly", "daily", "weekly", "monthly":
 	default:
-		return fmt.Errorf("widgets.power.log_interval must be off, hourly, daily, weekly or monthly, not %q", p.LogInterval)
+		return refuse("widgets.power.log_interval", "Choose off, hourly, daily, weekly or monthly, not %q.", p.LogInterval)
 	}
 	if _, err := ParseHours(p.PeakHours); err != nil {
-		return fmt.Errorf("widgets.power.peak_hours: %w", err)
+		return refuse("widgets.power.peak_hours", "%s.", sentence(err.Error()))
 	}
 	return nil
+}
+
+func sentence(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // Hours is one peak window: a ≤ hour < b.
@@ -291,9 +399,30 @@ func decode(data []byte) (Config, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&cfg); err != nil {
+		var typeErr *json.UnmarshalTypeError
+		if errors.As(err, &typeErr) {
+			return Default(), refuse(typeErr.Field, "A %s is needed here, not a %s.", kind(typeErr.Type.Kind().String()), typeErr.Value)
+		}
+		if field, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
+			return Default(), refuse(strings.Trim(field, `"`), "There is no such setting.")
+		}
 		return Default(), err
 	}
 	return cfg, cfg.validate()
+}
+
+func kind(k string) string {
+	switch {
+	case strings.HasPrefix(k, "int"), strings.HasPrefix(k, "uint"), strings.HasPrefix(k, "float"):
+		return "number"
+	case k == "bool":
+		return "true or false"
+	case k == "slice":
+		return "list"
+	case k == "struct", k == "map":
+		return "group of settings"
+	}
+	return k
 }
 
 // save writes through a temporary file and a rename, so a crash mid-write

@@ -1,7 +1,12 @@
 package comfyui
 
 import (
+	"context"
+	"fmt"
+	"strconv"
 	"time"
+
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/config"
 
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/hub"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/model"
@@ -75,4 +80,17 @@ func (Mock) Transition(from, to model.State, s model.Snapshot) string {
 // Variants: nothing answering at the endpoint.
 func (Mock) Variants(time.Time) map[string]model.Snapshot {
 	return map[string]model.Snapshot{"offline": render(reading{base: mockBase})}
+}
+
+// Ask "probe", in a mock session: says what it would have asked, and asks
+// nothing (a mock never touches the network).
+func (Mock) Ask(_ context.Context, what string, args map[string]string) (string, []string, error) {
+	if what != "probe" {
+		return "", nil, fmt.Errorf("ComfyUI cannot answer %q", what)
+	}
+	port, err := strconv.Atoi(args["port"])
+	if !config.ValidHost(args["host"]) || err != nil || port < 1 || port > 65535 {
+		return "", nil, fmt.Errorf("%q:%q is not an endpoint", args["host"], args["port"])
+	}
+	return baseURL(args["host"], port) + " answered · ComfyUI 0.3.60 · RTX 4090 · queue empty (invented: a mock asks nothing)", nil, nil
 }

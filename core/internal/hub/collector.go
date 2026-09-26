@@ -40,6 +40,13 @@ type Forcer interface {
 	Force()
 }
 
+// Asker answers questions that change nothing (Settings asking before it
+// saves): "probe" an endpoint, list the "peers" seen. Args are the
+// question's own; what is not understood is an error.
+type Asker interface {
+	Ask(ctx context.Context, what string, args map[string]string) (message string, items []string, err error)
+}
+
 // Transitioner words a widget's own state changes ("Generation complete")
 // instead of repeating the new state label. An empty message raises no toast.
 type Transitioner interface {
@@ -100,6 +107,14 @@ func (w mocked) Variants(time.Time) map[string]model.Snapshot {
 		return v.Variants(w.now())
 	}
 	return nil
+}
+
+// Ask: a mock answers from its invention, when it has one.
+func (w mocked) Ask(ctx context.Context, what string, args map[string]string) (string, []string, error) {
+	if a, ok := w.m.(Asker); ok {
+		return a.Ask(ctx, what, args)
+	}
+	return "", nil, fmt.Errorf("%s cannot answer %q", w.m.Meta().Title, what)
 }
 
 func (w mocked) Act(ctx context.Context, action string, args map[string]string) (string, error) {

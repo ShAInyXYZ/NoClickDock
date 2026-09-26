@@ -73,6 +73,27 @@ type Running struct {
 	Args   map[string]string `json:"args,omitempty"`
 }
 
+// ConfigResult answers a config.patch that carried an id (Settings): ok,
+// or the field the core refused and why, in a sentence.
+type ConfigResult struct {
+	Type    string `json:"type"`
+	ID      string `json:"id"`
+	OK      bool   `json:"ok"`
+	Field   string `json:"field,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// Answer answers an ask: a question for a widget that is not an action —
+// Settings probing an endpoint before it is saved, or listing the peers
+// seen. Message is a sentence; Items, when the question was for a list.
+type Answer struct {
+	Type    string   `json:"type"`
+	ID      string   `json:"id"`
+	OK      bool     `json:"ok"`
+	Message string   `json:"message,omitempty"`
+	Items   []string `json:"items,omitempty"`
+}
+
 func NewHello(platform string, config any, widgets []string) Hello {
 	return Hello{Type: "hello", Version: Version, Platform: platform, Config: config, Widgets: widgets}
 }
@@ -95,10 +116,11 @@ func NewRunning(req Request) Running {
 
 // Request is any UI → core message: one stdin line, or one POST /v1/send.
 type Request struct {
-	Type   string            `json:"type"` // "action" | "refresh" | "config.patch"
+	Type   string            `json:"type"` // "action" | "refresh" | "config.patch" | "ask"
 	ID     string            `json:"id,omitempty"`
 	Widget string            `json:"widget,omitempty"`
 	Action string            `json:"action,omitempty"`
+	What   string            `json:"what,omitempty"` // ask: the question
 	Args   map[string]string `json:"args,omitempty"`
 	Patch  json.RawMessage   `json:"patch,omitempty"`
 }

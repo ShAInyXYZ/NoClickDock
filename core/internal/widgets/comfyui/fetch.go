@@ -3,6 +3,7 @@ package comfyui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -10,6 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/config"
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/sensors"
 )
 
 const (
@@ -139,4 +143,79 @@ func normalise(d rawDevice, position int) device {
 		VRAMTotal: d.VRAMTotal, VRAMUsed: max(0, d.VRAMTotal-d.VRAMFree),
 		TorchTotal: d.TorchVRAMTotal, TorchUsed: max(0, d.TorchVRAMTotal-d.TorchVRAMFree),
 	}
+}
+
+// Ask "probe" (host, port): what Settings' Test button reports — the address
+// actually asked, and what answered there, before anything is saved.
+func (w *Widget) Ask(ctx context.Context, what string, args map[string]string) (string, []string, error) {
+	if what != "probe" {
+		return "", nil, fmt.Errorf("ComfyUI cannot answer %q", what)
+	}
+	host := strings.TrimSpace(args["host"])
+	port, err := strconv.Atoi(strings.TrimSpace(args["port"]))
+	if !config.ValidHost(host) {
+		return "", nil, fmt.Errorf("%q is not a host name or an address", host)
+	}
+	if err != nil || port < 1 || port > 65535 {
+		return "", nil, fmt.Errorf("%q is not a port (1–65535)", args["port"])
+	}
+	base := baseURL(host, port)
+	q, err := fetchQueue(ctx, w.client, base)
+	if err != nil {
+		return "", nil, fmt.Errorf("%s did not answer: %s", base, why(err, "/queue"))
+	}
+	sys, devices, err := fetchStats(ctx, w.client, base)
+	if err != nil {
+		return "", nil, fmt.Errorf("%s answered /queue but not /system_stats: %s", base, why(err, "/system_stats"))
+	}
+	var names []string
+	for _, d := range devices {
+		names = append(names, sensors.ShortGPUName(d.Name))
+	}
+	parts := []string{base + " answered"}
+	if sys.ComfyUI != "" {
+		parts = append(parts, "ComfyUI "+sys.ComfyUI)
+	}
+	switch len(devices) {
+	case 0:
+		parts = append(parts, "no devices")
+	case 1:
+		parts = append(parts, names[0])
+	default:
+		parts = append(parts, fmt.Sprintf("%d devices (%s)", len(devices), strings.Join(names, ", ")))
+	}
+	switch {
+	case q.Running > 0:
+		parts = append(parts, fmt.Sprintf("generating, %d pending", q.Pending))
+	case q.Pending > 0:
+		parts = append(parts, fmt.Sprintf("%d pending", q.Pending))
+	default:
+		parts = append(parts, "queue empty")
+	}
+	return strings.Join(parts, " · "), nil, nil
+}
+
+// why says a failed request in a few words.
+func why(err error, path string) string {
+	msg := err.Error()
+	switch {
+	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(msg, "Client.Timeout") || strings.Contains(msg, "i/o timeout"):
+		return fmt.Sprintf("no answer within %s", fetchTimeout)
+	case strings.Contains(msg, "connection refused"):
+		return "connection refused (nothing listens on that port)"
+	case strings.Contains(msg, "no such host"):
+		return "no such host"
+	case strings.Contains(msg, "no route to host"), strings.Contains(msg, "network is unreachable"):
+		return "the host cannot be reached"
+	case strings.Contains(msg, ": 4"), strings.Contains(msg, ": 5"):
+		if i := strings.LastIndex(msg, ": "); i >= 0 {
+			return "HTTP " + msg[i+2:] + " on " + path + " — is it ComfyUI?"
+		}
+	}
+	var syntax *json.SyntaxError
+	var typeErr *json.UnmarshalTypeError
+	if errors.As(err, &syntax) || errors.As(err, &typeErr) {
+		return "the answer on " + path + " is not ComfyUI's"
+	}
+	return msg
 }

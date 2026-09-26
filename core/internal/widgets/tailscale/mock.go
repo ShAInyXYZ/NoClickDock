@@ -1,6 +1,8 @@
 package tailscale
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/hub"
@@ -62,4 +64,13 @@ func (Mock) Mock(now time.Time) model.Snapshot {
 // Variants: the daemon not running.
 func (Mock) Variants(time.Time) map[string]model.Snapshot {
 	return map[string]model.Snapshot{"unavailable": render(&poll{})}
+}
+
+// Ask "peers", for Settings in a mock session: the invented tailnet.
+func (Mock) Ask(_ context.Context, what string, _ map[string]string) (string, []string, error) {
+	if what != "peers" {
+		return "", nil, fmt.Errorf("Tailscale cannot answer %q", what)
+	}
+	peers := []string{"atlas", "build-agent", "exit-ams", "exit-fra", "fileserver", "laptop", "old-desktop", "old-vm", "phone", "pi-garage", "test-vm"}
+	return fmt.Sprintf("%d peers on this tailnet", len(peers)), peers, nil
 }

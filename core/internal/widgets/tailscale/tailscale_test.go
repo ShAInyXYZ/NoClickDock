@@ -1,6 +1,7 @@
 package tailscale
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -478,5 +479,21 @@ func TestPinsMatchTheHostNameToo(t *testing.T) {
 	long := render(&poll{available: true, st: &status{Backend: "Running", SelfOnline: true, Peers: []*peer{{Host: "a-very-long-machine-name-for-a-test", Watched: true}}}, now: now, pinned: true, exposure: &exposure{}})
 	if n := len([]rune(long.StateLabel)); n > 28 || !strings.HasSuffix(long.StateLabel, " offline") {
 		t.Errorf("label %q (%d chars)", long.StateLabel, n)
+	}
+}
+
+func TestSettingsAskForThePeers(t *testing.T) {
+	w := New(nil)
+	if msg, items, err := w.Ask(context.Background(), "peers", nil); err != nil || items != nil || !strings.Contains(msg, "No peers seen yet") {
+		t.Errorf("before a poll: %q %v %v", msg, items, err)
+	}
+	st := load(t, "status-running.json", now)
+	w.observe(st, now)
+	msg, items, err := w.Ask(context.Background(), "peers", nil)
+	if err != nil || len(items) != len(st.Peers) || !strings.HasSuffix(msg, "on this tailnet") {
+		t.Errorf("%q %v %v", msg, items, err)
+	}
+	if _, _, err := w.Ask(context.Background(), "probe", nil); err == nil {
+		t.Error("a question it does not know")
 	}
 }

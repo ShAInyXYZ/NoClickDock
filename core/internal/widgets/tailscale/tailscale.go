@@ -8,9 +8,11 @@ package tailscale
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -32,9 +34,10 @@ type Widget struct {
 	// seen online since the core started.
 	watch func() *[]string
 
-	mu   sync.Mutex
-	seen map[string]bool   // peers seen online this run (lower-cased)
-	prev map[string]sample // counters at the previous poll, per peer
+	mu    sync.Mutex
+	seen  map[string]bool   // peers seen online this run (lower-cased)
+	prev  map[string]sample // counters at the previous poll, per peer
+	known []string          // every peer in the last status, as shown
 }
 
 type sample struct {
@@ -91,7 +94,9 @@ func (w *Widget) observe(st *status, now time.Time) (pinned bool) {
 	list := w.watch()
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	w.known = w.known[:0]
 	for _, p := range st.Peers {
+		w.known = append(w.known, p.Host)
 		if p.Online {
 			w.seen[p.id] = true
 		}
@@ -121,4 +126,20 @@ func (w *Widget) observe(st *status, now time.Time) (pinned bool) {
 		}
 	}
 	return list != nil
+}
+
+// Ask "peers": every peer the tailnet listed at the last poll, for
+// Settings' watch-list editor to choose from.
+func (w *Widget) Ask(_ context.Context, what string, _ map[string]string) (string, []string, error) {
+	if what != "peers" {
+		return "", nil, fmt.Errorf("Tailscale cannot answer %q", what)
+	}
+	w.mu.Lock()
+	peers := append([]string(nil), w.known...)
+	w.mu.Unlock()
+	sort.Slice(peers, func(i, j int) bool { return strings.ToLower(peers[i]) < strings.ToLower(peers[j]) })
+	if len(peers) == 0 {
+		return "No peers seen yet: Tailscale has not answered since NoClickDock started.", nil, nil
+	}
+	return fmt.Sprintf("%d %s on this tailnet", len(peers), map[bool]string{true: "peer", false: "peers"}[len(peers) == 1]), peers, nil
 }

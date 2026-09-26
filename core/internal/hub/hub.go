@@ -150,10 +150,35 @@ func (h *Hub) loop(ctx context.Context, e *entry) {
 		case <-timer.C:
 		case <-e.refresh:
 		}
+		// The cadence may follow the config (Power's poll_interval).
+		if secs := e.c.Meta().PollSecs; secs > 0 && secs != e.meta.PollSecs {
+			e.meta.PollSecs = secs
+			interval = e.interval()
+		}
+		// A disabled widget has no dial, and its collector does not run.
+		if !h.enabled(e.meta.ID) {
+			timer.Reset(interval)
+			continue
+		}
 		start := time.Now()
 		h.poll(ctx, e)
 		timer.Reset(max(time.Until(start.Add(interval)), minGap))
 	}
+}
+
+// enabled: config.json's widgets.<id>.enabled; a widget it does not know
+// runs.
+func (h *Hub) enabled(id string) bool {
+	w, ok := h.cfg.Get().Widgets.Of(id)
+	return !ok || w.Enabled
+}
+
+// order is the widget's place on the rail: the config's, else its own.
+func (h *Hub) order(e *entry) int {
+	if w, ok := h.cfg.Get().Widgets.Of(e.meta.ID); ok && w.Order > 0 {
+		return w.Order
+	}
+	return e.meta.Order
 }
 
 func (e *entry) interval() time.Duration {
@@ -233,6 +258,7 @@ func (h *Hub) apply(e *entry, snap model.Snapshot, err error) {
 		snap = e.failed(err)
 	}
 	e.normalize(&snap)
+	snap.Order = h.order(e)
 
 	// A failed collect neither raises nor clears toasts: the previous state
 	// and issues stay as they were until a collect succeeds.
@@ -408,17 +434,67 @@ func (h *Hub) Handle(ctx context.Context, line []byte) error {
 		}
 		go h.act(ctx, req)
 	case "config.patch":
+		before := h.cfg.Get()
 		cfg, err := h.cfg.Patch(req.Patch)
 		// A rejected patch re-announces the config it left unchanged, so a
 		// window that changed a control ahead of the answer puts it back.
 		h.broadcast(model.NewConfig(cfg))
+		if req.ID != "" { // Settings: the answer, with the field refused
+			res := model.ConfigResult{Type: "config.result", ID: req.ID, OK: err == nil}
+			var fe *config.FieldError
+			switch {
+			case errors.As(err, &fe):
+				res.Field, res.Message = fe.Field, fe.Message
+			case err != nil:
+				res.Message = err.Error()
+			}
+			h.broadcast(res)
+		}
 		if err != nil {
 			return err
 		}
+		// A widget whose section changed (turned on, moved, a new endpoint)
+		// is polled now rather than at its next tick.
+		for _, e := range h.entries {
+			a, _ := json.Marshal(before.Widgets.Section(e.meta.ID))
+			b, _ := json.Marshal(cfg.Widgets.Section(e.meta.ID))
+			if !bytes.Equal(a, b) {
+				h.Refresh(e.meta.ID)
+			}
+		}
+	case "ask":
+		if req.ID == "" {
+			return fmt.Errorf("ask: missing id")
+		}
+		go h.ask(ctx, req)
 	default:
 		return fmt.Errorf("unknown message type %q", req.Type)
 	}
 	return nil
+}
+
+const askTimeout = 15 * time.Second
+
+func (h *Hub) ask(ctx context.Context, req model.Request) {
+	ans := model.Answer{Type: "answer", ID: req.ID}
+	e := h.byID[req.Widget]
+	a, ok := Asker(nil), false
+	if e != nil {
+		a, ok = e.c.(Asker)
+	}
+	if !ok {
+		ans.Message = fmt.Sprintf("%s cannot answer that", req.Widget)
+		h.broadcast(ans)
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, askTimeout)
+	defer cancel()
+	msg, items, err := a.Ask(ctx, req.What, req.Args)
+	ans.OK, ans.Message, ans.Items = err == nil, msg, items
+	if err != nil {
+		ans.Message = err.Error()
+	}
+	h.broadcast(ans)
 }
 
 func (h *Hub) act(ctx context.Context, req model.Request) {
@@ -562,7 +638,7 @@ func (h *Hub) Variants() map[string]map[string]model.Snapshot {
 func (h *Hub) Hello() model.Hello {
 	ids := make([]string, len(h.entries))
 	for i, e := range h.entries {
-		ids[i] = e.meta.ID
+		ids[i] = e.meta.ID // every widget: the interface hides the disabled ones by config
 	}
 	return model.NewHello(h.platform, h.cfg.Get(), ids)
 }
@@ -576,6 +652,9 @@ func (h *Hub) Subscribe() ([][]byte, *Subscription) {
 	defer h.mu.Unlock()
 	state := [][]byte{hello}
 	for _, e := range h.entries {
+		if !h.enabled(e.meta.ID) {
+			continue
+		}
 		if e.lastMsg != nil {
 			state = append(state, e.lastMsg)
 		}
