@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 )
 
@@ -44,5 +45,13 @@ func TestStateTone(t *testing.T) {
 		if got := state.Tone(); got != tone {
 			t.Errorf("%q.Tone() = %q, want %q", state, got, tone)
 		}
+	}
+}
+
+func TestAnUnmeasuredBarIsNull(t *testing.T) {
+	now := 2
+	got, _ := json.Marshal(Blocks{Bars{Values: []float64{180, math.NaN(), 212.5}, Highlight: &now, Unit: "W"}})
+	if want := `[{"kind":"bars","values":[180,null,212.5],"highlight":2,"unit":"W"}]`; string(got) != want {
+		t.Fatalf("got %s, want %s", got, want)
 	}
 }

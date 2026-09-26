@@ -3,6 +3,7 @@ package model
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 )
 
 // Block is one element of a panel, top to bottom. On the wire every block is
@@ -180,12 +181,29 @@ type Segment struct {
 	Display string  `json:"display"`
 }
 
-// Bars is a small series (Power's last 24 hours).
+// Bars is a small series (Power's last 24 hours). A value that was not
+// measured is NaN here and null on the wire: drawn as a floor stub, never
+// as a short bar that would read as "almost nothing".
 type Bars struct {
-	Values    []float64 `json:"values"`
-	Labels    []string  `json:"labels,omitempty"`
-	Highlight *int      `json:"highlight,omitempty"`
-	Unit      string    `json:"unit,omitempty"`
+	Values    []float64
+	Labels    []string
+	Highlight *int
+	Unit      string
+}
+
+func (b Bars) MarshalJSON() ([]byte, error) {
+	values := make([]*float64, len(b.Values))
+	for i := range b.Values {
+		if !math.IsNaN(b.Values[i]) && !math.IsInf(b.Values[i], 0) {
+			values[i] = &b.Values[i]
+		}
+	}
+	return json.Marshal(struct {
+		Values    []*float64 `json:"values"`
+		Labels    []string   `json:"labels,omitempty"`
+		Highlight *int       `json:"highlight,omitempty"`
+		Unit      string     `json:"unit,omitempty"`
+	}{values, b.Labels, b.Highlight, b.Unit})
 }
 
 // Empty is a panel with nothing to list saying what is true, in one

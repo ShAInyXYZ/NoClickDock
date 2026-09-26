@@ -91,3 +91,40 @@ func TestBrokenFileIsKeptAside(t *testing.T) {
 		t.Fatalf("backup = %q", data)
 	}
 }
+
+func TestWidgetOptionsAreValidated(t *testing.T) {
+	s, _ := Open(t.TempDir())
+	cfg := s.Get()
+	if c := cfg.Widgets.ComfyUI; c.Host != "127.0.0.1" || c.Port != 8188 {
+		t.Errorf("comfyui defaults %+v", c)
+	}
+	if p := cfg.Widgets.Power; p.PricePerKWh != 0.30 || p.Currency != "EUR" || p.LogInterval != "hourly" || p.PeakHours != "6-13,15-22" || !p.TOUWeekendOffPeak || p.PeakRate != nil {
+		t.Errorf("power defaults %+v", p)
+	}
+	for _, bad := range []string{
+		`{"widgets":{"comfyui":{"port":0}}}`,
+		`{"widgets":{"comfyui":{"host":"http://example"}}}`,
+		`{"widgets":{"comfyui":{"host":""}}}`,
+		`{"widgets":{"power":{"log_interval":"yearly"}}}`,
+		`{"widgets":{"power":{"peak_hours":"13-6"}}}`,
+		`{"widgets":{"power":{"peak_hours":"6to13"}}}`,
+		`{"widgets":{"power":{"currency":"EURSSS"}}}`,
+		`{"widgets":{"power":{"price_per_kwh":-1}}}`,
+		`{"widgets":{"power":{"poll_interval":0}}}`,
+		`{"widgets":{"power":{"peak_rate":-0.1}}}`,
+	} {
+		if _, err := s.Patch(json.RawMessage(bad)); err == nil {
+			t.Errorf("accepted %s", bad)
+		}
+	}
+	cfg, err := s.Patch(json.RawMessage(`{"widgets":{"comfyui":{"host":"::1","port":8000},"power":{"tou":true,"peak_rate":0.4,"peak_hours":"7-9, 17-21"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Widgets.ComfyUI.Port != 8000 || !cfg.Widgets.Power.TOU || *cfg.Widgets.Power.PeakRate != 0.4 || cfg.Widgets.Power.Currency != "EUR" {
+		t.Errorf("patched %+v", cfg.Widgets)
+	}
+	if h, _ := ParseHours("7-9, 17-21"); len(h) != 2 || h[1] != (Hours{17, 21}) {
+		t.Errorf("hours %+v", h)
+	}
+}

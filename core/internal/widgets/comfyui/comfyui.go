@@ -1,107 +1,220 @@
-// Package comfyui watches a ComfyUI server: its queue, its devices and the
-// progress of the running job. Parity: docs/rewrite/specs/comfyui.md. Until
-// its collector is ported (M5) it only has a mock.
+// Package comfyui watches a ComfyUI server: its queue, its devices and, when
+// the server runs on this machine, their temperatures and load. Parity:
+// docs/rewrite/specs/comfyui.md.
 package comfyui
 
 import (
-	"fmt"
+	"context"
+	"net/http"
+	"runtime"
+	"strings"
+	"sync"
 	"time"
 
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/config"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/hub"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/model"
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/sensors"
 )
 
-type Widget struct{}
+var meta = hub.Meta{ID: "comfyui", Title: "ComfyUI", Order: 30, PollSecs: 2}
 
-func (Widget) Meta() hub.Meta {
-	return hub.Meta{ID: "comfyui", Title: "ComfyUI", Order: 30, PollSecs: 2}
+const sensorsEvery = 5 * time.Second
+
+type Widget struct {
+	endpoint func() config.ComfyUI
+	client   *http.Client
+	net      resolver
+	ws       *listener
+
+	mu      sync.Mutex
+	refresh func()
+
+	// Per endpoint: a change starts over (offline, local re-evaluated,
+	// sensors forgotten, the websocket reconnected).
+	base  string
+	local bool
+
+	sensorsAt time.Time
+	gpus      []sensors.GPU
+	cpuTemp   *float64
+	cpuLoad   *float64
+	cpuUsage  sensors.CPUUsage
+	tempInput string
+
+	phase, prevPhase string // "offline" | "idle" | "queued" | "generating"
 }
 
-const endpoint = "http://127.0.0.1:8188"
-
-// cycle is a live mock's rhythm: idle for the first seconds of each minute,
-// then a job that runs to the end of it.
-const idleSecs = 8
-
-// Mock is a job in progress with two more queued. Live, it finishes once a
-// minute, idles a few seconds, and starts again, so the progress arc and
-// the "Generation complete" toast can be watched.
-func (Widget) Mock(now time.Time) model.Snapshot {
-	sec := now.Second()
-	still := now.Equal(hub.Still)
-	if sec < idleSecs && !still {
-		return idle()
-	}
-	if still {
-		sec = 30 // the still instant shows the job at 42 %
-	}
-	progress := float64(sec-idleSecs) / float64(60-idleSecs)
-	pct := int(progress * 100)
-	s := panel(fmt.Sprint(1), "2", true)
-	s.State, s.StateLabel = model.StateBusy, fmt.Sprintf("generating · %d%%", pct)
-	s.Glance = model.Glance{Text: fmt.Sprintf("%d%%", pct)}
-	s.Progress = &progress
-	return s
+func New(endpoint func() config.ComfyUI) *Widget {
+	w := &Widget{endpoint: endpoint, client: &http.Client{}, net: netResolver}
+	w.ws = newListener(func() {
+		w.mu.Lock()
+		refresh := w.refresh
+		w.mu.Unlock()
+		if refresh != nil {
+			refresh()
+		}
+	})
+	return w
 }
 
-func idle() model.Snapshot {
-	s := panel("0", "0", false)
-	s.State, s.StateLabel = model.StateOK, "idle"
-	s.Glance = model.Glance{Text: "14%"} // device 0's VRAM in use
-	return s
+func (*Widget) Meta() hub.Meta { return meta }
+
+func (w *Widget) SetRefresh(f func()) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.refresh = f
 }
 
-func panel(running, pending string, busy bool) model.Snapshot {
-	vram, load, power := 0.38, "87%", "312W"
-	if !busy {
-		vram, load, power = 0.14, "2%", "38W"
+func (w *Widget) Collect(ctx context.Context) (model.Snapshot, error) {
+	ep := w.endpoint()
+	base := baseURL(ep.Host, ep.Port)
+
+	w.mu.Lock()
+	changed, local := base != w.base, w.local
+	w.mu.Unlock()
+	if changed { // Collect never runs concurrently with itself
+		local = w.net.isLocal(ctx, ep.Host) // a lookup: not under the lock
+		w.mu.Lock()
+		w.base, w.local = base, local
+		w.sensorsAt, w.gpus, w.cpuTemp, w.cpuLoad = time.Time{}, nil, nil, nil
+		w.cpuUsage, w.tempInput = sensors.CPUUsage{}, ""
+		w.phase = "offline"
+		w.mu.Unlock()
+		w.ws.follow(ep.Host, ep.Port)
 	}
-	return model.Snapshot{
-		Width: 400,
-		Pages: []model.Page{{ID: "main", Blocks: model.Blocks{
-			model.Stats{Items: []model.Stat{{Key: "running", Value: running}, {Key: "pending", Value: pending}}},
-			model.Section{Title: "GPU · RTX 4090", Meta: "cudaMallocAsync"},
-			model.Meter{Label: "VRAM", Frac: vram, Value: fmt.Sprintf("%.1f GB / 24.0 GB (%.0f%%)", vram*24, vram*100)},
-			model.Stats{Items: []model.Stat{
-				{Key: "load", Value: load}, {Key: "temp", Value: "71°C"}, {Key: "power", Value: power}, {Key: "fan", Value: "45%"},
-			}},
-			model.Section{Title: "CPU"},
-			model.Stats{Items: []model.Stat{{Key: "load", Value: "23%"}, {Key: "temp", Value: "54°C"}, {Key: "ram", Value: "41%"}}},
-			model.Section{Title: "System"},
-			model.Meter{Label: "RAM", Frac: 51.2 / 125.7, Value: "51.2 GB / 125.7 GB"},
-			model.Stats{Items: []model.Stat{{Key: "comfyui", Value: "0.3.60"}, {Key: "torch", Value: "2.8.0"}, {Key: "python", Value: "3.12.3"}}},
-			model.Row{Name: "Endpoint", Value: endpoint},
-		}}},
-		Menu: []model.MenuItem{{ID: "open-ui", Label: "Open ComfyUI", URL: endpoint}},
+
+	r := reading{base: base, local: local, os: runtime.GOOS}
+	q, err := fetchQueue(ctx, w.client, base)
+	if err == nil {
+		r.system, r.devices, err = fetchStats(ctx, w.client, base)
 	}
+	r.online, r.queue = err == nil, q
+
+	if r.online && local {
+		w.readSensors(ctx)
+		w.mu.Lock()
+		r.devices = merge(r.devices, w.gpus)
+		r.cpuTemp, r.cpuLoad, r.sensed = w.cpuTemp, w.cpuLoad, true
+		w.mu.Unlock()
+	}
+	if r.online && r.queue.Running > 0 {
+		r.progress = w.ws.Progress()
+	} else {
+		w.ws.clear()
+	}
+
+	w.mu.Lock()
+	w.prevPhase, w.phase = w.phase, r.phase()
+	w.mu.Unlock()
+	return render(r), nil
 }
 
-// Transition words the job's life as the Python widget did; being idle
-// again after a queue drains says nothing.
-func (Widget) Transition(from, to model.State, s model.Snapshot) string {
+// readSensors refreshes the local telemetry every five seconds; the queue
+// keeps its two.
+func (w *Widget) readSensors(ctx context.Context) {
+	w.mu.Lock()
+	due := time.Since(w.sensorsAt) >= sensorsEvery
+	if due {
+		w.sensorsAt = time.Now()
+	}
+	w.mu.Unlock()
+	if !due {
+		return
+	}
+	gpus, _ := sensors.NvidiaSMI(ctx)
+	load := w.cpuUsage.Read()
+	var temp *float64
+	if runtime.GOOS == "linux" {
+		if w.tempInput == "" {
+			w.tempInput = sensors.CPUTempInput(sensors.HwmonRoot)
+		}
+		temp = sensors.Milli(w.tempInput)
+	}
+	w.mu.Lock()
+	w.gpus, w.cpuLoad, w.cpuTemp = gpus, load, temp
+	w.mu.Unlock()
+}
+
+// merge puts nvidia-smi's telemetry on ComfyUI's devices by index. Torch's
+// CUDA order (fastest first by default) can differ from nvidia-smi's PCI
+// order: when both lists are as long and the names disagree at an index,
+// the card is found by name instead; otherwise that device gets none.
+func merge(devices []device, gpus []sensors.GPU) []device {
+	byIndex := map[int]sensors.GPU{}
+	for _, g := range gpus {
+		byIndex[g.Index] = g
+	}
+	cuda := 0
+	for _, d := range devices {
+		if d.Type == "cuda" {
+			cuda++
+		}
+	}
+	used := map[int]bool{}
+	for i := range devices {
+		d := &devices[i]
+		if d.Type != "cuda" {
+			continue
+		}
+		g, ok := byIndex[d.Index]
+		if !ok || !sameCard(d.Name, g.Name) {
+			ok = false
+			if cuda == len(gpus) {
+				g, ok = byName(gpus, d.Name, used)
+			}
+		}
+		if !ok {
+			continue
+		}
+		used[g.Index] = true
+		d.Temp, d.Util, d.Power, d.Fan = g.Temp, g.Util, g.Power, g.Fan
+	}
+	return devices
+}
+
+func sameCard(a, b string) bool {
+	return strings.EqualFold(sensors.ShortGPUName(strings.TrimSpace(a)), sensors.ShortGPUName(strings.TrimSpace(b)))
+}
+
+// byName is the one unused card of that name, if exactly one.
+func byName(gpus []sensors.GPU, name string, used map[int]bool) (sensors.GPU, bool) {
+	var found []sensors.GPU
+	for _, g := range gpus {
+		if !used[g.Index] && sameCard(name, g.Name) {
+			found = append(found, g)
+		}
+	}
+	if len(found) == 1 {
+		return found[0], true
+	}
+	return sensors.GPU{}, false
+}
+
+// Transition words the job's life as the Python widget did. A queue that
+// drains without a job having been seen running says nothing.
+func (w *Widget) Transition(from, to model.State, s model.Snapshot) string {
+	w.mu.Lock()
+	prev, phase := w.prevPhase, w.phase
+	w.mu.Unlock()
+	return transition(prev, phase, s)
+}
+
+func transition(prev, phase string, s model.Snapshot) string {
 	switch {
-	case to == model.StateBusy:
-		return "Generating…"
-	case from == model.StateBusy && to == model.StateOK:
-		return "Generation complete"
-	case to == model.StateIdle:
+	case phase == "offline":
 		return "ComfyUI is offline"
-	case from == model.StateIdle && to == model.StateOK:
+	case phase == "generating":
+		return "Generating…"
+	case phase == "queued":
+		_, pending, _ := strings.Cut(s.StateLabel, " · ")
+		return "Queued, " + pending
+	case prev == "generating" && phase == "idle":
+		return "Generation complete"
+	case prev == "offline" && phase == "idle":
 		return "ComfyUI is online"
 	}
 	return ""
 }
 
-// Variants: nothing answering at the endpoint.
-func (Widget) Variants(time.Time) map[string]model.Snapshot {
-	return map[string]model.Snapshot{
-		"offline": {
-			State: model.StateIdle, StateLabel: "offline",
-			Glance: model.Glance{Text: "off", Tone: model.ToneIdle}, Width: 400,
-			// Unknown is never zero, and nothing twice: the sentence alone.
-			Pages: []model.Page{{ID: "main", Blocks: model.Blocks{
-				model.Empty{Text: "ComfyUI is not answering at", Commands: []string{endpoint}},
-			}}},
-		},
-	}
-}
+func (w *Widget) Close() { w.ws.stop() }

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -22,7 +23,34 @@ type Config struct {
 
 // Widgets holds each widget's own options.
 type Widgets struct {
+	ComfyUI   ComfyUI   `json:"comfyui"`
+	Power     Power     `json:"power"`
 	Tailscale Tailscale `json:"tailscale"`
+}
+
+// ComfyUI is the server the ComfyUI widget watches.
+type ComfyUI struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
+
+// Power is the tariff and the estimates every Power figure derives from
+// (docs/rewrite/specs/power.md).
+type Power struct {
+	PricePerKWh     float64 `json:"price_per_kwh"`
+	Currency        string  `json:"currency"`
+	OverheadWatts   float64 `json:"overhead_watts"`   // board, fans, PSU losses
+	PeripheralWatts float64 `json:"peripheral_watts"` // once, when any USB peripheral exists
+	PollInterval    int     `json:"poll_interval"`    // seconds
+	LogInterval     string  `json:"log_interval"`     // off | hourly | daily | weekly | monthly
+	// Time of use: peak_rate inside peak_hours ("6-13,15-22": a ≤ hour < b),
+	// off_peak_rate otherwise, weekends off-peak unless tou_weekend_offpeak
+	// is false. A missing or zero rate falls back to price_per_kwh.
+	TOU               bool     `json:"tou"`
+	PeakRate          *float64 `json:"peak_rate"`
+	OffPeakRate       *float64 `json:"off_peak_rate"`
+	PeakHours         string   `json:"peak_hours"`
+	TOUWeekendOffPeak bool     `json:"tou_weekend_offpeak"`
 }
 
 type Tailscale struct {
@@ -53,7 +81,16 @@ type Position struct {
 }
 
 func Default() Config {
-	return Config{Dock: Dock{Orientation: "vertical", Density: "normal", Readouts: true}}
+	return Config{
+		Dock: Dock{Orientation: "vertical", Density: "normal", Readouts: true},
+		Widgets: Widgets{
+			ComfyUI: ComfyUI{Host: "127.0.0.1", Port: 8188},
+			Power: Power{
+				PricePerKWh: 0.30, Currency: "EUR", OverheadWatts: 30, PeripheralWatts: 5,
+				PollInterval: 2, LogInterval: "hourly", PeakHours: "6-13,15-22", TOUWeekendOffPeak: true,
+			},
+		},
+	}
 }
 
 func (c Config) validate() error {
@@ -77,6 +114,12 @@ func (c Config) validate() error {
 			return fmt.Errorf("dock.position.along must be between 0 and 1")
 		}
 	}
+	if err := c.Widgets.ComfyUI.validate(); err != nil {
+		return err
+	}
+	if err := c.Widgets.Power.validate(); err != nil {
+		return err
+	}
 	if w := c.Widgets.Tailscale.Watch; w != nil {
 		for _, host := range *w {
 			if strings.TrimSpace(host) == "" || len(host) > 253 {
@@ -85,6 +128,79 @@ func (c Config) validate() error {
 		}
 	}
 	return nil
+}
+
+func (c ComfyUI) validate() error {
+	h := c.Host
+	if h == "" || len(h) > 253 || strings.ContainsAny(h, " /?#@\t") {
+		return fmt.Errorf("widgets.comfyui.host must be a host name or address, not %q", h)
+	}
+	if c.Port < 1 || c.Port > 65535 {
+		return fmt.Errorf("widgets.comfyui.port must be between 1 and 65535, not %d", c.Port)
+	}
+	return nil
+}
+
+func (p Power) validate() error {
+	positive := func(key string, v float64) error {
+		if v < 0 || v > 1e6 {
+			return fmt.Errorf("widgets.power.%s must be a positive number, not %v", key, v)
+		}
+		return nil
+	}
+	for _, f := range []struct {
+		key string
+		v   float64
+	}{{"price_per_kwh", p.PricePerKWh}, {"overhead_watts", p.OverheadWatts}, {"peripheral_watts", p.PeripheralWatts}} {
+		if err := positive(f.key, f.v); err != nil {
+			return err
+		}
+	}
+	for key, v := range map[string]*float64{"peak_rate": p.PeakRate, "off_peak_rate": p.OffPeakRate} {
+		if v != nil {
+			if err := positive(key, *v); err != nil {
+				return err
+			}
+		}
+	}
+	if n := len([]rune(p.Currency)); n > 5 {
+		return fmt.Errorf("widgets.power.currency is at most 5 characters, not %q", p.Currency)
+	}
+	if p.PollInterval < 1 || p.PollInterval > 60 {
+		return fmt.Errorf("widgets.power.poll_interval must be 1 to 60 seconds, not %d", p.PollInterval)
+	}
+	switch p.LogInterval {
+	case "off", "hourly", "daily", "weekly", "monthly":
+	default:
+		return fmt.Errorf("widgets.power.log_interval must be off, hourly, daily, weekly or monthly, not %q", p.LogInterval)
+	}
+	if _, err := ParseHours(p.PeakHours); err != nil {
+		return fmt.Errorf("widgets.power.peak_hours: %w", err)
+	}
+	return nil
+}
+
+// Hours is one peak window: a ≤ hour < b.
+type Hours struct{ From, To int }
+
+// ParseHours reads "6-13,15-22". Unlike the Python widget, which skipped a
+// range it could not read, a malformed one is refused when it is saved.
+func ParseHours(spec string) ([]Hours, error) {
+	var out []Hours
+	for _, part := range strings.Split(spec, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		a, b, ok := strings.Cut(part, "-")
+		from, err1 := strconv.Atoi(strings.TrimSpace(a))
+		to, err2 := strconv.Atoi(strings.TrimSpace(b))
+		if !ok || err1 != nil || err2 != nil || from < 0 || to > 24 || from >= to {
+			return nil, fmt.Errorf("%q is not an hour range like 6-13", part)
+		}
+		out = append(out, Hours{from, to})
+	}
+	return out, nil
 }
 
 // Dir is where config.json lives: ~/.config/noclickdock on Linux,

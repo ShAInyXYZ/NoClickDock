@@ -1,0 +1,7 @@
+{"system": {"os": "posix", "ram_total": 68719476736, "ram_free": 34359738368, "comfyui_version": "0.3.60",
+  "python_version": "3.11.9", "pytorch_version": "2.7.1"},
+ "devices": [
+  {"name": "cuda:0 NVIDIA GeForce RTX 3060 : native", "type": "cuda", "index": 0,
+   "vram_total": 12884901888, "vram_free": 644245094, "torch_vram_total": 8589934592, "torch_vram_free": 2147483648},
+  {"name": "cuda:1 NVIDIA GeForce RTX 4090 : native", "type": "cuda",
+   "vram_total": 25757220864, "vram_free": 24696061952, "torch_vram_total": 0, "torch_vram_free": 0}]}

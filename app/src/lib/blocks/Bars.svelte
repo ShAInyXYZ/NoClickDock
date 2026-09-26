@@ -2,8 +2,9 @@
   import type { BarsBlock } from "$lib/protocol";
 
   // A day by the hour: bars fill the column, past hours in faint ink, the
-  // hour in progress lit, hours to come a stub on the floor. Integer rects
-  // with crisp edges, like the meters.
+  // hour in progress lit, hours to come a stub on the floor — and so is an
+  // hour nothing measured (unknown is never zero). Integer rects with crisp
+  // edges, like the meters.
   let { block }: { block: BarsBlock } = $props();
 
   const GAP = 2;
@@ -13,7 +14,7 @@
   const now = $derived(block.highlight ?? block.values.length - 1);
   const bar = $derived(Math.max(1, Math.floor((width - (slots - 1) * GAP) / slots)));
   const drawn = $derived(slots * bar + (slots - 1) * GAP);
-  const peak = $derived(Math.max(...block.values, 1));
+  const peak = $derived(Math.max(...block.values.map((v) => v ?? 0), 1));
   const ticks = $derived(slots === 24 ? [0, 6, 12, 18] : []);
 </script>
 
@@ -29,10 +30,11 @@
     >
       {#each { length: slots }, i}
         {@const x = i * (bar + GAP)}
-        {#if i > now || i >= block.values.length}
+        {@const value = block.values[i]}
+        {#if i > now || value == null}
           <rect class="future" {x} y={HEIGHT - 1} width={bar} height="1" />
         {:else}
-          {@const h = Math.max(2, Math.round((block.values[i] / peak) * HEIGHT))}
+          {@const h = Math.max(2, Math.round((value / peak) * HEIGHT))}
           <rect class:now={i === now} {x} y={HEIGHT - h} width={bar} height={h} />
         {/if}
       {/each}

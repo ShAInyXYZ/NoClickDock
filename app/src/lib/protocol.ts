@@ -36,7 +36,8 @@ export interface TableBlock {
   rows: { cells: TableCell[]; tone?: Tone; led?: Tone; sub?: string; group?: string; meta?: string }[];
 }
 export interface DonutBlock { kind: "donut"; segments: { label: string; value: number; display: string }[]; center: string; unit?: string }
-export interface BarsBlock { kind: "bars"; values: number[]; labels?: string[]; highlight?: number; unit?: string }
+/** A null value was not measured: drawn as a floor stub, never a short bar. */
+export interface BarsBlock { kind: "bars"; values: (number | null)[]; labels?: string[]; highlight?: number; unit?: string }
 export interface SplitBlock { kind: "split"; columns: Block[][] }
 /** One honest sentence when there is nothing to list, then any commands that would change it. */
 export interface EmptyBlock { kind: "empty"; text: string; commands?: string[] }
