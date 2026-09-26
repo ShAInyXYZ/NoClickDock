@@ -1,0 +1,3 @@
+{"card1": {"Average Graphics Package Power (W)": "35.0", "Max Graphics Package Power (W)": "300.0", "Temperature (Sensor edge) (C)": "44.0", "VRAM Total Used Memory (B)": "2147483648", "VRAM Total Memory (B)": "17163091968", "Card series": "Radeon RX 7800 XT"},
+ "card0": {"Temperature (Sensor edge) (C)": "39.0", "Card series": "Radeon Graphics"},
+ "system": {"Driver version": "6.0"}}

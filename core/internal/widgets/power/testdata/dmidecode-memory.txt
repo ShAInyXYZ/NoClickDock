@@ -1,0 +1,20 @@
+# dmidecode 3.5
+Handle 0x0010, DMI type 17, 92 bytes
+Memory Device
+	Size: 32 GB
+	Form Factor: DIMM
+	Type: DDR5
+	Speed: 5600 MT/s
+	Manufacturer: Examplemem
+	Configured Memory Speed: 4800 MT/s
+Handle 0x0011, DMI type 17, 92 bytes
+Memory Device
+	Size: No Module Installed
+	Type: Unknown
+	Manufacturer: Unknown
+Handle 0x0012, DMI type 17, 92 bytes
+Memory Device
+	Size: 32 GB
+	Type: DDR5
+	Manufacturer: Examplemem
+	Configured Memory Speed: 4800 MT/s

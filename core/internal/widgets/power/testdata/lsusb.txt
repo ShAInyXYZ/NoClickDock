@@ -1,0 +1,8 @@
+Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+Bus 001 Device 004: ID 1234:5678 Example Corp. Wireless Mouse Receiver
+Bus 001 Device 003: ID 1234:9abc Example Corp. USB Hub
+Bus 001 Device 005: ID 2222:3333 Sample Audio Interface
+Bus 001 Device 006: ID 4444:5555 Generic Smart Card Reader
+Bus 001 Device 007: ID 6666:7777 Virtual Keyboard Device
+Bus 003 Device 002: ID 8888:9999 Mechanical Keyboard
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub

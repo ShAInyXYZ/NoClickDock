@@ -52,12 +52,20 @@ impl Options {
         options
     }
 
+    /// The core's arguments. Only a plain `ncd` runs it in production (the
+    /// real config, Power's log in ~/Documents/PM-Log); a named instance —
+    /// a review or a test on the real collectors — gets a scratch config,
+    /// which also keeps its Power log out of PM-Log.
     fn core_args(&self) -> Vec<String> {
+        let dev = user_cache_dir().join("noclickdock-dev");
         if !self.mock {
-            return Vec::new();
+            return match &self.instance {
+                Some(name) => vec!["--config".into(), dev.join(name).to_string_lossy().into_owned()],
+                None => Vec::new(),
+            };
         }
         let name = format!("mock-{}", self.instance.as_deref().unwrap_or("default"));
-        let config = user_cache_dir().join("noclickdock-dev").join(name);
+        let config = dev.join(name);
         vec!["--mock".into(), "--mock-live".into(), "--stdio".into(), "--config".into(), config.to_string_lossy().into_owned()]
     }
 }

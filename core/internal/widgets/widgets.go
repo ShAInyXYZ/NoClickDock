@@ -16,10 +16,18 @@ import (
 // Real is every widget that measures this machine. A widget joins this list
 // when its collector reaches parity with the Python one. Options are read
 // from the config on every poll, so a change applies without a restart.
-func Real(cfg *config.Store) []hub.Collector {
+//
+// powerLog is where Power writes its hourly CSV and report: the user's
+// ~/Documents/PM-Log only when the core runs in production; the caller
+// gives development runs a scratch directory.
+func Real(cfg *config.Store, powerLog string) []hub.Collector {
 	watch := func() *[]string { return cfg.Get().Widgets.Tailscale.Watch }
 	endpoint := func() config.ComfyUI { return cfg.Get().Widgets.ComfyUI }
-	return []hub.Collector{claude.New(), codex.New(), comfyui.New(endpoint), disk.New(), docker.New(), tailscale.New(watch)}
+	tariff := func() config.Power { return cfg.Get().Widgets.Power }
+	return []hub.Collector{
+		claude.New(), codex.New(), comfyui.New(endpoint), disk.New(), docker.New(),
+		power.New(tariff, powerLog), tailscale.New(watch),
+	}
 }
 
 // Mocks is every widget, each inventing its data: still (one fixed instant,
@@ -29,7 +37,7 @@ func Mocks(live bool) []hub.Collector {
 	var out []hub.Collector
 	for _, m := range []hub.Mocker{
 		claude.Mock{}, codex.Mock{}, comfyui.Mock{}, disk.New(),
-		docker.Mock{}, power.Widget{}, tailscale.Mock{},
+		docker.Mock{}, power.Mock{}, tailscale.Mock{},
 	} {
 		out = append(out, hub.Mocked(m, live))
 	}

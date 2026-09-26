@@ -8,6 +8,9 @@
 //	ncd-core --mock --stdio    invented data over stdio (the shell's `ncd --mock`)
 //	ncd-core --mock --mock-live  invented data that moves: progress, failures that come and go
 //	ncd-core --once disk       print one snapshot and exit (add --mock for invented data)
+//
+// Only the first form is production: Power writes its hourly log to
+// ~/Documents/PM-Log then, and to a scratch directory in every other.
 package main
 
 import (
@@ -73,7 +76,15 @@ func main() {
 		}
 	}
 
-	collectors := widgets.Real(cfg)
+	// Power's hourly log goes to ~/Documents/PM-Log only in production (no
+	// --dev, --mock, --once or --config): every other run — the reviewers',
+	// the tests', a named shell instance's — logs to a scratch directory.
+	production := !scratch && *once == "" && *configDir == ""
+	powerLog, err := chooseLogDir(production, dir, *once != "")
+	if err != nil {
+		log.Fatal(err)
+	}
+	collectors := widgets.Real(cfg, powerLog)
 	if *mock {
 		collectors = widgets.Mocks(*live)
 	}
@@ -120,6 +131,27 @@ func chooseConfigDir(flagDir string, scratch bool, port int) (string, error) {
 		return filepath.Join(base, "noclickdock-dev", fmt.Sprintf("core-%d", port)), nil
 	}
 	return config.Dir()
+}
+
+// chooseLogDir: ~/Documents/PM-Log (the Python widget's, whose history the
+// report reads) in production; beside a scratch config otherwise; under the
+// user's cache for --once, whose config is the real one.
+func chooseLogDir(production bool, configDir string, once bool) (string, error) {
+	switch {
+	case production:
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(home, "Documents", "PM-Log"), nil
+	case once:
+		base, err := os.UserCacheDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(base, "noclickdock-dev", "once", "PM-Log"), nil
+	}
+	return filepath.Join(configDir, "PM-Log"), nil
 }
 
 func printOnce(ctx context.Context, collectors []hub.Collector, id string) error {

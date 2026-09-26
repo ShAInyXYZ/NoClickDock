@@ -1,107 +1,470 @@
-// Package power measures what the machine draws and what it costs. Parity:
-// docs/rewrite/specs/power.md. Until its collector is ported (M5) it only
-// has a mock.
+// Package power measures what the machine draws and what it costs: the
+// CPU package (RAPL), every GPU, drives, board, displays and USB, priced by
+// a flat or time-of-use tariff, logged hourly and gathered into a report.
+// Parity: docs/rewrite/specs/power.md.
 package power
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"math"
+	"log"
+	"runtime"
+	"sync"
 	"time"
 
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/config"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/hub"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/model"
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/sensors"
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/sys"
 )
 
-type Widget struct{}
+const (
+	staticEvery = 5 * time.Minute
+	vramEvery   = 5 * time.Second
+	vramBackoff = time.Minute // after any failure: a hiccup must not blind it
+	avgSamples  = 1800        // ≈ 1 h at 2 s
+	donutEvery  = time.Minute
+	levelHold   = 60 * time.Second // a new level must hold this long to be announced (Q3)
+	nvmeWatts   = 5
+)
 
-func (Widget) Meta() hub.Meta {
-	return hub.Meta{ID: "power", Title: "Power", Order: 60, PollSecs: 2}
+// Thermal alerts: a GPU's memory junction, else its core; the CPU.
+const (
+	vramAlertC = 90
+	coreAlertC = 80
+	cpuAlertC  = 85
+)
+
+type Widget struct {
+	cfg    func() config.Power
+	logDir string
+
+	mu      sync.Mutex
+	refresh func()
+
+	cpu       cpuPower
+	usage     sensors.CPUUsage
+	tempInput string
+	firstPoll bool
+
+	static     staticInfo
+	staticAt   time.Time
+	staticBusy bool
+
+	vram      map[string]float64
+	vramAt    time.Time
+	vramRetry time.Time
+	vramBusy  bool
+
+	totals []float64 // the last avgSamples totals
+
+	donutAcc []parts
+	donutAt  time.Time
+	donut    *parts // the last minute's average; nil until one has closed
+
+	level, candidate string
+	candidateSince   time.Time
+
+	log        *logger
+	reportBusy bool
 }
 
-// hourly is an invented day of average watts per clock hour, up to the
-// current one.
-var hourly = []float64{182, 176, 171, 168, 170, 174, 210, 265, 318, 344, 372, 389, 402, 356, 398}
+// staticInfo is what changes rarely.
+type staticInfo struct {
+	CPUModel, Board, RAM string
+	Displays             []display
+	USB                  []string
+	NVMe                 []nvme
+}
 
-// Mock is an invented workstation: two GPUs, the first with a memory
-// junction running hot (the widget's warning), on a time-of-use tariff.
-// Every model name here is illustrative. Live, the draw breathes a little.
-func (Widget) Mock(now time.Time) model.Snapshot {
-	warn := model.ToneWarn
-	total := 412.0 + 18*math.Sin(float64(now.Unix())/7)
-	watts := fmt.Sprintf("%.0fW", total)
-	cell := func(text string) model.Cell { return model.Cell{Text: text} }
-	hot := func(text string) model.Cell { return model.Cell{Text: text, Tone: warn} }
-	current := len(hourly) - 1
+// parts is the draw by component, for the donut.
+type parts struct {
+	cpu, gpu, nvme, periph, total float64
+}
 
-	// One table: draw, storage, displays and USB share its columns, so every
-	// name and number lines up; the header row is the first group's strip.
-	// Numbers carry no units — the header says them — as the reference
-	// draws it; `~` marks an estimate.
-	left := model.Blocks{
-		model.Table{
-			Columns: []model.Column{
-				{Label: "Draw", Align: "left", Mono: true},
-				{Label: "", Align: "left"},
-				{Label: "W / cap", Align: "right", Mono: true},
-				{Label: "core", Align: "right", Mono: true},
-				{Label: "vram", Align: "right", Mono: true},
-			},
-			Rows: []model.TableRow{
-				{Cells: []model.Cell{cell("CPU"), cell("Ryzen 9 7950X"), cell("96"), cell("61°"), cell("")}},
-				{Cells: []model.Cell{cell("GPU0"), cell("RTX 4090"), cell("318/450"), hot("71°"), hot("92°")}},
-				{Cells: []model.Cell{cell("GPU1"), cell("RTX 3060"), cell("21/170"), cell("41°"), cell("46°")}},
-				{Cells: []model.Cell{cell("Board"), cell("X670E board"), cell("~30"), cell(""), cell("")}},
-				model.Group("Storage", "2"),
-				{Cells: model.Cells("NVMe", "990 PRO 2 TB", "5", "43°", "")},
-				{Cells: model.Cells("NVMe", "SN850X 1 TB", "5", "38°", "")},
-				model.Group("Displays", "own PSU"),
-				{Cells: model.Cells("DP-0", "27″ 2560×1440", "~48", "", "")},
-				{Cells: model.Cells("HDMI-0", "24″ 1920×1080", "~43", "", "")},
-				model.Group("USB", ""),
-				{Cells: model.Cells("USB", "3 devices", "~5", "", "")},
-			},
-		},
-		model.Note{Text: "keyboard · mouse receiver · audio interface"},
-	}
+// New watches this machine. logDir is where the hourly CSV and the report
+// go: ~/Documents/PM-Log in production only (the caller decides).
+func New(cfg func() config.Power, logDir string) *Widget {
+	w := &Widget{cfg: cfg, logDir: logDir, firstPoll: true, log: newLogger(logDir)}
+	w.log.wrote = w.rebuildReport
+	return w
+}
 
-	highlight := current
-	right := model.Blocks{
-		model.Section{Title: "Cost", Meta: "297 kWh / mo"},
-		model.Donut{
-			Segments: []model.Segment{
-				{Label: "GPU", Value: 339, Display: "61 EUR"},
-				{Label: "CPU", Value: 96, Display: "17 EUR"},
-				{Label: "Board", Value: 30, Display: "5 EUR"},
-				{Label: "NVMe", Value: 10, Display: "2 EUR"},
-				{Label: "USB", Value: 5, Display: "1 EUR"},
-			},
-			Center: "86",
-			Unit:   "EUR / mo",
-		},
-		model.Section{Title: "Today"},
-		model.Stats{Items: []model.Stat{{Key: "today", Value: "4.1 kWh"}, {Key: "cost", Value: "1.23 EUR"}}},
-		model.Bars{Values: hourly, Highlight: &highlight, Unit: "W"},
-		model.Section{Title: "Utilization"},
-		model.Meter{Label: "CPU", Frac: 0.22, Value: "22%"},
-		model.Meter{Label: "RAM", Frac: 41.0 / 125, Value: "41/125G"},
-		model.Meter{Label: "VRAM0", Frac: 22.1 / 24, Value: "22.1/24G", Tone: warn},
-		model.Meter{Label: "VRAM1", Frac: 0.9 / 12, Value: "0.9/12G"},
-	}
+func (w *Widget) Meta() hub.Meta {
+	return hub.Meta{ID: "power", Title: "Power", Order: 60, PollSecs: max(1, w.cfg().PollInterval)}
+}
 
-	return model.Snapshot{
-		State:      model.StateWarn,
-		StateLabel: "GPU0 VRAM 92°C",
-		Glance:     model.Glance{Text: watts, Tone: warn},
-		Width:      640,
-		Pages: []model.Page{{ID: "main", Blocks: model.Blocks{
-			model.Stats{Items: []model.Stat{
-				{Key: "avg", Value: "402W"}, {Key: "now", Value: fmt.Sprintf("%.2f EUR/h", total/1000*0.34)},
-				{Key: "rate", Value: "0.34 EUR/kWh"}, {Key: "peak until", Value: "22:00"},
-			}},
-			model.Split{Columns: []model.Blocks{left, right}},
-		}}},
-		Footer: "logging hourly",
-		Menu:   []model.MenuItem{{ID: "open-report", Label: "Open power report"}},
-		Issues: []model.Issue{{ID: "GPU0 RTX 4090", Text: "GPU0 RTX 4090 memory junction is at 92°C", Tone: warn}},
+func (w *Widget) SetRefresh(f func()) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.refresh = f
+}
+
+func (w *Widget) poke() {
+	w.mu.Lock()
+	refresh := w.refresh
+	w.mu.Unlock()
+	if refresh != nil {
+		refresh()
 	}
 }
+
+// gpu is a card with its memory junction temperature, when known.
+type gpu struct {
+	sensors.GPU
+	VRAMTemp *float64
+}
+
+// reading is one poll, everything the panel says derived from it.
+type reading struct {
+	now     time.Time
+	os      string
+	tariff  tariff
+	logging string
+
+	cpuW         *float64 // measured, or estimated (then cpuEstimated)
+	cpuEstimated bool
+	cpuNote      string
+	cpuTemp      *float64
+	cpuUsage     *float64
+	mem          *sensors.Memory
+	gpus         []gpu
+	nvme         []nvme
+	static       staticInfo
+
+	overhead, periph, gpuW, nvmeW float64
+	total                         *float64
+	avg                           float64
+	monitors                      float64
+	donut                         parts
+	today                         today
+	alerts                        []alert
+}
+
+type alert struct {
+	id, label, text string
+}
+
+func (w *Widget) Collect(ctx context.Context) (model.Snapshot, error) {
+	cfg := w.cfg()
+	t := newTariff(cfg)
+	now := time.Now()
+	w.dueStatic()
+	w.dueVRAM()
+
+	r := reading{now: now, os: runtime.GOOS, tariff: t, logging: cfg.LogInterval, overhead: cfg.OverheadWatts}
+	r.cpuW = w.cpu.read(now)
+	if r.cpuW == nil && w.firstPoll && w.cpu.primed() {
+		// The first poll measures over half a second rather than show an
+		// estimate for two (only once: never a sleep in every poll).
+		select {
+		case <-time.After(500 * time.Millisecond):
+		case <-ctx.Done():
+		}
+		r.cpuW = w.cpu.read(time.Now())
+	}
+	r.cpuUsage = w.usage.Read()
+	if w.firstPoll && r.cpuUsage == nil {
+		r.cpuUsage = w.usage.Read()
+	}
+	w.firstPoll = false
+	if w.tempInput == "" {
+		w.tempInput = cpuTempInput()
+	}
+	r.cpuTemp = readCPUTemp(w.tempInput)
+	if m, ok := readMemory(); ok {
+		r.mem = &m
+	}
+
+	w.mu.Lock()
+	r.static = w.static
+	vram := w.vram
+	w.mu.Unlock()
+	for _, g := range readGPUs(ctx) {
+		c := gpu{GPU: g}
+		if v, ok := vram[g.Bus]; ok && g.Bus != "" {
+			c.VRAMTemp = &v
+		}
+		r.gpus = append(r.gpus, c)
+	}
+	for _, n := range r.static.NVMe {
+		n.Temp = n.readTemp()
+		r.nvme = append(r.nvme, n)
+	}
+	derive(&r, cfg, w.cpu.reason)
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if r.total != nil {
+		w.totals = append(w.totals, *r.total)
+		if len(w.totals) > avgSamples {
+			w.totals = w.totals[len(w.totals)-avgSamples:]
+		}
+	}
+	r.avg = mean(w.totals)
+	r.donut = w.donutAverage(r, now)
+
+	// The log: every poll, whatever the panel shows.
+	if r.total != nil {
+		s := sample{at: now, total: *r.total, gpu: r.gpuW, cpuTemp: r.cpuTemp, cpuPct: r.cpuUsage}
+		if r.cpuW != nil && !r.cpuEstimated {
+			s.cpu = *r.cpuW
+		}
+		for _, g := range r.gpus {
+			if g.Temp != nil && (s.gpuTemp == nil || *g.Temp > *s.gpuTemp) {
+				v := *g.Temp
+				s.gpuTemp = &v
+			}
+		}
+		if r.mem != nil {
+			pct := r.mem.Pct()
+			s.ramPct = &pct
+		}
+		if err := w.log.add(s, cfg.LogInterval, t); err != nil {
+			log.Printf("power log: %v", err)
+		}
+	}
+	r.today = w.log.today(now, t)
+
+	s := render(r)
+	if n := w.levelNotice(r, now); n != "" {
+		s.Notices = []model.Issue{{Text: n, Tone: model.ToneInfo}}
+	}
+	return s, nil
+}
+
+// derive: the PC's total through its own PSU (displays have theirs), its
+// level and the thermal alerts.
+func derive(r *reading, cfg config.Power, reason string) {
+	for _, g := range r.gpus {
+		if g.Power != nil {
+			r.gpuW += *g.Power
+		}
+	}
+	r.nvmeW = float64(nvmeWatts * len(r.nvme))
+	if len(r.static.USB) > 0 {
+		r.periph = cfg.PeripheralWatts // once, whatever the count
+	}
+	rest := r.gpuW + r.overhead + r.nvmeW + r.periph
+	switch {
+	case r.cpuW != nil:
+	case r.cpuUsage != nil:
+		est := 10 + *r.cpuUsage/100*190
+		r.cpuW, r.cpuEstimated = &est, true
+		r.cpuNote = cpuPowerNote(reason)
+	}
+	if r.cpuW != nil || len(r.gpus) > 0 || r.cpuUsage != nil {
+		total := rest
+		if r.cpuW != nil {
+			total += *r.cpuW
+		}
+		r.total = &total
+	}
+	for _, d := range r.static.Displays {
+		r.monitors += d.EstW
+	}
+	for _, g := range r.gpus {
+		tag := gpuTag(g, len(r.gpus))
+		name := sensors.ShortGPUName(g.Name)
+		switch {
+		case g.VRAMTemp != nil && *g.VRAMTemp >= vramAlertC:
+			r.alerts = append(r.alerts, alert{
+				id: fmt.Sprintf("gpu:%d", g.Index), label: fmt.Sprintf("%s VRAM %.0f°C", tag, *g.VRAMTemp),
+				text: fmt.Sprintf("%s %s memory junction is at %.0f°C", tag, name, *g.VRAMTemp),
+			})
+		case g.Temp != nil && *g.Temp >= coreAlertC:
+			r.alerts = append(r.alerts, alert{
+				id: fmt.Sprintf("gpu:%d", g.Index), label: fmt.Sprintf("%s core %.0f°C", tag, *g.Temp),
+				text: fmt.Sprintf("%s %s core is at %.0f°C", tag, name, *g.Temp),
+			})
+		}
+	}
+	if r.cpuTemp != nil && *r.cpuTemp >= cpuAlertC {
+		r.alerts = append(r.alerts, alert{id: "cpu", label: fmt.Sprintf("CPU %.0f°C", *r.cpuTemp), text: fmt.Sprintf("CPU is at %.0f°C", *r.cpuTemp)})
+	}
+}
+
+// gpuTag is "GPU" when there is one card, "GPU0", "GPU1"… when several.
+func gpuTag(g gpu, count int) string {
+	if count == 1 {
+		return "GPU"
+	}
+	return fmt.Sprintf("GPU%d", g.Index)
+}
+
+// level is the Python widget's four words, by total watts.
+func level(total *float64) string {
+	switch {
+	case total == nil:
+		return ""
+	case *total < 100:
+		return "idle"
+	case *total < 250:
+		return "normal"
+	case *total < 500:
+		return "high load"
+	}
+	return "full send"
+}
+
+// levelNotice announces a new level once it has held for a minute (Q3):
+// at a threshold the Python widget toasted every two seconds.
+func (w *Widget) levelNotice(r reading, now time.Time) string {
+	lv := level(r.total)
+	switch {
+	case lv == "":
+		return ""
+	case w.level == "":
+		w.level = lv // the first reading is not news
+	case lv == w.level:
+		w.candidate = ""
+	case lv != w.candidate:
+		w.candidate, w.candidateSince = lv, now
+	case now.Sub(w.candidateSince) >= levelHold:
+		w.level, w.candidate = lv, ""
+		return fmt.Sprintf("%s at %.0fW", sentence(lv), *r.total)
+	}
+	return ""
+}
+
+func sentence(s string) string {
+	if s == "" {
+		return s
+	}
+	return string(s[0]-'a'+'A') + s[1:]
+}
+
+// donutAverage holds the donut on the last full minute's average, so its
+// slices do not twitch every poll; live values until a minute has closed.
+func (w *Widget) donutAverage(r reading, now time.Time) parts {
+	live := parts{gpu: r.gpuW, nvme: r.nvmeW, periph: r.periph}
+	if r.cpuW != nil {
+		live.cpu = *r.cpuW
+	}
+	if r.total != nil {
+		live.total = *r.total
+	}
+	if w.donutAt.IsZero() {
+		w.donutAt = now
+	}
+	w.donutAcc = append(w.donutAcc, live)
+	if now.Sub(w.donutAt) >= donutEvery {
+		var sum parts
+		for _, p := range w.donutAcc {
+			sum.cpu += p.cpu
+			sum.gpu += p.gpu
+			sum.nvme += p.nvme
+			sum.periph += p.periph
+			sum.total += p.total
+		}
+		n := float64(len(w.donutAcc))
+		avg := parts{sum.cpu / n, sum.gpu / n, sum.nvme / n, sum.periph / n, sum.total / n}
+		w.donut, w.donutAcc, w.donutAt = &avg, nil, now
+	}
+	if w.donut != nil {
+		return *w.donut
+	}
+	return live
+}
+
+// dueStatic re-reads the machine's parts every five minutes, off the poll.
+func (w *Widget) dueStatic() {
+	w.mu.Lock()
+	if w.staticBusy || (!w.staticAt.IsZero() && time.Since(w.staticAt) < staticEvery) {
+		w.mu.Unlock()
+		return
+	}
+	w.staticBusy, w.staticAt = true, time.Now()
+	w.mu.Unlock()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s := readStatic(ctx)
+		w.mu.Lock()
+		w.static, w.staticBusy = s, false
+		w.mu.Unlock()
+		w.poke()
+	}()
+}
+
+// dueVRAM asks gddr6-oneshot every five seconds, off the poll; any failure
+// leaves it alone for a minute.
+func (w *Widget) dueVRAM() {
+	w.mu.Lock()
+	now := time.Now()
+	if w.vramBusy || now.Before(w.vramRetry) || (!w.vramAt.IsZero() && now.Sub(w.vramAt) < vramEvery) {
+		w.mu.Unlock()
+		return
+	}
+	w.vramBusy, w.vramAt = true, now
+	w.mu.Unlock()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+		defer cancel()
+		temps, err := readVRAMTemps(ctx)
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		w.vramBusy = false
+		if err != nil {
+			w.vram = nil
+			if !errors.Is(err, errNoTool) {
+				w.vramRetry = time.Now().Add(vramBackoff)
+			} else {
+				w.vramRetry = time.Now().Add(staticEvery) // not installed: look again later
+			}
+			return
+		}
+		w.vram = temps
+	}()
+}
+
+// rebuildReport runs after a log row is written, off the poll.
+func (w *Widget) rebuildReport() {
+	if w.reportBusy {
+		return
+	}
+	w.reportBusy = true
+	cfg, dir := w.cfg(), w.logDir
+	go func() {
+		if _, err := writeReport(dir, newTariff(cfg), cfg.PeakHours, time.Now()); err != nil && !errors.Is(err, errNoRows) {
+			log.Printf("power report: %v", err)
+		}
+		w.mu.Lock()
+		w.reportBusy = false
+		w.mu.Unlock()
+	}()
+}
+
+// Act: the menu's "Open power report" — rebuilt from the log, then opened
+// by the core (never a file:// URL through the shell).
+func (w *Widget) Act(_ context.Context, action string, _ map[string]string) (string, error) {
+	if action != "open-report" {
+		return "", fmt.Errorf("power has no action %q", action)
+	}
+	cfg := w.cfg()
+	path, err := writeReport(w.logDir, newTariff(cfg), cfg.PeakHours, time.Now())
+	if errors.Is(err, errNoRows) {
+		return "", errors.New("No report yet — logging builds it")
+	}
+	if err != nil {
+		return "", fmt.Errorf("could not build the power report: %w", err)
+	}
+	if err := openFile(path); err != nil {
+		return "", fmt.Errorf("could not open the power report: %w", err)
+	}
+	return "Power report opened", nil
+}
+
+// openFile hands a local file to the desktop's opener.
+func openFile(path string) error {
+	if runtime.GOOS == "windows" {
+		return sys.Start("rundll32.exe", "url.dll,FileProtocolHandler", path)
+	}
+	return sys.Start("xdg-open", path)
+}
+
+// Transition: a thermal alert toasts itself (an issue); calming down, and
+// load changes of state, say nothing here (levels are notices).
+func (w *Widget) Transition(_, _ model.State, _ model.Snapshot) string { return "" }
