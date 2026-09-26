@@ -48,19 +48,26 @@ pub fn xid(window: &WebviewWindow) -> Option<u32> {
 /// Showing deletes the property (fully opaque, the default); hiding sets it
 /// to 0.
 pub fn set_visible(changes: &[(u32, bool)]) -> bool {
+    let changes: Vec<(u32, Option<u32>)> = changes.iter().map(|&(id, visible)| (id, if visible { None } else { Some(0) })).collect();
+    set_opacity(&changes)
+}
+
+/// Sets windows' compositor opacity: `None` removes the property (opaque),
+/// `Some(v)` sets it (0 transparent … `u32::MAX` opaque). Several changes go
+/// inside one server grab, so the compositor takes them in one batch.
+pub fn set_opacity(changes: &[(u32, Option<u32>)]) -> bool {
     let Some(l) = link() else { return false };
-    let batch = || -> Result<(), Box<dyn std::error::Error>> {
-        l.conn.grab_server()?;
-        for &(id, visible) in changes {
-            if visible {
-                l.conn.delete_property(id, l.opacity)?;
-            } else {
-                l.conn.change_property32(PropMode::REPLACE, id, l.opacity, AtomEnum::CARDINAL, &[0])?;
-            }
-        }
-        l.conn.ungrab_server()?;
-        l.conn.flush()?;
-        Ok(())
-    };
-    batch().is_ok()
+    let grab = changes.len() > 1;
+    if grab && l.conn.grab_server().is_err() {
+        return false;
+    }
+    let sent = changes.iter().all(|&(id, value)| match value {
+        None => l.conn.delete_property(id, l.opacity).is_ok(),
+        Some(v) => l.conn.change_property32(PropMode::REPLACE, id, l.opacity, AtomEnum::CARDINAL, &[v]).is_ok(),
+    });
+    // Released on every path, whatever failed above (research M2 r4): a
+    // server grab left behind would freeze every client on the display.
+    let released = !grab || l.conn.ungrab_server().is_ok();
+    let flushed = l.conn.flush().is_ok();
+    sent && released && flushed
 }

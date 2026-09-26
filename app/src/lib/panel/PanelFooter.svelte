@@ -54,7 +54,7 @@
     letter-spacing: .04em;
     color: var(--dim);
   }
-  .PanelFooter-about { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .PanelFooter-about { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 16px; }
   .fresh { flex: none; color: var(--faint); white-space: nowrap; }
   .PanelFooter[data-tone="crit"], .PanelFooter[data-tone="crit"] .fresh { color: var(--err); }
   .PanelFooter[data-tone="warn"], .PanelFooter[data-tone="warn"] .fresh { color: var(--warn); }

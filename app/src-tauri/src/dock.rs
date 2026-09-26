@@ -112,6 +112,7 @@ fn clamp(position: (i32, i32), size: (i32, i32), area: Area) -> (i32, i32) {
 #[tauri::command]
 pub fn rail_layout(app: AppHandle, layout: RailLayout) -> Result<(), String> {
     let rail = app.get_webview_window("rail").ok_or("The rail window is missing.")?;
+    crate::hover::trace(&format!("rail_layout {} dials", layout.dials.len()));
     confirm_scale(&app, &rail, &layout);
     let scale = overlay::scale(&rail);
     let size = ((layout.width * scale).ceil() as i32, (layout.height * scale).ceil() as i32);
@@ -269,12 +270,14 @@ pub fn set_hidden(app: &AppHandle, hidden: bool) {
         state.shown = !hidden && state.size.is_some();
         state.size
     };
+    crate::menu::sync_tray(app, hidden);
     if hidden {
         // Toasts first, so the panel closing does not release them.
         toast::set_dock_hidden(app, true);
         hover::close(app);
         let _ = overlay::conceal(&rail);
     } else {
+        crate::recover::retry(app); // the interface had crashed for good
         if let Some(size) = size {
             let vertical = app.state::<Dock>().layout().is_some_and(|l| l.height >= l.width);
             let (x, y) = restore(app, size, vertical);

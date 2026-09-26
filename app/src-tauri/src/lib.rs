@@ -6,6 +6,7 @@ mod hover;
 mod main_thread;
 mod menu;
 mod overlay;
+mod recover;
 mod toast;
 mod watchdog;
 #[cfg(windows)]
@@ -89,6 +90,7 @@ pub fn run() {
         .manage(overlay::Scale::default())
         .manage(overlay::Shown::default())
         .manage(overlay::Parked::default())
+        .manage(recover::Recovery::default())
         .invoke_handler(tauri::generate_handler![
             core::core_state,
             core::core_send,
@@ -96,9 +98,11 @@ pub fn run() {
             dock::rail_layout,
             hover::hover_dial,
             hover::hover_panel,
+            hover::hover_approach,
             hover::panel_layout,
             hover::panel_painted,
             hover::panel_page,
+            hover::panel_ready,
             toast::toast_layout,
             toast::toast_dismiss,
             menu::dial_menu,
@@ -116,6 +120,7 @@ pub fn run() {
                 overlay::prime(&panel)?;
             }
             overlay::build(app, "toast", "toast", Some(&rail))?;
+            recover::watch(app);
             if let Err(error) = menu::tray(app) {
                 // No tray host (vanilla GNOME): the rail's menu has everything.
                 eprintln!("ncd: no tray: {error}");

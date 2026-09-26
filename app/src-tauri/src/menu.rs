@@ -239,13 +239,33 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     // The mark as a light monochrome glyph on transparent, like the symbolic
     // icons beside it on a dark top bar (design M2 r1b: the app icon was a
     // dark square there). The dark variant is for light taskbars (M7).
-    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-light-44.png"))?;
-    let builder = TrayIconBuilder::with_id("ncd").tooltip("NoClickDock").menu(&menu).show_menu_on_left_click(true).icon(icon);
+    const PNG: &[u8] = include_bytes!("../icons/tray-light-44.png");
+    let icon = tauri::image::Image::from_bytes(PNG)?;
+    // On Linux the icon is written to a file named after the tray's id, and
+    // GNOME's AppIndicator host caches the texture by that path until the
+    // next login (design M2 r2b: the old dark icon stayed). An id that
+    // changes with the picture gives every new icon a new path.
+    let id = format!("ncd-{:08x}", fnv1a(PNG) as u32);
+    let builder = TrayIconBuilder::with_id(id).tooltip("NoClickDock").menu(&menu).show_menu_on_left_click(true).icon(icon);
     builder.build(app)?;
     if let Ok(mut slot) = app.state::<Tray>().0.lock() {
         *slot = Some(toggle);
     }
     Ok(())
+}
+
+/// The tray's show/hide item follows the dock, whoever hid it.
+pub fn sync_tray(app: &AppHandle, hidden: bool) {
+    if let Ok(slot) = app.state::<Tray>().0.lock() {
+        if let Some(item) = slot.as_ref() {
+            let _ = item.set_text(if hidden { "Show dock" } else { "Hide dock" });
+        }
+    }
+}
+
+/// FNV-1a: a stable fingerprint of the tray picture (not for security).
+fn fnv1a(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |hash, &b| (hash ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3))
 }
 
 /// Every menu choice, from any menu.
@@ -272,11 +292,6 @@ pub fn chosen(app: &AppHandle, id: &str) {
         (Some("app"), Some("toggle"), None) => {
             let hidden = !app.state::<dock::Dock>().is_hidden();
             dock::set_hidden(app, hidden);
-            if let Ok(slot) = app.state::<Tray>().0.lock() {
-                if let Some(item) = slot.as_ref() {
-                    let _ = item.set_text(if hidden { "Show dock" } else { "Hide dock" });
-                }
-            }
         }
         (Some("app"), Some("quit"), None) => app.exit(0),
         _ => eprintln!("ncd: unknown menu item {id}"),
@@ -345,7 +360,14 @@ pub fn settings(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::web_page;
+    use super::{fnv1a, web_page};
+
+    #[test]
+    fn a_new_tray_picture_gets_a_new_file_name() {
+        assert_eq!(fnv1a(b""), 0xcbf2_9ce4_8422_2325);
+        assert_eq!(fnv1a(b"a"), 0xaf63_dc4c_8601_ec8c); // the published FNV-1a 64 vector
+        assert_ne!(fnv1a(include_bytes!("../icons/tray-light-44.png")), fnv1a(include_bytes!("../icons/tray-dark-44.png")));
+    }
 
     #[test]
     fn only_plain_web_pages_open() {

@@ -2,7 +2,11 @@
 //! still act on it, shown beside the dial that raised it, on the panel side.
 //!
 //! - one stack at a time, from one widget, newest nearest the dial, at most 3;
-//! - each for 5 s, then a 160 ms fade;
+//! - each for 5 s; when the last one's time is up, the shell fades the
+//!   window's compositor opacity to 0 over 160 ms and parks it (WebKit stops
+//!   painting a click-through window, so the fade cannot live in the page:
+//!   design M2 r2b); reduced motion dismisses at once. A toast whose time is
+//!   up while newer ones stay simply leaves the stack;
 //! - while any panel is open they wait, and a toast for the widget whose panel
 //!   is open is dropped — the panel already says it;
 //! - while the dock is hidden they wait too: no toast floats beside no rail;
@@ -22,10 +26,10 @@ use crate::hover::{Geometry, Side};
 use crate::{main_thread, overlay};
 
 const VISIBLE: Duration = Duration::from_millis(5000);
+#[cfg(target_os = "linux")]
 const FADE: Duration = Duration::from_millis(160);
-/// The window parks only once the fade has certainly been drawn: WebKit's
-/// frames can trail the clock, and parking mid-fade looked like a pop.
-const SETTLE: Duration = Duration::from_millis(140);
+#[cfg(target_os = "linux")]
+const FADE_STEPS: u32 = 10;
 const MAX: usize = 3;
 const TICK: Duration = Duration::from_millis(100);
 /// A waiting toast older than this is no longer news.
@@ -48,6 +52,9 @@ struct State {
     seq: u64,
     visible: bool,
     ticking: bool,
+    /// The window is fading out; bumped when anything else hides it first.
+    fading: bool,
+    fade: u64,
     /// Linux only: the toast window lets the pointer through once shown.
     #[cfg(target_os = "linux")]
     click_through: bool,
@@ -65,7 +72,6 @@ struct Item {
 struct Shown {
     item: Item,
     until: Instant,
-    leaving: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -80,7 +86,6 @@ struct StackItem {
     key: u64,
     tone: String,
     text: String,
-    leaving: bool,
 }
 
 /// A toast from the core or the shell itself, from any thread: placing it
@@ -135,6 +140,17 @@ fn requeue(st: &mut State) {
         st.pending.push_front(item);
     }
     st.widget = None;
+}
+
+/// The toast page was reloaded (a web process crash): what it showed is
+/// gone with it; waiting toasts come when the next one arrives.
+pub fn reset(app: &AppHandle) {
+    main_thread::assert();
+    let toasts = app.state::<Toasts>();
+    let Ok(mut st) = toasts.0.lock() else { return };
+    st.shown.clear();
+    st.widget = None;
+    hide(app, &mut st);
 }
 
 /// A panel opened: its widget's toasts are dropped, the rest wait.
@@ -202,8 +218,8 @@ pub fn toast_layout(app: AppHandle, seq: u64, width: f64, height: f64, anchor: f
 
 /// Moves waiting toasts into the stack when nothing holds them.
 fn pump(app: &AppHandle, st: &mut State) {
-    if st.held.is_some() || st.dock_hidden {
-        return;
+    if st.held.is_some() || st.dock_hidden || st.fading {
+        return; // a fade ends by pumping
     }
     st.pending.retain(|item| item.at.elapsed() < STALE);
     if st.widget.is_none() {
@@ -218,7 +234,7 @@ fn pump(app: &AppHandle, st: &mut State) {
     let mut moved = false;
     while let Some(i) = st.pending.iter().position(|item| item.widget == widget) {
         let item = st.pending.remove(i).expect("position is in range");
-        st.shown.insert(0, Shown { item, until: Instant::now() + VISIBLE, leaving: false });
+        st.shown.insert(0, Shown { item, until: Instant::now() + VISIBLE });
         moved = true;
     }
     // Newest nearest the dial; beyond three, the oldest simply goes.
@@ -229,26 +245,77 @@ fn pump(app: &AppHandle, st: &mut State) {
     }
 }
 
-/// Fades what has been up five seconds, removes what has faded, and when
-/// the stack is empty moves on to the next widget's toasts.
+/// Takes out what has been up five seconds; when that is every toast, the
+/// window fades out, then the next widget's toasts come.
 fn tick(app: &AppHandle, st: &mut State) -> bool {
-    let now = Instant::now();
-    let mut changed = false;
-    for s in st.shown.iter_mut().filter(|s| !s.leaving && now >= s.until) {
-        s.leaving = true;
-        changed = true;
+    if st.fading {
+        return true;
     }
-    let before = st.shown.len();
-    st.shown.retain(|s| !(s.leaving && now >= s.until + FADE + SETTLE));
-    changed |= st.shown.len() != before;
+    let now = Instant::now();
     if st.shown.is_empty() {
         st.widget = None;
         hide(app, st);
         pump(app, st);
-    } else if changed {
+        return !st.shown.is_empty();
+    }
+    if st.shown.iter().all(|s| now >= s.until) {
+        fade_out(app, st);
+        return st.fading;
+    }
+    let before = st.shown.len();
+    st.shown.retain(|s| now < s.until);
+    if st.shown.len() != before {
         render(app, st);
     }
-    !st.shown.is_empty()
+    true
+}
+
+/// Fades the toast window out at the compositor, then parks it and moves
+/// on. Instant with reduced motion, without a compositor, or off Linux.
+fn fade_out(app: &AppHandle, st: &mut State) {
+    #[cfg(target_os = "linux")]
+    if st.visible && overlay::composited() && animations() {
+        if let Some(id) = app.get_webview_window("toast").as_ref().and_then(crate::x11::xid) {
+            st.fading = true;
+            st.fade += 1;
+            let (fade, app) = (st.fade, app.clone());
+            let step = FADE / FADE_STEPS;
+            let mut i = 0;
+            gtk::glib::timeout_add_local(step, move || {
+                i += 1;
+                let toasts = app.state::<Toasts>();
+                let Ok(mut st) = toasts.0.lock() else { return gtk::glib::ControlFlow::Break };
+                if !st.fading || st.fade != fade {
+                    return gtk::glib::ControlFlow::Break; // something else hid it
+                }
+                if i < FADE_STEPS {
+                    let left = f64::from(FADE_STEPS - i) / f64::from(FADE_STEPS);
+                    crate::x11::set_opacity(&[(id, Some((f64::from(u32::MAX) * left) as u32))]);
+                    return gtk::glib::ControlFlow::Continue;
+                }
+                st.fading = false;
+                finish(&app, &mut st);
+                gtk::glib::ControlFlow::Break
+            });
+            return;
+        }
+    }
+    finish(app, st);
+}
+
+fn finish(app: &AppHandle, st: &mut State) {
+    st.shown.clear();
+    st.widget = None;
+    hide(app, st);
+    pump(app, st);
+}
+
+/// GTK's "enable animations", which WebKit also reads for
+/// prefers-reduced-motion.
+#[cfg(target_os = "linux")]
+fn animations() -> bool {
+    use gtk::prelude::GtkSettingsExt;
+    gtk::Settings::default().map(|s| s.is_gtk_enable_animations()).unwrap_or(true)
 }
 
 fn tick_while_shown(app: &AppHandle, st: &mut State) {
@@ -290,13 +357,15 @@ fn render(app: &AppHandle, st: &mut State) {
         items: st
             .shown
             .iter()
-            .map(|s| StackItem { key: s.item.key, tone: s.item.tone.clone(), text: s.item.text.clone(), leaving: s.leaving })
+            .map(|s| StackItem { key: s.item.key, tone: s.item.tone.clone(), text: s.item.text.clone() })
             .collect(),
     };
     let _ = app.emit_to("toast", "toasts", stack);
 }
 
 fn hide(app: &AppHandle, st: &mut State) {
+    st.fading = false;
+    st.fade += 1;
     if st.visible {
         if let Some(window) = app.get_webview_window("toast") {
             let _ = overlay::conceal(&window);

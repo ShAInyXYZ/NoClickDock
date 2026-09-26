@@ -49,7 +49,7 @@ class Core {
     return this.#transport.connect(
       (message) => this.#apply(message),
       (up, error, since) => {
-        if (!up) for (const fn of this.#resetListeners) fn();
+        if (!up) this.#reset();
         this.linked = up;
         this.linkError = up ? null : (error ?? null);
         this.linkDownSince = up ? null : (since ?? this.linkDownSince ?? Date.now());
@@ -105,10 +105,20 @@ class Core {
     });
   }
 
+  /** The core went away or started again: nothing it was running will
+   *  answer. Pending actions settle quietly — no "did not answer" 150 s
+   *  later, after the action may have been run again (research M2 r4). */
+  #reset() {
+    const pending = [...this.#pending.values()];
+    this.#pending.clear();
+    for (const settle of pending) settle({ ok: false, message: "" });
+    for (const fn of this.#resetListeners) fn();
+  }
+
   #apply(message: CoreMessage) {
     switch (message.type) {
       case "hello": {
-        for (const fn of this.#resetListeners) fn();
+        this.#reset();
         // A (re)started core: forget widgets it no longer runs.
         this.platform = message.platform;
         this.config = message.config;

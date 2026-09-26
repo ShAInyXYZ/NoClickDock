@@ -16,6 +16,13 @@
 //! resized window a frame or several late: design M1 r2). The first panel
 //! is prepared the same way during the dwell, whose end only shows it.
 //!
+//! Each window keeps what it last drew. The rail says which dial the
+//! pointer is heading for while a panel is open, and that widget is drawn
+//! in the window not showing before the pointer arrives; a switch back to
+//! the widget shown before finds it still drawn. Either way the switch on
+//! arrival is only the swap (design M1 r4: on the real desktop the drawing
+//! after arrival cost ~40 ms of a 70 ms budget).
+//!
 //! Once shown, a panel's header never moves under the pointer: a page switch
 //! or a growing snapshot resizes it away from the header's edge.
 use std::sync::Mutex;
@@ -44,7 +51,7 @@ const MENU_QUIET: Duration = Duration::from_millis(400);
 
 /// `NCD_TRACE=1` prints hover timings (wall-clock ms) to stderr, for
 /// measuring the path from pointer to panel against an outside clock.
-fn trace(what: &str) {
+pub(crate) fn trace(what: &str) {
     crate::watchdog::note(format!("hover {what}"));
     if std::env::var_os("NCD_TRACE").is_some() {
         let ms = std::time::SystemTime::now()
@@ -75,30 +82,58 @@ struct State {
     in_panel: bool,
     /// Bumped by every event, so a timer that fires late knows it is stale.
     generation: u64,
-    /// Bumped by every panel-open, so a stale measurement is ignored.
+    /// Bumped by every drawing asked of a window, so a stale measurement is
+    /// ignored; each window remembers the one it is on.
     seq: u64,
-    widget: Option<String>,
     side: Side,
     visible: bool,
-    /// The window showing, or last shown (an index into PANELS), and the one
-    /// the current widget is drawn in.
+    /// The window showing, or last shown (an index into PANELS).
     front: usize,
-    target: usize,
-    /// The last panel whose page has painted it at its size.
-    painted: u64,
+    win: [Win; 2],
     /// Each widget's selected page, kept here for both panel windows.
     pages: std::collections::HashMap<String, String>,
-    size: Option<(f64, f64)>,
-    /// Where the panel was put for this widget: its header edge stays there.
-    anchor: Option<(i32, i32)>,
-    /// Each window's size and place as last set, to skip what did not change.
-    fitted: [Option<(i32, i32)>; 2],
-    at: [Option<(i32, i32)>; 2],
     /// Until then, pointer entries do not open a panel (a menu is popping).
     quiet_until: Option<Instant>,
     /// A menu popped over this dial (None: over the rail): its panel stays
     /// shut until the pointer really leaves or reaches another dial.
     menu_block: Option<(Option<String>, Instant)>,
+}
+
+/// What one panel window holds.
+#[derive(Default, Clone)]
+struct Win {
+    widget: Option<String>,
+    seq: u64,
+    /// The page's measurement for `seq`, and whether it has painted at it.
+    size: Option<(f64, f64)>,
+    painted: bool,
+    /// Where it was put for this widget: its header edge stays there.
+    anchor: Option<(i32, i32)>,
+    /// Its size and place as last set, to skip what did not change.
+    fitted: Option<(i32, i32)>,
+    at: Option<(i32, i32)>,
+    /// What its page was last asked to draw, to ask again if the page was
+    /// not listening yet (just reloaded).
+    asked: Option<PanelOpen>,
+}
+
+impl State {
+    /// The widget the pointer asks for, if any.
+    fn wanted(&self) -> Option<&str> {
+        match &self.phase {
+            Phase::Closed => None,
+            Phase::Dwell(w) | Phase::Open(w) | Phase::Grace(w) => Some(w),
+        }
+    }
+
+    fn by_seq(&self, seq: u64) -> Option<usize> {
+        (0..2).find(|&i| self.win[i].seq == seq && self.win[i].widget.is_some())
+    }
+
+    /// Drawn and painted at its current size: showing it is only the swap.
+    fn ready(&self, t: usize) -> bool {
+        self.win[t].size.is_some() && self.win[t].painted
+    }
 }
 
 #[derive(Default, Clone, PartialEq)]
@@ -156,16 +191,20 @@ pub fn hover_dial(app: AppHandle, widget: Option<String>) {
         (Some(w), Phase::Closed | Phase::Dwell(_)) => {
             st.phase = Phase::Dwell(w.clone());
             // Draw and measure now; the dwell's end only has to show it.
-            if st.widget.as_deref() != Some(w.as_str()) || st.size.is_none() {
-                open(&app, &mut st, w);
-            }
+            draw(&app, &mut st, &w);
             after(&app, DWELL, generation, dwell_done);
         }
         (Some(w), Phase::Open(current) | Phase::Grace(current)) => {
             st.phase = Phase::Open(w.clone());
             if current != w {
-                open(&app, &mut st, w.clone());
                 toast::hold(&app, &w);
+                // Drawn ahead (the pointer was heading here) or shown
+                // before: the swap now. Otherwise it shows once painted.
+                if let Some(t) = draw(&app, &mut st, &w) {
+                    if st.ready(t) && !(st.visible && st.front == t) {
+                        show(&app, &mut st, t);
+                    }
+                }
             }
         }
         (None, Phase::Dwell(_)) => st.phase = Phase::Closed,
@@ -195,51 +234,84 @@ pub fn hover_panel(app: AppHandle, inside: bool) {
     }
 }
 
-/// The panel page measured itself for the widget it was asked to draw.
+/// The rail sees the pointer heading for another dial while a panel is
+/// open: that widget is drawn now in the window not showing, so the switch
+/// on arrival is only the swap. A wrong guess costs a redraw nobody sees.
+#[tauri::command]
+pub fn hover_approach(app: AppHandle, widget: String) {
+    let hover = app.state::<Hover>();
+    let Ok(mut st) = hover.0.lock() else { return };
+    let Some(current) = st.wanted().map(str::to_owned) else { return };
+    // Only while the panel asked for is the one showing: the window not
+    // showing may still be drawing it.
+    let settled = matches!(st.phase, Phase::Open(_) | Phase::Grace(_))
+        && st.visible
+        && st.win[st.front].widget.as_deref() == Some(current.as_str());
+    if !settled || widget == current || widget.len() > 64 || !overlay::composited() {
+        return;
+    }
+    trace(&format!("approach {widget}"));
+    draw(&app, &mut st, &widget);
+}
+
+/// A panel page has loaded and listens: a drawing asked of it before then
+/// (it was being reloaded after a web process crash) is asked again.
+#[tauri::command]
+pub fn panel_ready(app: AppHandle, window: tauri::WebviewWindow) {
+    let hover = app.state::<Hover>();
+    let Ok(st) = hover.0.lock() else { return };
+    let Some(t) = PANELS.iter().position(|label| *label == window.label()) else { return };
+    if let (Some(open), None) = (st.win[t].asked.clone(), st.win[t].size) {
+        trace("panel ready: asked again");
+        let _ = app.emit_to(PANELS[t], "panel-open", open);
+    }
+}
+
+/// A panel page measured itself for the widget it was asked to draw.
 #[tauri::command]
 pub fn panel_layout(app: AppHandle, seq: u64, width: f64, height: f64) {
     let hover = app.state::<Hover>();
     let Ok(mut st) = hover.0.lock() else { return };
-    if seq != st.seq || st.widget.is_none() {
-        return; // a measurement for a panel that is no longer asked for
-    }
-    st.size = Some((width, height));
+    let Some(t) = st.by_seq(seq) else {
+        return; // a measurement for a drawing no longer asked for
+    };
+    st.win[t].size = Some((width, height));
+    st.win[t].painted = false; // until it has painted at this size
     trace(&format!("panel_layout {width}x{height}"));
-    if st.phase != Phase::Closed {
-        place(&app, &mut st);
-    }
+    place(&app, &mut st, t);
 }
 
 /// The page has painted the panel at the size `panel_layout` gave its
-/// window. A panel drawn in the window not showing is shown now (after the
-/// dwell, if one runs).
+/// window. A panel drawn in the window not showing is shown now if it is
+/// the one asked for (after the dwell, if one runs).
 #[tauri::command]
 pub fn panel_painted(app: AppHandle, seq: u64, width: f64, height: f64) {
-    let target = {
+    let t = {
         let hover = app.state::<Hover>();
         let Ok(st) = hover.0.lock() else { return };
         // A paint of an older size (a snapshot changed it since) shows
         // nothing: the paint of the new size will.
-        if seq != st.seq || st.size != Some((width, height)) {
-            return;
+        match st.by_seq(seq) {
+            Some(t) if st.win[t].size == Some((width, height)) => t,
+            _ => return,
         }
-        st.target
     };
     // The page has painted; the window has it once GTK has drawn a frame
     // after that (design M1 r3: a sweep once showed a panel whose lower part
     // was not drawn yet).
-    let Some(panel) = app.get_webview_window(PANELS[target]) else { return };
+    let Some(panel) = app.get_webview_window(PANELS[t]) else { return };
     let app2 = app.clone();
     overlay::after_next_frame(&panel, move || {
         let hover = app2.state::<Hover>();
         let Ok(mut st) = hover.0.lock() else { return };
-        if seq != st.seq || st.size != Some((width, height)) {
+        if st.win[t].seq != seq || st.win[t].size != Some((width, height)) {
             return;
         }
-        st.painted = seq;
+        st.win[t].painted = true;
         trace("panel painted");
-        if matches!(st.phase, Phase::Open(_) | Phase::Grace(_)) && !(st.visible && st.target == st.front) {
-            show(&app2, &mut st);
+        let asked = matches!(st.phase, Phase::Open(_) | Phase::Grace(_)) && st.wanted() == st.win[t].widget.as_deref();
+        if asked && !(st.visible && st.front == t) {
+            show(&app2, &mut st, t);
         }
     });
 }
@@ -290,8 +362,28 @@ fn close_for(app: &AppHandle, quiet_until: Option<Instant>) {
 pub fn replace(app: &AppHandle) {
     let hover = app.state::<Hover>();
     let Ok(mut st) = hover.0.lock() else { return };
-    if st.visible && st.target == st.front {
-        place(app, &mut st);
+    for i in 0..2 {
+        if !(st.visible && i == st.front) {
+            st.win[i].anchor = None; // placed afresh when shown
+        }
+    }
+    if st.visible {
+        let front = st.front;
+        place(app, &mut st, front);
+    }
+}
+
+/// Forgets what both windows hold: their pages were reloaded (a web process
+/// crash, research M2 r4). The panel is closed; the next hover draws anew.
+pub fn reset(app: &AppHandle) {
+    let hover = app.state::<Hover>();
+    let Ok(mut st) = hover.0.lock() else { return };
+    st.generation += 1;
+    st.phase = Phase::Closed;
+    hide(app, &mut st);
+    for win in &mut st.win {
+        let (fitted, at) = (win.fitted, win.at);
+        *win = Win { fitted, at, ..Win::default() };
     }
 }
 
@@ -299,10 +391,10 @@ fn dwell_done(app: &AppHandle, st: &mut State) {
     trace("dwell done");
     if let Phase::Dwell(w) = st.phase.clone() {
         st.phase = Phase::Open(w.clone());
-        if st.widget.as_deref() != Some(w.as_str()) {
-            open(app, st, w);
-        } else if st.painted == st.seq {
-            show(app, st); // drawn during the dwell: show it now
+        if let Some(t) = draw(app, st, &w) {
+            if st.ready(t) {
+                show(app, st, t); // drawn during the dwell: show it now
+            }
         }
     }
 }
@@ -330,28 +422,47 @@ fn after(app: &AppHandle, delay: Duration, generation: u64, then: fn(&AppHandle,
     });
 }
 
-/// Asks the panel page to draw a widget. It answers with its size
-/// (`panel_layout`); the window is then staged (during a dwell) or placed.
-fn open(app: &AppHandle, st: &mut State, widget: String) {
-    let Some(g) = Geometry::of(app, &widget) else { return };
+/// Makes sure a window holds `widget`: the one showing it, the parked one
+/// that still has it, or else the window not showing, whose page is asked
+/// to draw it (it answers with `panel_layout`, then `panel_painted`).
+fn draw(app: &AppHandle, st: &mut State, widget: &str) -> Option<usize> {
+    let (t, fresh) = choose(st, widget, overlay::composited());
+    if !fresh {
+        return Some(t);
+    }
+    let g = Geometry::of(app, widget)?;
     st.side = g.side();
-    let page = incoming(st, &widget, overlay::composited());
+    st.seq += 1;
+    let (fitted, at) = (st.win[t].fitted, st.win[t].at);
+    st.win[t] = Win { widget: Some(widget.to_owned()), seq: st.seq, fitted, at, ..Win::default() };
+    let page = st.pages.get(widget).cloned();
     let max_height = (f64::from(g.area.height) - HEADROOM * g.scale) / g.scale;
-    let _ = app.emit_to(PANELS[st.target], "panel-open", PanelOpen { widget, seq: st.seq, side: st.side, max_height, page });
+    let open = PanelOpen { widget: widget.to_owned(), seq: st.seq, side: st.side, max_height, page };
+    st.win[t].asked = Some(open.clone());
+    let _ = app.emit_to(PANELS[t], "panel-open", open);
+    Some(t)
 }
 
-/// Starts drawing a widget: a new seq, the window to draw it in, and the
-/// page to open it on — the widget's own, whichever window draws it.
-fn incoming(st: &mut State, widget: &str, composited: bool) -> Option<String> {
-    st.seq += 1;
-    st.widget = Some(widget.to_owned());
-    st.size = None;
-    st.anchor = None;
-    // Drawn where it cannot be seen: never in the window showing, or still
-    // fading out. Without a compositor nothing can be parked: one window,
-    // resized in place.
-    st.target = if composited { 1 - st.front } else { st.front };
-    st.pages.get(widget).cloned()
+/// Which window `widget` goes in, and whether it must be drawn there. Never
+/// the window showing another widget: drawing there would resize what is on
+/// screen. Without a compositor nothing can be parked: one window, redrawn
+/// in place.
+fn choose(st: &State, widget: &str, composited: bool) -> (usize, bool) {
+    let holds = |i: usize| st.win[i].widget.as_deref() == Some(widget);
+    if !composited {
+        return (st.front, !holds(st.front));
+    }
+    if st.visible && holds(st.front) {
+        return (st.front, false);
+    }
+    let back = 1 - st.front;
+    if holds(back) {
+        return (back, false);
+    }
+    if !st.visible && holds(st.front) {
+        return (st.front, false);
+    }
+    (back, true)
 }
 
 /// Where the panel goes: centred on its dial when first placed for a
@@ -360,9 +471,9 @@ fn incoming(st: &mut State, widget: &str, composited: bool) -> Option<String> {
 /// what would leave the work area), one below a rail keeps its top, one
 /// above a rail keeps the edge against the rail (the panel page gives it
 /// the height of its tallest page, so its header does not move either).
-fn position(st: &mut State, g: &Geometry, size: (i32, i32)) -> (i32, i32) {
+fn position(st: &mut State, t: usize, g: &Geometry, size: (i32, i32)) -> (i32, i32) {
     let fresh = g.place(st.side, size);
-    let (x, y) = match (st.anchor, st.side) {
+    let (x, y) = match (st.win[t].anchor, st.side) {
         (Some((_, top)), Side::Left | Side::Right) => {
             let edge = (EDGE * g.scale).round() as i32;
             (fresh.0, top.min(g.area.bottom() - edge - size.1).max(g.area.y + edge))
@@ -373,44 +484,47 @@ fn position(st: &mut State, g: &Geometry, size: (i32, i32)) -> (i32, i32) {
         }
         _ => fresh,
     };
-    if st.anchor.is_none() {
-        st.anchor = Some((x, y));
+    if st.win[t].anchor.is_none() {
+        st.win[t].anchor = Some((x, y));
     }
     (x, y)
 }
 
-/// Sizes and places the window the current panel is drawn in. A visible
-/// one (the shown widget grew, or its page changed) moves no further than
-/// its anchored header allows; one not showing waits for the page to paint.
-fn place(app: &AppHandle, st: &mut State) {
-    let (Some(widget), Some((width, height))) = (st.widget.clone(), st.size) else { return };
-    let t = st.target;
+/// Sizes and places a window for what it holds. The visible one (its widget
+/// grew, or its page changed) moves no further than its anchored header
+/// allows; a parked one may go anywhere, unseen.
+fn place(app: &AppHandle, st: &mut State, t: usize) {
+    let (Some(widget), Some((width, height))) = (st.win[t].widget.clone(), st.win[t].size) else { return };
     let (Some(panel), Some(g)) = (app.get_webview_window(PANELS[t]), Geometry::of(app, &widget)) else { return };
     st.side = g.side();
     let size = ((width * g.scale).ceil() as i32, (height * g.scale).ceil() as i32);
-    let (x, y) = position(st, &g, size);
-    if st.fitted[t] != Some(size) {
+    let (x, y) = position(st, t, &g, size);
+    if st.win[t].fitted != Some(size) {
         if overlay::fit(&panel, size.0, size.1).is_err() {
             return;
         }
-        st.fitted[t] = Some(size);
+        st.win[t].fitted = Some(size);
     }
-    if st.at[t] != Some((x, y)) && panel.set_position(PhysicalPosition::new(x, y)).is_ok() {
-        st.at[t] = Some((x, y));
+    if st.win[t].at != Some((x, y)) && panel.set_position(PhysicalPosition::new(x, y)).is_ok() {
+        st.win[t].at = Some((x, y));
     }
     if st.visible && t == st.front {
         let _ = app.emit_to("rail", "panel-state", PanelState { widget: Some(widget), side: st.side });
     }
 }
 
-/// Shows the window the page has painted the current panel in, and parks
-/// the other in the same main-loop turn: the compositor sees one swap.
-fn show(app: &AppHandle, st: &mut State) {
-    let (t, old) = (st.target, st.front);
-    let (Some(widget), Some((x, y)), Some(panel)) = (st.widget.clone(), st.at[t], app.get_webview_window(PANELS[t])) else {
+/// Shows window `t`, painted with the widget asked for, and parks the other
+/// in the same main-loop turn: the compositor sees one swap.
+fn show(app: &AppHandle, st: &mut State, t: usize) {
+    let old = st.front;
+    let was_visible = st.visible;
+    if st.win[t].anchor.is_none() || !was_visible {
+        st.win[t].anchor = None;
+        place(app, st, t); // centred on its dial, where the dial is now
+    }
+    let (Some(widget), Some((x, y)), Some(panel)) = (st.win[t].widget.clone(), st.win[t].at, app.get_webview_window(PANELS[t])) else {
         return;
     };
-    let was_visible = st.visible;
     trace("show");
     // Open and switch are instant (DESIGN, amended): a switch is one change
     // at the compositor, the incoming window shown as the outgoing parks.
@@ -430,15 +544,16 @@ fn show(app: &AppHandle, st: &mut State) {
     let _ = app.emit_to("rail", "panel-state", PanelState { widget: Some(widget), side: st.side });
 }
 
-/// Closes the panel: parked at once (close is instant, DESIGN amended).
+/// Closes the panel: parked at once (close is instant, DESIGN amended). The
+/// windows keep what they drew, so reopening the same widget is instant.
 fn hide(app: &AppHandle, st: &mut State) {
     let was_visible = st.visible;
     st.visible = false;
-    st.widget = None;
-    st.size = None;
     // A window hidden under the pointer may never hear it leave.
     st.in_panel = false;
-    st.anchor = None;
+    for win in &mut st.win {
+        win.anchor = None;
+    }
     if was_visible {
         if let Some(panel) = app.get_webview_window(PANELS[st.front]) {
             let _ = overlay::conceal(&panel);
@@ -565,35 +680,70 @@ mod tests {
     fn a_placed_panel_keeps_its_top_when_it_resizes() {
         let g = right_rail();
         let mut st = State { side: Side::Left, ..State::default() };
-        let first = position(&mut st, &g, (663, 849));
-        let shorter = position(&mut st, &g, (663, 537));
+        let first = position(&mut st, 0, &g, (663, 849));
+        let shorter = position(&mut st, 0, &g, (663, 537));
         assert_eq!(first.1, shorter.1, "the header must not move under the pointer");
         // Grown past the bottom of the work area: up by the overflow only.
-        let taller = position(&mut st, &g, (663, 1500));
+        let taller = position(&mut st, 0, &g, (663, 1500));
         assert_eq!(taller.1, 2208 + 2112 - 12 - 1500);
+    }
+
+    /// What `draw` does to the windows, without GTK.
+    fn put(st: &mut State, widget: &str, composited: bool) -> (usize, bool) {
+        let (t, fresh) = choose(st, widget, composited);
+        if fresh {
+            st.seq += 1;
+            st.win[t] = Win { widget: Some(widget.into()), seq: st.seq, size: Some((400.0, 300.0)), painted: true, ..Win::default() };
+        }
+        (t, fresh)
+    }
+
+    fn shown(st: &mut State, t: usize) {
+        st.front = t;
+        st.visible = true;
+    }
+
+    /// Design M1 r4: the widget the pointer heads for is drawn ahead in the
+    /// window not showing; the one shown before stays drawn.
+    #[test]
+    fn a_switch_finds_its_widget_already_drawn() {
+        let mut st = State::default();
+        let (a, fresh) = put(&mut st, "docker", true);
+        assert!(fresh);
+        shown(&mut st, a);
+        // Heading for Power: drawn in the other window, unseen.
+        let (b, fresh) = put(&mut st, "power", true);
+        assert!(fresh && b != a);
+        // Arriving: nothing to draw, only the swap.
+        assert_eq!(put(&mut st, "power", true), (b, false));
+        shown(&mut st, b);
+        // Back to Docker: still drawn in the first window.
+        assert_eq!(put(&mut st, "docker", true), (a, false));
+        shown(&mut st, a);
+        // Heading for Claude overwrites the parked one, never the one showing.
+        let (c, fresh) = put(&mut st, "claude", true);
+        assert!(fresh && c == b);
+        // Closed, then reopened on the widget last shown: nothing to draw.
+        st.visible = false;
+        assert_eq!(put(&mut st, "docker", true), (a, false));
+        // Without a compositor there is one window, redrawn in place.
+        let front = st.front;
+        assert_eq!(put(&mut st, "tailscale", false), (front, true));
     }
 
     /// Research M2 r2: a widget's tab follows the widget, not the window.
     #[test]
     fn a_widget_opens_on_its_own_page_in_either_window() {
         let mut st = State::default();
+        st.pages.insert("docker".into(), "stopped".into()); // chosen in one window
         let mut windows = Vec::new();
         for widget in ["docker", "power", "claude", "docker"] {
-            let page = incoming(&mut st, widget, true);
-            windows.push(st.target);
-            st.front = st.target; // shown
-            if widget == "docker" && page.is_none() {
-                st.pages.insert("docker".into(), "stopped".into()); // the user picks Stopped
-            } else if widget == "docker" {
-                assert_eq!(page.as_deref(), Some("stopped"));
-            }
+            let (t, _) = put(&mut st, widget, true);
+            windows.push(t);
+            shown(&mut st, t);
         }
         assert_ne!(windows[0], windows[3], "drawn in the other window, two dials later");
-        assert_eq!(st.pages.get("docker").map(String::as_str), Some("stopped"));
-        // Without a compositor there is one window.
-        let front = st.front;
-        incoming(&mut st, "power", false);
-        assert_eq!(st.target, front);
+        assert_eq!(st.pages.get("docker").map(String::as_str), Some("stopped"), "the shell hands this to either window");
     }
 
     #[test]

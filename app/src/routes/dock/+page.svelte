@@ -3,7 +3,17 @@
   import { core, coreDown } from "$lib/core.svelte";
   import Rail from "$lib/dock/Rail.svelte";
   import type { Side } from "$lib/dock/side";
-  import { dialMenu, hoverDial, onPanelState, railLayout, railMenu, report, reportUncaught, startDrag } from "$lib/shell";
+  import {
+    dialMenu,
+    hoverApproach,
+    hoverDial,
+    onPanelState,
+    railLayout,
+    railMenu,
+    report,
+    reportUncaught,
+    startDrag,
+  } from "$lib/shell";
 
   // The rail window. The shell sizes the window to whatever this page
   // measures and opens panels against the dial rectangles reported here.
@@ -76,6 +86,7 @@
       {open}
       {side}
       onhover={(widget) => hoverDial(widget).catch(report)}
+      onapproach={(widget) => hoverApproach(widget).catch(report)}
       ongrab={() => startDrag().catch(report)}
       onmenu={menu}
     />

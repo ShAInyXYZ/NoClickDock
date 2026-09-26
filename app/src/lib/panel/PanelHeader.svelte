@@ -46,6 +46,7 @@
     font: 600 var(--fs-body)/1 var(--font-sans);
     color: var(--tone);
   }
-  .PanelHeader-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* A 1× line box clips descenders under overflow:hidden ("runninq"). */
+  .PanelHeader-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 20px; }
   .PanelHeader-state[data-tone="ok"], .PanelHeader-state[data-tone="idle"] { color: var(--muted); }
 </style>

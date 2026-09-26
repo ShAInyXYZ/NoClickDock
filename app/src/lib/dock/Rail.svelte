@@ -20,6 +20,7 @@
     side = "right",
     element = $bindable(),
     onhover,
+    onapproach,
     ongrab,
     onmenu,
     children,
@@ -32,11 +33,57 @@
     side?: Side;
     element?: HTMLElement;
     onhover?: (widget: string | null) => void;
+    /** While a panel is open: the dial the pointer is heading for. */
+    onapproach?: (widget: string) => void;
     ongrab?: (event: PointerEvent) => void;
     /** Right-click: on a dial with its widget, on the rail itself with null. */
     onmenu?: (widget: string | null) => void;
     children?: Snippet;
   } = $props();
+
+  // While a panel is open, the dial the pointer is heading for along the
+  // rail: in the last third of a dial moving on, or in the gap before the
+  // next. The shell draws that widget ahead, unseen (design M1 r4); a wrong
+  // guess costs only a redraw nobody sees.
+  let along: number | null = null;
+  let predicted: string | null = null;
+  $effect(() => {
+    void open;
+    predicted = null;
+  });
+  function approach(event: PointerEvent) {
+    if (!onapproach || !open || !element) {
+      along = null;
+      return;
+    }
+    const vertical = orientation !== "horizontal";
+    const p = vertical ? event.clientY : event.clientX;
+    const d = along === null ? 0 : p - along;
+    along = p;
+    if (Math.abs(d) < 1) return;
+    const dials = [...element.querySelectorAll<HTMLElement>(".Slot[data-widget]")].map((slot) => {
+      const r = slot.querySelector(".Dial")!.getBoundingClientRect();
+      return { widget: slot.dataset.widget!, start: vertical ? r.top : r.left, end: vertical ? r.bottom : r.right };
+    });
+    let next: string | undefined;
+    for (let i = 0; i < dials.length; i++) {
+      const { start, end } = dials[i];
+      if (p >= start && p <= end) {
+        const f = (p - start) / (end - start);
+        if (d > 0 && f > 2 / 3) next = dials[i + 1]?.widget;
+        if (d < 0 && f < 1 / 3) next = dials[i - 1]?.widget;
+        break;
+      }
+      if (i + 1 < dials.length && p > end && p < dials[i + 1].start) {
+        next = d > 0 ? dials[i + 1].widget : dials[i].widget;
+        break;
+      }
+    }
+    if (next && next !== open && next !== predicted) {
+      predicted = next;
+      onapproach(next);
+    }
+  }
 
   function grab(event: PointerEvent) {
     if (event.button !== 0 || (event.target as Element).closest(".Dial")) return;
@@ -52,6 +99,8 @@
   aria-label="NoClickDock"
   bind:this={element}
   onpointerdown={grab}
+  onpointermove={approach}
+  onpointerleave={() => (along = null)}
   oncontextmenu={(event) => {
     if (!onmenu) return;
     event.preventDefault();

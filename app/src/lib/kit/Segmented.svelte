@@ -73,7 +73,7 @@
     min-width: 0;
     transition: color .1s, background .1s;
   }
-  .Segmented-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .Segmented-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; line-height: 14px; }
   .Segmented-btn:hover { color: var(--text); }
   .Segmented-btn[aria-selected="true"] {
     color: var(--text);

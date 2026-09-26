@@ -4,12 +4,12 @@
 
   // Newest nearest the dial, at most three, 6px apart. The pointer passes
   // through: a toast never blocks the desktop under it.
-  let { toasts }: { toasts: { key: number | string; tone: Tone; text: string; leaving?: boolean }[] } = $props();
+  let { toasts }: { toasts: { key: number | string; tone: Tone; text: string }[] } = $props();
 </script>
 
 <div class="ToastStack" aria-live="polite">
   {#each toasts as toast (toast.key)}
-    <Toast tone={toast.tone} text={toast.text} leaving={toast.leaving} />
+    <Toast tone={toast.tone} text={toast.text} />
   {/each}
 </div>
 

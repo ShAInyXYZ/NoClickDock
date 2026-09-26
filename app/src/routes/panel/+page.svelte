@@ -9,6 +9,7 @@
     panelLayout,
     panelPage,
     panelPainted,
+    panelReady,
     report,
     reportUncaught,
   } from "$lib/shell";
@@ -104,6 +105,7 @@
       await tick();
       measure();
     });
+    unlistenOpen.then(() => panelReady()).catch(report);
 
     const root = document.documentElement;
     const enter = () => hoverPanel(true).catch(report);

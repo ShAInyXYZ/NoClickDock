@@ -45,6 +45,9 @@ export function reportUncaught() {
 export const railLayout = (layout: RailLayout) => invoke<void>("rail_layout", { layout });
 export const hoverDial = (widget: string | null) => invoke<void>("hover_dial", { widget });
 export const hoverPanel = (inside: boolean) => invoke<void>("hover_panel", { inside });
+/** While a panel is open, the dial the pointer is heading for: the shell
+ *  draws it ahead, unseen, so the switch on arrival is only the swap. */
+export const hoverApproach = (widget: string) => invoke<void>("hover_approach", { widget });
 export const panelLayout = (seq: number, width: number, height: number) =>
   invoke<void>("panel_layout", { seq, width, height });
 /** Painted at this size (the one given to `panelLayout`); an older size shows nothing. */
@@ -52,6 +55,8 @@ export const panelPainted = (seq: number, width: number, height: number) =>
   invoke<void>("panel_painted", { seq, width, height });
 /** A tab chosen: the shell keeps it for the widget, for both panel windows. */
 export const panelPage = (widget: string, page: string) => invoke<void>("panel_page", { widget, page });
+/** The panel page listens: anything asked of it while it loaded is asked again. */
+export const panelReady = () => invoke<void>("panel_ready");
 export const startDrag = () => getCurrentWindow().startDragging();
 export const dialMenu = (widget: string) => invoke<void>("dial_menu", { widget });
 export const railMenu = () => invoke<void>("rail_menu");
@@ -60,7 +65,7 @@ export const railMenu = () => invoke<void>("rail_menu");
 export interface ToastStackMessage {
   seq: number;
   side: Side;
-  items: { key: number; tone: Tone; text: string; leaving: boolean }[];
+  items: { key: number; tone: Tone; text: string }[];
 }
 export const onToasts = (fn: (stack: ToastStackMessage) => void): Promise<UnlistenFn> =>
   listen<ToastStackMessage>("toasts", (event) => fn(event.payload));

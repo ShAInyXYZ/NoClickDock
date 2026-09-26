@@ -48,7 +48,7 @@
     font: 500 var(--fs-small)/1 var(--font-sans);
     color: var(--muted);
   }
-  .Chip-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .Chip-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 16px; }
   .Chip-value {
     margin-left: auto;
     font: 400 var(--fs-small)/1 var(--font-mono);

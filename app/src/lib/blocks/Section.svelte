@@ -23,7 +23,9 @@
   }
   .Section:first-child { margin-top: 0; border-top: 0; }
   .Section-title {
-    font: 500 var(--fs-micro)/1 var(--font-mono);
+    /* Uppercase has no descenders, but a 1× line box under overflow:hidden
+       would clip any that came (a "·", a lowercase unit). */
+    font: 500 var(--fs-micro)/16px var(--font-mono);
     letter-spacing: .22em;
     text-transform: uppercase;
     color: var(--dim);
