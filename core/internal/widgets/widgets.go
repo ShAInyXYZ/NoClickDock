@@ -15,7 +15,7 @@ import (
 // Real is every widget that measures this machine. A widget joins this list
 // when its collector reaches parity with the Python one.
 func Real() []hub.Collector {
-	return []hub.Collector{disk.New()}
+	return []hub.Collector{disk.New(), docker.New()}
 }
 
 // Mocks is every widget, each inventing its data: still (one fixed instant,
@@ -25,7 +25,7 @@ func Mocks(live bool) []hub.Collector {
 	var out []hub.Collector
 	for _, m := range []hub.Mocker{
 		claude.Widget{}, codex.Widget{}, comfyui.Widget{}, disk.New(),
-		docker.Widget{}, power.Widget{}, tailscale.Widget{},
+		docker.Mock{}, power.Widget{}, tailscale.Widget{},
 	} {
 		out = append(out, hub.Mocked(m, live))
 	}

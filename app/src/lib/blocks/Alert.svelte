@@ -68,6 +68,8 @@
     grid-column: 2 / 4;
     font: 400 var(--fs-small)/16px var(--font-sans);
     color: var(--muted);
+    /* A second line (what else is known) shows when the first leaves room. */
+    white-space: pre-line;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
