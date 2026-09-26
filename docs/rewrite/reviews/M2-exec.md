@@ -203,3 +203,72 @@ restored after each run.
   wall-clock-aligned recorder.
 - **The core does not yet reject duplicate action ids within a block.** The
   UI no longer breaks on them.
+
+## M2 r2 (research r1 + design M1 r2) — `fde7211`, `13f1995`, `3c69860`, `42fe857`, `82c8f12`
+
+- **Off-main-thread X calls (`fde7211`).** The sidecar reader pushed
+  toasts itself; placing them read the monitor through GDK on the reader
+  thread (the xcb abort, and a deadlock that stopped the shell reading the
+  core). `main_thread::run` hops to the main thread, `assert` panics in
+  debug builds (logs once in release), and `init_xlib` calls XInitThreads
+  first thing.
+- **No AppIndicator library → no abort.** The tray is built only when
+  `libayatana-appindicator3.so.1` or `libappindicator3.so.1` loads.
+  Checked with the library hidden in a user namespace: one stderr line, the
+  dock runs.
+- **Parked windows take no input.** Empty GDK input shape instead of tao's
+  1×1 region; a Tk probe under the parked panel's corner gets the pointer.
+- **Toasts:** newest three per widget wait, none older than 30 s is shown,
+  a widget whose toasts keep coming yields to one that waits, and they wait
+  while the dock is hidden from the tray.
+- **Rail placement:** the shell's own moves are recognised by a 400 ms
+  deadline (a no-op move left the old counter high); `_GTK_WORKAREAS_Dn` is
+  watched on the root window through an x11rb connection of our own.
+- **URLs** are parsed (`url` crate): http(s) only, a host, no userinfo, no
+  control characters or spaces; a refused one is logged.
+- **Switch blink (design M1 r2).** Two panel windows: the incoming widget
+  is drawn, sized and placed in the parked one; the page reports
+  `panel_painted` after the window took its size and two frames painted;
+  then it is shown and the other parked in one main-loop turn. Both are
+  mapped parked at start (WebKit runs no frames in a never-shown window);
+  each page listens only to its own window (a listener without a target
+  hears events sent to the other). Tried first and dropped: one fixed
+  transparent strip — WebKitGTK left the old panel's pixels where the page
+  became transparent, even after a full GTK redraw. Measured on Xvfb +
+  picom at 60 fps, 10 size-changing switches: 7 clean old → new, 3 with one
+  empty frame (picom's handling of opacity-0 windows; Mutter to be
+  measured); dial → swap 20–33 ms. Cost: one more webview.
+
+## M2 design r1 part A — `5c83d5b`, `38209da`, `dab3002`
+
+All ten must-fixes and the cheap should-fixes:
+1. Rows are one line (`.Row-line`, nowrap); a long value ellipsizes.
+2. A18: peers and endpoints in Manrope, `row.mono` only for paths
+   (Plex Mono 11.5/400), labels in sentence case, values in lowercase words.
+3. State labels name the fact in sentence case (`Console degraded`).
+4. One time format; `sys.Clock` for every writer from M4.
+5. Model split as a `stats` line.
+6. Unknown is words, never 0 (codex-mini; ComfyUI offline).
+7. Nothing twice: ComfyUI offline is the sentence alone; the core-down
+   footer says `retrying every 10 s` · `since 03:27:52` (amber; the shell's
+   link state now carries `since`); Docker System drops its Engine
+   duplicates (one row per kind; versions in the footer).
+8. Power: one table with row groups (`TableRow.group/meta`, `model.Group`),
+   numbers without units as the reference; the split gives the names'
+   column 1.2 parts.
+9. Tailscale: every online peer `ok`; a relayed one `warn` in lamp and
+   value.
+10. Tailscale: problems first (watched offline, then health; a node that
+    is down leads with This node).
+
+Should-fixes taken: the alert title flexes; Docker's crash body no longer
+repeats its meta, `5 stacks · 10 containers`, a partial stack's value
+`warn`; an empty glance reads `—`; the gallery's toast specimen is one
+widget's stack (ComfyUI's transition words); status pages' own service
+names; `27″`, `vram`; a `panel/ncd/core-down` gallery surface.
+
+**For main:** ARCHITECTURE's `table` row gains `group?`/`meta?` (a row that
+opens a group; no cells) — the block table there should say so.
+
+Gallery audit (`shoot.mjs --audit`, 1× and 2×): 33 surfaces, 0 findings,
+0 console errors.
