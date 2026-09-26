@@ -38,6 +38,8 @@ const (
 
 var errStillCollecting = errors.New("still collecting…")
 
+const stillRunning = "that is still running"
+
 type Hub struct {
 	platform string
 	cfg      *config.Store
@@ -420,6 +422,13 @@ func (h *Hub) Handle(ctx context.Context, line []byte) error {
 
 func (h *Hub) act(ctx context.Context, req model.Request) {
 	ok, msg := h.runAction(ctx, req)
+	if msg == stillRunning {
+		// A second press of an action still running: answered to its sender
+		// only (no widget, action or args, so no window takes it for the
+		// running one's result), and no toast — the first is still coming.
+		h.broadcast(model.NewResult(model.Request{ID: req.ID}, false, msg))
+		return
+	}
 	h.broadcast(model.NewResult(req, ok, msg))
 	// Also a toast: an action chosen from a menu has no panel to answer in.
 	// The shell drops it when the widget's panel is open and already says it.
@@ -464,7 +473,7 @@ func (h *Hub) runAction(ctx context.Context, req model.Request) (bool, string) {
 	}
 	h.mu.Unlock()
 	if busy {
-		return false, "that is still running"
+		return false, stillRunning
 	}
 	defer func() {
 		h.mu.Lock()

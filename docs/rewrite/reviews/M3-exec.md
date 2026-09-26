@@ -201,3 +201,21 @@ the domain example.org).
 - Docker actions have not been exercised against a live daemon, on purpose
   (they would change the user's real containers). A disposable container
   of our own on a throwaway context would be the M7/M8 end-to-end check.
+
+## M3 r2 and r3 (research M3 r1, r2) — `e625c2f`, and with M4's final commit
+
+- **Exposure:**
+  - foreground (`Foreground[session]`) serves and funnels are read and kept
+    apart, as `Serve · session` / `Funnel · session` rows;
+  - services are listed;
+  - an unknown shape, at the top or inside a foreground entry, reads
+    `unknown`;
+  - funnel ports are sorted as numbers.
+- **Peers:** known by node key and named by their MagicDNS label. A pin
+  matches the label **or** the lower-cased HostName (`office pc` for
+  `Office PC`).
+- **Labels:** `1 health warning`; `<host> offline` cut to the 28-character
+  budget.
+- **Duplicate presses:** the hub refuses a second press of an action still
+  running with an answer that names nothing and raises no toast. Docker
+  refuses a new action on a unit it is already acting on.

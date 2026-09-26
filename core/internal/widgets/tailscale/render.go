@@ -51,7 +51,7 @@ func render(p *poll) model.Snapshot {
 	case !st.SelfOnline:
 		s.State, s.StateLabel = model.StateCrit, "this node offline"
 	case len(down) == 1:
-		s.State, s.StateLabel = model.StateWarn, down[0].Host+" offline"
+		s.State, s.StateLabel = model.StateWarn, cut(down[0].Host, 28-len(" offline"))+" offline"
 	case len(down) > 1:
 		s.State, s.StateLabel = model.StateWarn, fmt.Sprintf("%d peers offline", len(down))
 	case len(st.Health) > 0:
@@ -192,24 +192,25 @@ func panel(p *poll, down []*peer) model.Blocks {
 	switch e := p.exposure; {
 	case e == nil || e.unknown:
 		out = append(out, model.Row{Name: "Serve / funnel", Value: "unknown", LED: idle})
-	case len(e.serve) == 0 && len(e.funnel) == 0 && len(e.services) == 0:
+	case e.empty():
 		out = append(out, model.Row{Name: "Serve / funnel", Value: "nothing exposed", LED: ok})
 	default:
-		// A terminal session's serve ends with the terminal; say so.
-		session := ""
-		if e.session {
-			session = " · session"
-		}
-		if len(e.funnel) > 0 {
-			var ports []string
-			for _, hp := range e.funnel {
-				ports = append(ports, ":"+hp[strings.LastIndex(hp, ":")+1:])
+		// The public internet first; a terminal session's own rows say so,
+		// since they end with the terminal.
+		funnel := func(name string, ports []int) {
+			if len(ports) > 0 {
+				out = append(out, model.Row{Name: name, Value: portList(ports) + " · public internet", Tone: crit, LED: crit})
 			}
-			out = append(out, model.Row{Name: "Funnel", Value: strings.Join(ports, ", ") + " · public internet" + session, Tone: crit, LED: crit})
 		}
-		if len(e.serve) > 0 {
-			out = append(out, model.Row{Name: "Serve", Value: serveValue(e.serve) + session, Tone: warn, LED: warn})
+		serve := func(name string, ss []served) {
+			if len(ss) > 0 {
+				out = append(out, model.Row{Name: name, Value: serveValue(ss), Tone: warn, LED: warn})
+			}
 		}
+		funnel("Funnel", e.funnel)
+		funnel("Funnel · session", e.sessionFunnel)
+		serve("Serve", e.serve)
+		serve("Serve · session", e.sessionServe)
 		if len(e.services) > 0 {
 			out = append(out, model.Row{Name: "Services", Value: strings.Join(e.services, ", "), Tone: warn, LED: warn})
 		}
@@ -333,6 +334,14 @@ func panel(p *poll, down []*peer) model.Blocks {
 		all = append(all, part...)
 	}
 	return all
+}
+
+func portList(ports []int) string {
+	var out []string
+	for _, p := range ports {
+		out = append(out, fmt.Sprintf(":%d", p))
+	}
+	return strings.Join(out, ", ")
 }
 
 // serveValue: one port with where it goes, or the ports.

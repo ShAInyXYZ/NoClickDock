@@ -113,7 +113,9 @@ func (w *Widget) observe(st *status, now time.Time) (pinned bool) {
 	}
 	for _, p := range st.Peers {
 		if pins != nil {
-			p.Watched = pins[p.name]
+			// A pin may name the MagicDNS label or the HostName ("Office PC",
+			// label "office-pc"): legacy lists and the spec use the latter.
+			p.Watched = pins[p.name] || (p.hostname != "" && pins[p.hostname])
 		} else {
 			p.Watched = w.seen[p.id]
 		}

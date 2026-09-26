@@ -238,7 +238,7 @@ func TestServeAndFunnel(t *testing.T) {
 		t.Errorf("tailnet serve: %+v", e)
 	}
 	e, _ = parseServe(read("serve-funnel.json"))
-	if !reflect.DeepEqual(e.funnel, []string{"workstation.tail0c4fe.ts.net:443"}) {
+	if !reflect.DeepEqual(e.funnel, []int{443}) {
 		t.Errorf("funnel: %+v", e)
 	}
 	for _, none := range []string{"", "{}\n", "  "} {
@@ -253,13 +253,21 @@ func TestServeAndFunnel(t *testing.T) {
 	// A serve or funnel run in a terminal (no --bg) lives under Foreground:
 	// a public funnel must never read as nothing exposed (research M3 r1).
 	e, _ = parseServe(read("serve-foreground-funnel.json"))
-	if !reflect.DeepEqual(e.funnel, []string{"workstation.tail0c4fe.ts.net:443"}) || !e.session ||
-		!reflect.DeepEqual(e.serve, []served{{443, "127.0.0.1:5173"}}) {
+	if !reflect.DeepEqual(e.sessionFunnel, []int{443}) || len(e.funnel) != 0 ||
+		!reflect.DeepEqual(e.sessionServe, []served{{443, "127.0.0.1:5173"}}) || len(e.serve) != 0 {
 		t.Errorf("foreground funnel: %+v", e)
 	}
 	e, _ = parseServe(read("serve-mixed.json"))
-	if !reflect.DeepEqual(e.serve, []served{{8443, "localhost:8080"}, {10000, "127.0.0.1:3000"}}) || !e.session || len(e.funnel) != 0 {
-		t.Errorf("background + foreground: %+v", e)
+	if !reflect.DeepEqual(e.serve, []served{{8443, "localhost:8080"}}) || !reflect.DeepEqual(e.sessionServe, []served{{10000, "127.0.0.1:3000"}}) {
+		t.Errorf("background + foreground kept apart: %+v", e)
+	}
+	e, _ = parseServe(`{"Foreground":{"s1":{"Future":{"x":1}}}}`)
+	if !e.unknown {
+		t.Errorf("an unknown shape inside a foreground entry is unknown: %+v", e)
+	}
+	e, _ = parseServe(`{"AllowFunnel":{"n.example:8443":true,"n.example:443":true,"n.example:10000":true},"TCP":{"443":{}}}`)
+	if !reflect.DeepEqual(e.funnel, []int{443, 8443, 10000}) {
+		t.Errorf("funnel ports sorted as numbers: %v", e.funnel)
 	}
 	e, _ = parseServe(read("serve-services.json"))
 	if !reflect.DeepEqual(e.services, []string{"svc:wiki"}) || e.unknown {
@@ -290,15 +298,15 @@ func TestExposureRows(t *testing.T) {
 		}
 		var out []string
 		for _, r := range rowsOf(render(&poll{available: true, st: st, now: now, pinned: true, exposure: e}).Pages[0].Blocks) {
-			if strings.HasPrefix(r, "- Funnel") || strings.HasPrefix(r, "- Serve") || strings.HasPrefix(r, "- Services") {
+			if strings.HasPrefix(r, "- Funnel") || strings.HasPrefix(r, "- Serve ") || strings.HasPrefix(r, "- Serve |") || strings.HasPrefix(r, "- Services") {
 				out = append(out, r)
 			}
 		}
 		return out
 	}
 	if got := rows("serve-foreground-funnel.json"); !reflect.DeepEqual(got, []string{
-		"- Funnel | :443 · public internet · session | crit crit",
-		"- Serve | :443 → 127.0.0.1:5173 · session | warn warn",
+		"- Funnel · session | :443 · public internet | crit crit",
+		"- Serve · session | :443 → 127.0.0.1:5173 | warn warn",
 	}) {
 		t.Errorf("foreground funnel rows: %q", got)
 	}
@@ -446,5 +454,29 @@ func TestUnavailable(t *testing.T) {
 		if e, ok := s.Pages[0].Blocks[0].(model.Empty); !ok || e.Text != c.text {
 			t.Errorf("%+v: %+v", c.p, s.Pages[0].Blocks)
 		}
+	}
+}
+
+// Research M3 r2: a pin naming the HostName still matches when the MagicDNS
+// label differs (spaces, apostrophes, underscores).
+func TestPinsMatchTheHostNameToo(t *testing.T) {
+	st, err := parseStatus([]byte(`{"BackendState":"Running","Self":{"HostName":"workstation","Online":true},"Peer":{
+		"nodekey:cc":{"HostName":"Office PC","DNSName":"office-pc.tail0c4fe.ts.net.","Online":false},
+		"nodekey:dd":{"HostName":"build_box","DNSName":"build-box.tail0c4fe.ts.net.","Online":true}}}`), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	New(pin("office pc", "build-box")).observe(st, now)
+	ps := peers(st)
+	if !ps["office-pc"].Watched || !ps["build-box"].Watched {
+		t.Errorf("a HostName pin and a label pin both match: %+v %+v", ps["office-pc"], ps["build-box"])
+	}
+	s := render(&poll{available: true, st: st, now: now, pinned: true, exposure: &exposure{}})
+	if s.State != model.StateWarn || s.StateLabel != "office-pc offline" {
+		t.Errorf("state %s %q", s.State, s.StateLabel)
+	}
+	long := render(&poll{available: true, st: &status{Backend: "Running", SelfOnline: true, Peers: []*peer{{Host: "a-very-long-machine-name-for-a-test", Watched: true}}}, now: now, pinned: true, exposure: &exposure{}})
+	if n := len([]rune(long.StateLabel)); n > 28 || !strings.HasSuffix(long.StateLabel, " offline") {
+		t.Errorf("label %q (%d chars)", long.StateLabel, n)
 	}
 }

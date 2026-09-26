@@ -579,8 +579,27 @@ func TestTheSameActionRunsOnceAtATime(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	req.ID = "a2"
-	if ok, msg := h.runAction(context.Background(), req); ok || msg != "that is still running" {
+	if ok, msg := h.runAction(context.Background(), req); ok || msg != stillRunning {
 		t.Fatalf("a second press while running: %v %q", ok, msg)
+	}
+	// Its answer names nothing a window would take for the running
+	// action's result, and raises no toast.
+	_, sub := h.Subscribe()
+	h.act(context.Background(), req)
+	select {
+	case raw := <-sub.C:
+		var m map[string]any
+		json.Unmarshal(raw, &m)
+		if m["type"] != "result" || m["id"] != "a2" || m["widget"] != nil || m["action"] != nil {
+			t.Fatalf("refusal = %v", m)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no refusal")
+	}
+	select {
+	case raw := <-sub.C:
+		t.Fatalf("a refusal raised %s", raw)
+	case <-time.After(100 * time.Millisecond):
 	}
 	close(c.release)
 	if !<-first {

@@ -44,7 +44,8 @@ type rawStatus struct {
 type peer struct {
 	Host       string // its MagicDNS name (else its hostname), as shown
 	id         string // its node key: the identity for rates and "seen online"
-	name       string // lower-cased Host: what the watch list names
+	name       string // lower-cased Host: what the watch list names …
+	hostname   string // … or the lower-cased HostName (legacy and typed pins)
 	Online     bool
 	Active     bool // recent traffic
 	Exit       bool // our exit node
@@ -145,7 +146,7 @@ func parseStatus(data []byte, now time.Time) (*status, error) {
 			name = label
 		}
 		p := &peer{
-			Host: orQ(name), id: k, name: name,
+			Host: orQ(name), id: k, name: name, hostname: strings.ToLower(n.HostName),
 			Online: n.Online, Active: n.Active, Exit: n.ExitNode, ExitOption: n.ExitNodeOption,
 			OS: n.OS, Direct: n.CurAddr != "", Relay: n.Relay, Routes: n.PrimaryRoutes,
 			rx: n.RxBytes, tx: n.TxBytes,
@@ -182,15 +183,19 @@ func orQ(s string) string {
 // exposure is what this node publishes: tailnet-only serves and, worse,
 // funnels to the public internet.
 type exposure struct {
-	serve    []served
-	funnel   []string // host:port
-	services []string // svc:<name>, served as a Tailscale service
-	// session is set when some of it runs in a terminal (foreground), not
-	// in the background config: it ends when that terminal does.
-	session bool
+	// What the background config serves (tailnet only) and funnels (the
+	// public internet), and the same for configs run in a terminal
+	// (foreground: they end when that terminal does).
+	serve, sessionServe   []served
+	funnel, sessionFunnel []int    // ports
+	services              []string // svc:<name>, served as a Tailscale service
 	// unknown: the config holds something this reader does not know, and
 	// nothing it knows — so "nothing exposed" cannot be said.
 	unknown bool
+}
+
+func (e *exposure) empty() bool {
+	return len(e.serve)+len(e.sessionServe)+len(e.funnel)+len(e.sessionFunnel)+len(e.services) == 0
 }
 
 type served struct {
@@ -212,72 +217,94 @@ type serveConfig struct {
 	}
 	AllowFunnel  map[string]bool
 	AllowIngress map[string]bool // its name in older clients
-	Foreground   map[string]serveConfig
+	Foreground   map[string]json.RawMessage
 	Services     map[string]json.RawMessage
 }
 
-// The keys a ServeConfig may carry that expose nothing by themselves.
-var quietKeys = map[string]bool{"ETag": true}
+// The keys this reader understands, and those that expose nothing.
+var (
+	known     = map[string]bool{"TCP": true, "Web": true, "AllowFunnel": true, "AllowIngress": true, "Foreground": true, "Services": true}
+	quietKeys = map[string]bool{"ETag": true}
+)
 
 // parseServe reads `tailscale serve status --json`: a ServeConfig, "{}" or
 // nothing when there is none. Serve and funnel are one config; a port is a
 // funnel only where AllowFunnel says so (the text output lists tailnet-only
 // serves under `funnel status` too, which the Python widget took for public
-// exposure). Background and foreground (terminal) configs are merged.
+// exposure). Foreground (terminal) configs are read too, and kept apart.
 func parseServe(out string) (*exposure, error) {
 	out = strings.TrimSpace(out)
 	if out == "" || out == "{}" || out == "null" {
 		return &exposure{}, nil
 	}
+	e := &exposure{}
 	var cfg serveConfig
 	if err := json.Unmarshal([]byte(out), &cfg); err != nil {
 		return nil, fmt.Errorf("tailscale serve status: %w", err)
 	}
-	e := &exposure{}
-	targets := map[int]string{}
-	funnels := map[string]bool{}
-	merge(&cfg, targets, funnels, e)
-	for _, part := range cfg.Foreground {
-		if len(part.TCP)+len(part.Web)+len(part.AllowFunnel)+len(part.AllowIngress)+len(part.Services) > 0 {
-			e.session = true
+	unknown := strange([]byte(out))
+	e.serve, e.funnel = parts(&cfg, e)
+	var fgServe = map[int]string{}
+	fgFunnel := map[int]bool{}
+	for _, raw := range cfg.Foreground {
+		var part serveConfig
+		if json.Unmarshal(raw, &part) != nil {
+			unknown = true
+			continue
 		}
-		merge(&part, targets, funnels, e)
+		unknown = unknown || strange(raw)
+		serve, funnel := parts(&part, e)
+		for _, sv := range serve {
+			fgServe[sv.port] = sv.target
+		}
+		for _, port := range funnel {
+			fgFunnel[port] = true
+		}
 	}
-	for n, t := range targets {
-		e.serve = append(e.serve, served{port: n, target: t})
+	for port, target := range fgServe {
+		e.sessionServe = append(e.sessionServe, served{port, target})
 	}
-	sort.Slice(e.serve, func(i, j int) bool { return e.serve[i].port < e.serve[j].port })
-	for hp := range funnels {
-		e.funnel = append(e.funnel, hp)
+	sort.Slice(e.sessionServe, func(i, j int) bool { return e.sessionServe[i].port < e.sessionServe[j].port })
+	for port := range fgFunnel {
+		e.sessionFunnel = append(e.sessionFunnel, port)
 	}
-	sort.Strings(e.funnel)
+	sort.Ints(e.sessionFunnel)
 	sort.Strings(e.services)
-
 	// Something there that this reader does not understand, and nothing it
-	// does: say unknown rather than "nothing exposed".
-	if len(e.serve)+len(e.funnel)+len(e.services) == 0 {
-		var top map[string]json.RawMessage
-		if json.Unmarshal([]byte(out), &top) == nil {
-			for k, v := range top {
-				if known[k] || quietKeys[k] {
-					continue
-				}
-				if t := strings.TrimSpace(string(v)); t != "" && t != "null" && t != "{}" && t != "[]" && t != "false" && t != `""` {
-					e.unknown = true
-				}
-			}
-		}
-	}
+	// does: unknown, never "nothing exposed".
+	e.unknown = unknown && e.empty()
 	return e, nil
 }
 
-var known = map[string]bool{"TCP": true, "Web": true, "AllowFunnel": true, "AllowIngress": true, "Foreground": true, "Services": true}
+// strange: a config object with a key this reader does not know that
+// holds something.
+func strange(raw []byte) bool {
+	var top map[string]json.RawMessage
+	if json.Unmarshal(raw, &top) != nil {
+		return true
+	}
+	for k, v := range top {
+		if known[k] || quietKeys[k] {
+			continue
+		}
+		if t := strings.TrimSpace(string(v)); t != "" && t != "null" && t != "{}" && t != "[]" && t != "false" && t != `""` {
+			return true
+		}
+	}
+	return false
+}
 
-// merge adds one ServeConfig's ports, funnels and services.
-func merge(cfg *serveConfig, targets map[int]string, funnels map[string]bool, e *exposure) {
-	for hostport, web := range cfg.Web {
+// parts is one ServeConfig's served ports and funnel ports (numerically
+// sorted); its services go straight to e.
+func parts(cfg *serveConfig, e *exposure) ([]served, []int) {
+	targets := map[int]string{}
+	port := func(hostport string) (int, bool) {
 		n, err := strconv.Atoi(hostport[strings.LastIndex(hostport, ":")+1:])
-		if err != nil {
+		return n, err == nil
+	}
+	for hostport, web := range cfg.Web {
+		n, ok := port(hostport)
+		if !ok {
 			continue
 		}
 		if h, ok := web.Handlers["/"]; ok {
@@ -286,8 +313,8 @@ func merge(cfg *serveConfig, targets map[int]string, funnels map[string]bool, e 
 			targets[n] = ""
 		}
 	}
-	for port, tcp := range cfg.TCP {
-		n, err := strconv.Atoi(port)
+	for p, tcp := range cfg.TCP {
+		n, err := strconv.Atoi(p)
 		if err != nil {
 			continue
 		}
@@ -297,16 +324,28 @@ func merge(cfg *serveConfig, targets map[int]string, funnels map[string]bool, e 
 			targets[n] = ""
 		}
 	}
+	var serve []served
+	for n, t := range targets {
+		serve = append(serve, served{port: n, target: t})
+	}
+	sort.Slice(serve, func(i, j int) bool { return serve[i].port < serve[j].port })
+	funnelPorts := map[int]bool{}
 	for _, allow := range []map[string]bool{cfg.AllowFunnel, cfg.AllowIngress} {
 		for hostport, on := range allow {
-			if on {
-				funnels[hostport] = true
+			if n, ok := port(hostport); ok && on {
+				funnelPorts[n] = true
 			}
 		}
 	}
+	var funnel []int
+	for n := range funnelPorts {
+		funnel = append(funnel, n)
+	}
+	sort.Ints(funnel)
 	for name := range cfg.Services {
 		e.services = append(e.services, name)
 	}
+	return serve, funnel
 }
 
 // shortTarget drops the scheme: "http://127.0.0.1:6082" → "127.0.0.1:6082".

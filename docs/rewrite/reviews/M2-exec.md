@@ -272,3 +272,32 @@ opens a group; no cells) — the block table there should say so.
 
 Gallery audit (`shoot.mjs --audit`, 1× and 2×): 33 surfaces, 0 findings,
 0 console errors.
+
+## M2 r2b and r3 — `778b58a`, `9a9b2e9`
+
+- **r2b (research r2):** a widget's selected tab and its actions' running
+  and failed state follow the widget, not the panel window:
+  - the shell keeps the page per widget and sends it with `panel-open`;
+  - the hub broadcasts `running` and a `result` that names the action;
+  - without a compositor nothing is parked (one window, unmapped);
+  - a paint report carries its size.
+- **r3 (design M1 r3 / M2 r1b, research r3):**
+  - overlays are inert from their first map;
+  - parking is compositor-side opacity, and the swap is one change inside
+    a server grab, made after GTK has drawn the painted frame;
+  - right-click shuts the panel and keeps it shut;
+  - menus never block: our own GTK menus on Linux, the freeze's cure;
+  - open and close are instant; a toast parks after its fade;
+  - the rail re-snaps after an orientation change, and the saved position
+    agrees;
+  - the core-down reason is right;
+  - a light tray icon;
+  - a main-loop watchdog;
+  - one WebKit web process (410 → 184 MB PSS);
+  - running pills clear when the core goes.
+- **Measured under gnome-shell (Mutter) on Xvfb, 60 fps:**
+  - 12 size-changing switches with no empty or mixed frame, 33–66 ms,
+    median 50;
+  - sweeps clean.
+- **Checks:** `scripts/check-inert-overlays.py` and
+  `scripts/check-menu-under-grab.py`.
