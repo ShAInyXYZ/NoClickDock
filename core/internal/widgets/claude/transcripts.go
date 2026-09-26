@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -170,10 +169,63 @@ type record struct {
 	} `json:"message"`
 }
 
-var usageMark = []byte(`"usage"`)
+var (
+	usageMark = []byte(`"usage"`)
+	userMark  = []byte(`"user"`)
+)
+
+// prompt is the part of a user line that says what was asked.
+type prompt struct {
+	Type    string `json:"type"`
+	IsMeta  bool   `json:"isMeta"`
+	Message *struct {
+		Content json.RawMessage `json:"content"`
+	} `json:"message"`
+}
+
+// promptKind reads a user line: 0 not a prompt (a tool result, the CLI's
+// own caveat or command output), 1 a `/usage` command, 2 anything else.
+func promptKind(line []byte) int {
+	var p prompt
+	if json.Unmarshal(line, &p) != nil || p.Type != "user" || p.IsMeta || p.Message == nil {
+		return 0
+	}
+	var texts []string
+	var text string
+	if json.Unmarshal(p.Message.Content, &text) == nil {
+		texts = []string{text}
+	} else {
+		var blocks []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(p.Message.Content, &blocks) != nil {
+			return 0
+		}
+		for _, b := range blocks {
+			if b.Type == "text" { // tool results are not prompts
+				texts = append(texts, b.Text)
+			}
+		}
+	}
+	kind := 0
+	for _, t := range texts {
+		t = strings.TrimSpace(t)
+		switch {
+		case t == "", strings.HasPrefix(t, "<local-command-"):
+		case t == "/usage" || strings.Contains(t, "<command-name>/usage</command-name>"):
+			kind = max(kind, 1)
+		default:
+			return 2
+		}
+	}
+	return kind
+}
 
 // readTranscript streams one file: lines of any length, a line without
-// "usage" skipped before any JSON is decoded.
+// "usage" skipped before any JSON is decoded. A session whose only prompt
+// is `/usage` is a limits reading (ours, or the Python widget's), not
+// work: it counts for nothing.
 func readTranscript(path string) []turn {
 	f, err := os.Open(path)
 	if err != nil {
@@ -181,20 +233,29 @@ func readTranscript(path string) []turn {
 	}
 	defer f.Close()
 	var out []turn
+	asked, work := false, false // a /usage prompt seen; any other prompt seen
 	r := bufio.NewReaderSize(f, 256<<10)
 	for n := 0; ; n++ {
 		line, err := r.ReadBytes('\n')
+		if !work && len(line) > 0 && bytes.Contains(line, userMark) {
+			switch promptKind(line) {
+			case 1:
+				asked = true
+			case 2:
+				work = true
+			}
+		}
 		if len(line) > 0 && bytes.Contains(line, usageMark) {
 			if t, ok := parseLine(line, path, n); ok {
 				out = append(out, t)
 			}
 		}
-		if err != nil {
-			if err != io.EOF {
-				return out
-			}
+		if err != nil { // io.EOF, or a read error: keep what was read
 			break
 		}
+	}
+	if asked && !work {
+		return nil
 	}
 	return out
 }

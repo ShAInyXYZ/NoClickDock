@@ -2,12 +2,14 @@ package claude
 
 import (
 	"context"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/sys"
@@ -132,6 +134,57 @@ func command(path string) (name string, prefix []string) {
 	return path, nil
 }
 
+// noPersist keeps `claude -p` from writing a transcript and from firing the
+// user's SessionStart hooks: without it every reading left a session behind
+// (the Python widget left ~1,450). Never --bare: that skips the login and
+// answers with an empty cost summary.
+const noPersist = "--no-session-persistence"
+
+// flagRefused: the installed CLI said it does not know noPersist. Remembered
+// for the life of the process, so the refusal is paid once.
+var flagRefused atomic.Bool
+
+// usageArgs is the fixed argv after the program (and a shim's prefix).
+func usageArgs(prefix []string, withFlag bool) []string {
+	args := append(append([]string{}, prefix...), "-p", "/usage")
+	if withFlag {
+		args = append(args, noPersist)
+	}
+	return args
+}
+
+// refusesFlag is an older CLI's "error: unknown option '--no-session-persistence'".
+func refusesFlag(text string) bool {
+	t := strings.ToLower(text)
+	if !strings.Contains(t, noPersist) {
+		return false
+	}
+	for _, word := range []string{"unknown option", "unknown argument", "unrecognized", "unrecognised"} {
+		if strings.Contains(t, word) {
+			return true
+		}
+	}
+	return false
+}
+
+type runFunc func(ctx context.Context, dir string, timeout time.Duration, name string, args ...string) (stdout, stderr string, err error)
+
+// askUsage runs `/usage` without persistence; a CLI that refuses the flag is
+// asked once more without it, and never offered the flag again.
+func askUsage(ctx context.Context, run runFunc, dir, name string, prefix []string) string {
+	withFlag := !flagRefused.Load()
+	out, errOut, err := run(ctx, dir, limitsTimeout, name, usageArgs(prefix, withFlag)...)
+	if err != nil && withFlag && refusesFlag(out+"\n"+errOut+"\n"+err.Error()) {
+		flagRefused.Store(true)
+		log.Printf("claude: this CLI has no %s; each limits reading now leaves a transcript", noPersist)
+		out, _, err = run(ctx, dir, limitsTimeout, name, usageArgs(prefix, false)...)
+	}
+	if err != nil && out == "" {
+		return ""
+	}
+	return out
+}
+
 // readLimits asks the CLI, from the user's home (never the core's working
 // directory, whose project settings would apply). Nothing — no CLI, a
 // timeout, changed wording — is an empty list; the caller keeps what it had.
@@ -141,10 +194,5 @@ func readLimits(ctx context.Context, now time.Time) []limit {
 		return nil
 	}
 	home, _ := os.UserHomeDir()
-	args := append(append([]string{}, prefix...), "-p", "/usage")
-	out, _, err := sys.OutputIn(ctx, home, limitsTimeout, name, args...)
-	if err != nil && out == "" {
-		return nil
-	}
-	return parseLimits(out, now)
+	return parseLimits(askUsage(ctx, sys.OutputIn, home, name, prefix), now)
 }

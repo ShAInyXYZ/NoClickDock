@@ -162,3 +162,28 @@ M3-exec.md).
   wording, the Usage section keeps its last rows. The regex fixture will
   catch a change in a test, not at runtime.
 - Windows paths and the `.cmd` shim are unit-tested only (M7).
+
+## Addendum — limits readings leave no transcript
+
+- `claude -p /usage` now runs with `--no-session-persistence`: no
+  transcript is written and the user's SessionStart hooks do not fire.
+  Each reading by the Python widget left a session behind (~1,450 in the
+  home project here). Never `--bare`, which skips the login.
+- A CLI that refuses the flag (`unknown option` naming it) is asked once
+  more without it, and the refusal is remembered for the life of the
+  process. It is logged once. A timeout or any other failure is not a
+  refusal: no retry, and the flag stays.
+- The transcript scan drops any session whose only prompt is `/usage`:
+  the old junk files, and those an older CLI would still write. A tool
+  result, the CLI's caveat and command output are not prompts; a session
+  that starts with `/usage` and then does work counts.
+- **Tests:**
+  - the argv, native and through the Windows shim, with no `--bare`;
+  - the refusal, the retry, and the remembered refusal;
+  - a timeout is not a refusal;
+  - two invented `/usage` sessions, one of them with a reply that carries
+    usage, count for nothing. Without the rule the test fails, with 4
+    sessions and 25 extra tokens.
+- **The real machine:** one reading through the collector's own code path
+  returned all three rows, with the flag accepted by 2.1.280. The home
+  project's transcript count was 1,480 before and after.

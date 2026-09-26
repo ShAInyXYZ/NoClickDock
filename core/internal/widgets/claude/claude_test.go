@@ -114,8 +114,25 @@ func projects(t *testing.T) string {
 	write(t, filepath.Join(proj, "s1", "subagents", "agent-1.jsonl"), now,
 		line("assistant", ts(20*time.Minute), "s1", "msg_f", "req_f", "u9", "claude-sonnet-5", 400, 100, 0, 0))
 	write(t, filepath.Join(proj, "s2.jsonl"), now,
+		// A /usage first, then work: the session counts.
+		`{"type":"user","timestamp":"`+ts(4*time.Hour)+`","sessionId":"s2","message":{"role":"user","content":"<command-name>/usage</command-name>"}}`,
+		`{"type":"user","timestamp":"`+ts(4*time.Hour)+`","sessionId":"s2","message":{"role":"user","content":"(invented)"}}`,
 		line("assistant", ts(3*time.Hour), "s2", "msg_b", "req_b", "u10", "claude-sonnet-5", 1000, 200, 300, 500),
 		line("assistant", ts(90*time.Minute), "s2", "msg_g", "req_g", "u11", "claude-opus-5", 60, 40, 0, 0))
+	// Limits readings: sessions whose only prompt is /usage (each reading
+	// by an older CLI, or by the Python widget, left one). Nothing in them
+	// counts, not even a reply that carries usage; a tool result or the
+	// CLI's own caveat is not a prompt.
+	home := filepath.Join(root, "-home-someone")
+	write(t, filepath.Join(home, "r1.jsonl"), now,
+		`{"type":"user","isMeta":true,"timestamp":"`+ts(15*time.Minute)+`","sessionId":"r1","message":{"role":"user","content":"<local-command-caveat>(invented)</local-command-caveat>"}}`,
+		`{"type":"user","timestamp":"`+ts(15*time.Minute)+`","sessionId":"r1","message":{"role":"user","content":"<command-name>/usage</command-name>\n<command-message>usage</command-message>"}}`,
+		`{"type":"system","subtype":"local_command","timestamp":"`+ts(15*time.Minute)+`","sessionId":"r1","content":"<local-command-stdout>(invented)</local-command-stdout>"}`,
+		line("assistant", ts(15*time.Minute), "r1", "msg_r", "req_r", "u20", "<synthetic>", 0, 7, 0, 0))
+	write(t, filepath.Join(home, "r2.jsonl"), now,
+		`{"type":"user","timestamp":"`+ts(15*time.Minute)+`","sessionId":"r2","message":{"role":"user","content":[{"type":"text","text":"/usage"}]}}`,
+		`{"type":"user","timestamp":"`+ts(15*time.Minute)+`","sessionId":"r2","message":{"role":"user","content":[{"type":"tool_result","content":"(invented)"}]}}`,
+		line("assistant", ts(15*time.Minute), "r2", "msg_s", "req_s", "u21", "claude-opus-5", 9, 9, 0, 0))
 	// A file untouched for 8 days is not opened.
 	write(t, filepath.Join(proj, "old.jsonl"), now.Add(-8*24*time.Hour),
 		line("assistant", ts(time.Hour), "s9", "msg_z", "req_z", "u12", "claude-opus-5", 999_999, 0, 0, 0))
@@ -132,7 +149,7 @@ func TestSpendCountsEachMessageOnce(t *testing.T) {
 		t.Errorf("1h %d 24h %d 7d %d, want 655 2785 7785", u.H1, u.H24, u.D7)
 	}
 	if u.Sessions != 2 || !u.Available {
-		t.Errorf("sessions %d (want s1, s2)", u.Sessions)
+		t.Errorf("sessions %d (want s1, s2; never the /usage readings)", u.Sessions)
 	}
 	want := []spend{{"claude-sonnet-5", 2500}, {"claude-opus-5", 260}, {"claude-haiku-4-5-20251001", 20}}
 	if !reflect.DeepEqual(u.Models, want) {
@@ -360,6 +377,68 @@ func TestTheCLIIsRunWithAFixedArgv(t *testing.T) {
 	}
 	if name, _ := command(""); name != "" {
 		t.Error("no CLI, nothing to run")
+	}
+}
+
+func TestUsageIsAskedWithoutPersistence(t *testing.T) {
+	if got := usageArgs(nil, true); !reflect.DeepEqual(got, []string{"-p", "/usage", "--no-session-persistence"}) {
+		t.Errorf("native argv %q", got)
+	}
+	shim := []string{"/d", "/c", `C:\Users\someone\AppData\Roaming\npm\claude.cmd`}
+	if got := usageArgs(shim, true); !reflect.DeepEqual(got, append(append([]string{}, shim...), "-p", "/usage", "--no-session-persistence")) {
+		t.Errorf("shim argv %q", got)
+	}
+	if got := usageArgs(nil, false); !reflect.DeepEqual(got, []string{"-p", "/usage"}) {
+		t.Errorf("fallback argv %q", got)
+	}
+	for _, a := range usageArgs(shim, true) {
+		if a == "--bare" {
+			t.Error("--bare skips the login")
+		}
+	}
+}
+
+func TestACLIThatRefusesTheFlagIsAskedOnceWithoutIt(t *testing.T) {
+	answer, err := os.ReadFile("testdata/usage.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	flagRefused.Store(false)
+	defer flagRefused.Store(false)
+	var calls [][]string
+	old := func(_ context.Context, dir string, _ time.Duration, name string, args ...string) (string, string, error) {
+		calls = append(calls, append([]string{dir, name}, args...))
+		for _, a := range args {
+			if a == noPersist {
+				return "", "error: unknown option '--no-session-persistence'\n", fmt.Errorf("claude: error: unknown option '--no-session-persistence'")
+			}
+		}
+		return string(answer), "", nil
+	}
+	if out := askUsage(context.Background(), old, "/home/someone", "claude", nil); out != string(answer) {
+		t.Fatalf("the retry's answer is read: %q", out)
+	}
+	if !reflect.DeepEqual(calls, [][]string{
+		{"/home/someone", "claude", "-p", "/usage", "--no-session-persistence"},
+		{"/home/someone", "claude", "-p", "/usage"},
+	}) {
+		t.Errorf("calls %q", calls)
+	}
+	calls = nil
+	askUsage(context.Background(), old, "/home/someone", "claude", nil)
+	if len(calls) != 1 || len(calls[0]) != 4 {
+		t.Errorf("the refusal is remembered: %q", calls)
+	}
+
+	// Any other failure is not a refusal: no retry, the flag stays.
+	flagRefused.Store(false)
+	calls = nil
+	down := func(_ context.Context, dir string, _ time.Duration, name string, args ...string) (string, string, error) {
+		calls = append(calls, args)
+		return "", "", fmt.Errorf("claude timed out after 45s")
+	}
+	if out := askUsage(context.Background(), down, "/home/someone", "claude", nil); out != "" || len(calls) != 1 || flagRefused.Load() {
+		t.Errorf("a timeout is not a refusal: %q %q", out, calls)
 	}
 }
 
