@@ -247,6 +247,18 @@ export function coreDown(error: string): WidgetSnapshot {
   };
 }
 
+/** The rail's own dial while the interface restarts after repeated web
+ *  process crashes (the shell loads the rail as dock?restarting). */
+export function restarting(): WidgetSnapshot {
+  return {
+    ...coreDown("the interface crashed several times in a minute"),
+    state: "crit",
+    stateLabel: "interface restarting",
+    glance: { text: "…", tone: "crit" },
+    footer: "retrying in a minute",
+  };
+}
+
 /** 12:41:07 — the one time format the interface uses. */
 export function clock(ms: number): string {
   return new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { core, coreDown } from "$lib/core.svelte";
+  import { core, coreDown, restarting } from "$lib/core.svelte";
   import Rail from "$lib/dock/Rail.svelte";
   import type { Side } from "$lib/dock/side";
   import {
@@ -26,7 +26,10 @@
   // While the core is not answering, the rail still stands, with a dial of
   // its own that says so — never an invisible app.
   const down = $derived(core.linkError ? coreDown(core.linkError) : null);
-  const dials = $derived(down ? [down, ...core.widgets] : core.widgets);
+  // After repeated web process crashes the shell loads this page as
+  // dock?restarting: the NoClickDock dial alone, the least that can say so.
+  const minimal = typeof location !== "undefined" && new URLSearchParams(location.search).has("restarting");
+  const dials = $derived(minimal ? [restarting()] : down ? [down, ...core.widgets] : core.widgets);
   const dock = $derived(core.config?.dock);
 
   function measure() {

@@ -6,6 +6,16 @@
     <meta name="color-scheme" content="dark" />
     <link rel="icon" href="data:," />
     <title>NoClickDock</title>
+    <script>
+      // The overlay windows are transparent from their very first paint. A
+      // page that paints one opaque frame first leaves WebKit treating the
+      // view as opaque: after a web process crash the reloaded rail kept
+      // black corners (research M2 r5).
+      if (/^\/(dock|panel|toast)\/?$/.test(location.pathname)) document.documentElement.classList.add("overlay");
+    </script>
+    <style>
+      html.overlay, html.overlay body { background: transparent; color-scheme: normal; }
+    </style>
     %sveltekit.head%
   </head>
   <body>

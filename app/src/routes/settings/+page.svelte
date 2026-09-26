@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isTauri } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import { core } from "$lib/core.svelte";
@@ -9,14 +10,17 @@
   // The Settings window: created by the shell on demand and destroyed on
   // close (it costs nothing while shut). It reads and writes config.json
   // through the core like every window.
-  const win = getCurrentWindow();
-  const controls = {
-    drag: (event: PointerEvent) => {
-      if (event.button === 0) win.startDragging().catch(report);
-    },
-    minimize: () => win.minimize().catch(report),
-    close: () => win.close().catch(report),
-  };
+  // In a plain browser (development) there is no window to move or close.
+  const win = isTauri() ? getCurrentWindow() : null;
+  const controls = win
+    ? {
+        drag: (event: PointerEvent) => {
+          if (event.button === 0) win.startDragging().catch(report);
+        },
+        minimize: () => win.minimize().catch(report),
+        close: () => win.close().catch(report),
+      }
+    : undefined;
 
   onMount(() => {
     reportUncaught();

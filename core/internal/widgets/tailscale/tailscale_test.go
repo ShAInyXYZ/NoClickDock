@@ -306,12 +306,12 @@ func TestExposureRows(t *testing.T) {
 		return out
 	}
 	if got := rows("serve-foreground-funnel.json"); !reflect.DeepEqual(got, []string{
-		"- Funnel · session | :443 · public internet | crit crit",
-		"- Serve · session | :443 → 127.0.0.1:5173 | warn warn",
+		"- Funnel · session | :443 · public internet | warn warn",
+		"- Serve · session | :443 → 127.0.0.1:5173 | info info",
 	}) {
 		t.Errorf("foreground funnel rows: %q", got)
 	}
-	if got := rows("serve-services.json"); !reflect.DeepEqual(got, []string{"- Services | svc:wiki | warn warn"}) {
+	if got := rows("serve-services.json"); !reflect.DeepEqual(got, []string{"- Services | svc:wiki | info info"}) {
 		t.Errorf("service rows: %q", got)
 	}
 }
@@ -374,25 +374,25 @@ func TestPanel(t *testing.T) {
 		"- workstation | running | ok ",
 		"- Address | 100.64.0.10 |  ",
 		"- MagicDNS | workstation.tail0c4fe.ts.net |  ",
-		"- Version | 1.80.2 · update available | warn warn",
+		"- Version | 1.80.2 · update available | info info",
 		"- Key expires | 3d | warn warn",
-		"- Exit node | exit-fra | warn warn",
+		"- Exit node | exit-fra | info info",
 		"# Exposure  ",
-		"- Funnel | :443 · public internet | crit crit",
-		"- Serve | :443 → 127.0.0.1:3000 | warn warn",
-		"- Exit node | offered by this node | warn warn",
-		"- Route advertised | 10.10.0.0/16 | warn warn",
+		"- Funnel | :443 · public internet | warn warn",
+		"- Serve | :443 → 127.0.0.1:3000 | info info",
+		"- Exit node | offered by this node | info info",
+		"- Route advertised | 10.10.0.0/16 | info info",
 		"- Exit nodes available | exit-fra |  ",
 		"- Route via router | 192.168.50.0/24 |  ",
 		"# Online 5 ",
 		"- atlas | linux · direct | ok ",
-		"- build-agent | linux · relay fra | warn warn",
+		"- build-agent | linux · relay fra | info info",
 		"- exit-fra | linux · direct | ok ",
-		"- phone | iOS · relay ams | warn warn",
+		"- phone | iOS · relay ams | info info",
 		"- router | linux · direct | ok ",
 		"# Dormant 3 ",
 		"  [old-desktop 12d ago idle]",
-		"  [old-vm key expired warn]",
+		"  [old-vm key expired info]",
 		"  [pi-garage - idle]",
 	}
 	got := rowsOf(s.Pages[0].Blocks)
@@ -495,5 +495,27 @@ func TestSettingsAskForThePeers(t *testing.T) {
 	}
 	if _, _, err := w.Ask(context.Background(), "probe", nil); err == nil {
 		t.Error("a question it does not know")
+	}
+}
+
+// A20-a: configuration never raises the widget; a public funnel is a
+// steady warn, never crit.
+func TestConfigurationIsNotAProblem(t *testing.T) {
+	st := load(t, "status-running.json", now)
+	for _, p := range st.Peers {
+		p.Online, p.Watched = true, false
+	}
+	st.Health = nil
+	st.ExpiryDays = 90
+	quiet := &poll{available: true, now: now, st: st, exposure: &exposure{serve: []served{{port: 443, target: "localhost:3000"}}}}
+	s := render(quiet)
+	if model.RaiseToWorst(&s) || s.State != model.StateOK {
+		t.Errorf("a tailnet serve, routes and exits raised it: %q %q", s.State, s.StateLabel)
+	}
+	public := &poll{available: true, now: now, st: st, exposure: &exposure{funnel: []int{443}}}
+	s = render(public)
+	model.RaiseToWorst(&s)
+	if s.State != model.StateWarn || s.StateLabel != "public funnel :443" || s.Issues[len(s.Issues)-1].ID != "funnel" {
+		t.Errorf("a public funnel: %q %q", s.State, s.StateLabel)
 	}
 }

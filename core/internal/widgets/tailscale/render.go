@@ -42,6 +42,11 @@ func render(p *poll) model.Snapshot {
 		}
 	}
 	sort.Slice(down, func(i, j int) bool { return down[i].Host < down[j].Host })
+	var funnels []int
+	if e := p.exposure; e != nil && !e.unknown {
+		funnels = append(append(funnels, e.funnel...), e.sessionFunnel...)
+		sort.Ints(funnels)
+	}
 	up := len(watched) - len(down)
 	expiring := st.HasExpiry && st.ExpiryDays <= keyWarnDays
 
@@ -60,6 +65,10 @@ func render(p *poll) model.Snapshot {
 		s.State, s.StateLabel = model.StateWarn, fmt.Sprintf("%d health %s", n, plural(n, "warning", "warnings"))
 	case expiring:
 		s.State, s.StateLabel = model.StateWarn, fmt.Sprintf("key expires in %.0fd", st.ExpiryDays)
+	case len(funnels) > 0:
+		// The whole internet can reach this machine: a steady amber, never
+		// crit (A20-a), deliberate or not.
+		s.State, s.StateLabel = model.StateWarn, cut("public funnel "+portList(funnels), 28)
 	default:
 		s.State, s.StateLabel = model.StateOK, fmt.Sprintf("%d %s up", up, plural(up, "peer", "peers"))
 	}
@@ -86,6 +95,9 @@ func render(p *poll) model.Snapshot {
 	}
 	for _, h := range st.Health {
 		s.Issues = append(s.Issues, model.Issue{ID: "health:" + h, Text: cut(h, 80), Tone: model.ToneWarn})
+	}
+	if len(funnels) > 0 {
+		s.Issues = append(s.Issues, model.Issue{ID: "funnel", Text: "This machine is on the public internet (funnel " + portList(funnels) + ")", Tone: model.ToneWarn})
 	}
 
 	if st.IP != "" {
@@ -145,7 +157,7 @@ func unavailable(p *poll) model.Snapshot {
 
 func panel(p *poll, down []*peer) model.Blocks {
 	st := p.st
-	ok, warn, crit, idle := model.ToneOK, model.ToneWarn, model.ToneCrit, model.ToneIdle
+	ok, warn, crit, idle, info := model.ToneOK, model.ToneWarn, model.ToneCrit, model.ToneIdle, model.ToneInfo
 	var out, health, offline, tail model.Blocks
 
 	// When the daemon has something to say, it outranks the node's facts.
@@ -170,7 +182,7 @@ func panel(p *poll, down []*peer) model.Blocks {
 	}
 	switch {
 	case st.Update:
-		out = append(out, model.Row{Name: "Version", Value: st.Version + " · update available", Tone: warn, LED: warn})
+		out = append(out, model.Row{Name: "Version", Value: st.Version + " · update available", Tone: info, LED: info})
 	case st.Version != "":
 		out = append(out, model.Row{Name: "Version", Value: st.Version})
 	}
@@ -183,11 +195,14 @@ func panel(p *poll, down []*peer) model.Blocks {
 	}
 	if st.ExitNode != "" {
 		// Your traffic leaves through another machine: always said.
-		out = append(out, model.Row{Name: "Exit node", Value: st.ExitNode, Tone: warn, LED: warn})
+		out = append(out, model.Row{Name: "Exit node", Value: st.ExitNode, Tone: info, LED: info})
 	}
 
 	// What this machine publishes, and what the tailnet offers. Nothing
-	// exposed is said out loud: it is the reassuring case.
+	// exposed is said out loud: it is the reassuring case. Configuration is
+	// not a problem (A20-a): serving the tailnet, advertising a route or
+	// offering an exit is info and never raises the widget; only a public
+	// funnel — the whole internet — is warn, a steady amber, never crit.
 	out = append(out, model.Section{Title: "Exposure"})
 	switch e := p.exposure; {
 	case e == nil || e.unknown:
@@ -199,12 +214,12 @@ func panel(p *poll, down []*peer) model.Blocks {
 		// since they end with the terminal.
 		funnel := func(name string, ports []int) {
 			if len(ports) > 0 {
-				out = append(out, model.Row{Name: name, Value: portList(ports) + " · public internet", Tone: crit, LED: crit})
+				out = append(out, model.Row{Name: name, Value: portList(ports) + " · public internet", Tone: warn, LED: warn})
 			}
 		}
 		serve := func(name string, ss []served) {
 			if len(ss) > 0 {
-				out = append(out, model.Row{Name: name, Value: serveValue(ss), Tone: warn, LED: warn})
+				out = append(out, model.Row{Name: name, Value: serveValue(ss), Tone: info, LED: info})
 			}
 		}
 		funnel("Funnel", e.funnel)
@@ -212,14 +227,14 @@ func panel(p *poll, down []*peer) model.Blocks {
 		serve("Serve", e.serve)
 		serve("Serve · session", e.sessionServe)
 		if len(e.services) > 0 {
-			out = append(out, model.Row{Name: "Services", Value: strings.Join(e.services, ", "), Tone: warn, LED: warn})
+			out = append(out, model.Row{Name: "Services", Value: strings.Join(e.services, ", "), Tone: info, LED: info})
 		}
 	}
 	if st.ExitOffered {
-		out = append(out, model.Row{Name: "Exit node", Value: "offered by this node", Tone: warn, LED: warn})
+		out = append(out, model.Row{Name: "Exit node", Value: "offered by this node", Tone: info, LED: info})
 	}
 	for _, r := range st.Routes {
-		out = append(out, model.Row{Name: "Route advertised", Value: r, Tone: warn, LED: warn})
+		out = append(out, model.Row{Name: "Route advertised", Value: r, Tone: info, LED: info})
 	}
 	var exits []string
 	var routes model.Blocks
@@ -269,11 +284,12 @@ func panel(p *poll, down []*peer) model.Blocks {
 			if pr.HasRate {
 				bits = append(bits, fmtRate(pr.Rate))
 			}
-			// Online is ok, quiet or not; a relayed path is the one thing to
-			// fix, and its lamp says so with its value.
+			// Online is ok, quiet or not; a relayed path is worth knowing (it
+			// is slower) but is not a fault: info, which never raises the
+			// widget (A20-a).
 			r := model.Row{Name: pr.Host, Value: strings.Join(nonEmpty(bits), " · "), LED: ok}
 			if pr.Relay != "" && !pr.Direct {
-				r.Tone, r.LED = warn, warn
+				r.Tone, r.LED = info, info
 			}
 			out = append(out, r)
 		}
@@ -306,7 +322,7 @@ func panel(p *poll, down []*peer) model.Blocks {
 				c.Value = "-"
 			}
 			if pr.KeyExpired {
-				c.Tone, c.Value = warn, "key expired"
+				c.Tone, c.Value = info, "key expired" // a dormant peer's: nothing to do here
 			}
 			chips.Items = append(chips.Items, c)
 		}
