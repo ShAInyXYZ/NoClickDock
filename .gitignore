@@ -11,3 +11,4 @@ app/src-tauri/binaries/
 app/src-tauri/gen/
 core/ncd-core
 core/ncd-core.exe
+dist/

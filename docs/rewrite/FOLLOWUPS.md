@@ -17,3 +17,8 @@ Not must-fix: noted so nothing is lost. One line each, with its source.
 - Power `no-readings` variant: say it in one sentence, not a table of dashes, `Board ~0` and an empty right column. (M5-design-r1)
 - Power report copy: "There are 1 gaps". (M5-design-r1)
 - Note: the crash-reload dark corners above were fixed in 7dd2612 (app.html marks overlay pages transparent before the first paint). (M7-exec)
+- Windows: never run — first run owed on a real machine (tray, placement, the panel swap while WebView2 may not paint a hidden window, toasts on hover, install.ps1 end to end). (M7-exec)
+- Windows: web-process crash recovery (WebView2 ProcessFailed) not wired. (M7-exec)
+- Windows: the tray's dark variant for light taskbars is not wired. (M7-exec)
+- Windows: NoClickDock 1's %APPDATA%\NoClickDock\bar.conf is not migrated (migration is Linux-only). (M7-exec)
+- Windows Power: displays, USB and drives are not read; CPU package power needs LibreHardwareMonitor. (M7-exec, specs/power.md)
