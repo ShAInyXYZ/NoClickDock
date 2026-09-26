@@ -9,6 +9,7 @@
     onPanelOpen,
     onPanelReveal,
     panelLayout,
+    panelPage,
     panelPainted,
     report,
     reportUncaught,
@@ -41,6 +42,14 @@
   // header under the pointer.
   const steady = $derived(side === "top" && (snapshot?.pages.length ?? 0) > 1);
 
+  // A tab chosen here is the widget's, not this window's: the shell keeps it
+  // so the other panel window opens on it too.
+  function choose(id: string, chosen: string | undefined) {
+    if (!chosen || pages[id] === chosen) return;
+    pages[id] = chosen;
+    panelPage(id, chosen).catch(report);
+  }
+
   async function measure() {
     if (!frame || !widget || closing) return;
     let { width, height } = frame.getBoundingClientRect();
@@ -53,7 +62,7 @@
       await panelLayout(asked, width, height);
       await sized(width, height);
       await painted();
-      if (asked === seq) await panelPainted(asked);
+      if (asked === seq) await panelPainted(asked, width, height);
     } catch (error) {
       report(error);
     }
@@ -102,6 +111,7 @@
     disconnect.catch(report);
     const unlistenOpen = onPanelOpen(async (open) => {
       closing = false;
+      if (open.page) pages[open.widget] = open.page;
       widget = open.widget;
       side = open.side;
       // The window keeps 1px of margin on every side for the ring.
@@ -144,7 +154,7 @@
   <div class="window" class:closing bind:this={frame}>
     <Panel
       {snapshot}
-      bind:page={pages[snapshot.id]}
+      bind:page={() => pages[snapshot.id], (chosen) => choose(snapshot.id, chosen)}
       {maxHeight}
       minHeight={steady ? tallest : undefined}
       stale={widget === CORE_DIAL ? false : undefined}

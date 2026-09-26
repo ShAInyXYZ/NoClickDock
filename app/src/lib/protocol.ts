@@ -100,7 +100,8 @@ export type CoreMessage =
   | { type: "toast"; toast: Toast }
   | { type: "tick"; widget: string; at: string }
   | { type: "config"; config: Config }
-  | { type: "result"; id: string; ok: boolean; message: string };
+  | { type: "running"; id: string; widget: string; action: string; args?: Record<string, string> }
+  | { type: "result"; id: string; ok: boolean; message: string; widget?: string; action?: string; args?: Record<string, string> };
 
 /** UI → core: one stdin line, or one POST /v1/send. */
 export type UiMessage =
@@ -110,4 +111,4 @@ export type UiMessage =
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> | null : T[K] | null };
 
-export const CORE_MESSAGE_TYPES = ["hello", "snapshot", "tick", "toast", "config", "result"] as const;
+export const CORE_MESSAGE_TYPES = ["hello", "snapshot", "tick", "toast", "config", "running", "result"] as const;

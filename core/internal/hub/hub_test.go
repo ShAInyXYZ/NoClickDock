@@ -384,19 +384,29 @@ func TestActionsAreCheckedAgainstWhatWasOffered(t *testing.T) {
 		if err := h.Handle(context.Background(), []byte(line)); err != nil {
 			t.Fatal(err)
 		}
-		select {
-		case raw := <-sub.C:
-			var m map[string]any
-			json.Unmarshal(raw, &m)
-			return m
-		case <-time.After(2 * time.Second):
-			t.Fatal("no result")
-			return nil
+		for {
+			select {
+			case raw := <-sub.C:
+				var m map[string]any
+				json.Unmarshal(raw, &m)
+				if m["type"] == "running" {
+					// Every window hears the action start, with what it is.
+					if m["widget"] != "docker" || m["action"] == nil {
+						t.Fatalf("running = %v", m)
+					}
+					continue
+				}
+				return m
+			case <-time.After(2 * time.Second):
+				t.Fatal("no result")
+				return nil
+			}
 		}
 	}
 
 	r := send(`{"type":"action","id":"a1","widget":"docker","action":"stop","args":{"container":"api-gateway"}}`)
-	if r["type"] != "result" || r["id"] != "a1" || r["ok"] != true || r["message"] != "stopped api-gateway" {
+	if r["type"] != "result" || r["id"] != "a1" || r["ok"] != true || r["message"] != "stopped api-gateway" ||
+		r["widget"] != "docker" || r["action"] != "stop" || r["args"].(map[string]any)["container"] != "api-gateway" {
 		t.Fatalf("result = %v", r)
 	}
 	if toast := send2(t, sub); toast["type"] != "toast" || toast["toast"].(map[string]any)["text"] != "stopped api-gateway" {
@@ -519,7 +529,7 @@ func TestSlowSubscriberIsDroppedNotBlocking(t *testing.T) {
 	h := newHub(t)
 	_, sub := h.Subscribe()
 	for i := 0; i < subscriberBuffer+1; i++ {
-		h.broadcast(model.NewResult("x", true, ""))
+		h.broadcast(model.NewResult(model.Request{ID: "x"}, true, ""))
 	}
 	n := 0
 	for range sub.C { // closed after the buffered messages

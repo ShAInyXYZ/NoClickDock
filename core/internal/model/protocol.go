@@ -49,12 +49,28 @@ type ConfigMessage struct {
 	Config any    `json:"config"`
 }
 
-// Result answers one action, matched by the id the interface chose.
+// Result answers one action, matched by the id the interface chose. It
+// also names the action, so every window — not only the one that sent it —
+// knows which button failed (both panel windows show the same widget's
+// state, M2-a).
 type Result struct {
-	Type    string `json:"type"`
-	ID      string `json:"id"`
-	OK      bool   `json:"ok"`
-	Message string `json:"message"`
+	Type    string            `json:"type"`
+	ID      string            `json:"id"`
+	OK      bool              `json:"ok"`
+	Message string            `json:"message"`
+	Widget  string            `json:"widget,omitempty"`
+	Action  string            `json:"action,omitempty"`
+	Args    map[string]string `json:"args,omitempty"`
+}
+
+// Running says an action has started, to every window: its button is busy
+// wherever the widget is drawn, until the Result.
+type Running struct {
+	Type   string            `json:"type"`
+	ID     string            `json:"id"`
+	Widget string            `json:"widget"`
+	Action string            `json:"action"`
+	Args   map[string]string `json:"args,omitempty"`
 }
 
 func NewHello(platform string, config any, widgets []string) Hello {
@@ -69,8 +85,12 @@ func NewTick(widget string, at time.Time) Tick {
 	return Tick{Type: "tick", Widget: widget, At: at}
 }
 
-func NewResult(id string, ok bool, message string) Result {
-	return Result{Type: "result", ID: id, OK: ok, Message: message}
+func NewResult(req Request, ok bool, message string) Result {
+	return Result{Type: "result", ID: req.ID, OK: ok, Message: message, Widget: req.Widget, Action: req.Action, Args: req.Args}
+}
+
+func NewRunning(req Request) Running {
+	return Running{Type: "running", ID: req.ID, Widget: req.Widget, Action: req.Action, Args: req.Args}
 }
 
 // Request is any UI → core message: one stdin line, or one POST /v1/send.

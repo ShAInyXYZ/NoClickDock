@@ -390,7 +390,7 @@ func (h *Hub) Handle(ctx context.Context, line []byte) error {
 
 func (h *Hub) act(ctx context.Context, req model.Request) {
 	ok, msg := h.runAction(ctx, req)
-	h.broadcast(model.NewResult(req.ID, ok, msg))
+	h.broadcast(model.NewResult(req, ok, msg))
 	// Also a toast: an action chosen from a menu has no panel to answer in.
 	// The shell drops it when the widget's panel is open and already says it.
 	if msg != "" && h.byID[req.Widget] != nil {
@@ -423,6 +423,7 @@ func (h *Hub) runAction(ctx context.Context, req model.Request) (bool, string) {
 	if !allowed {
 		return false, "unknown action"
 	}
+	h.broadcast(model.NewRunning(req))
 	actx, cancel := context.WithTimeout(ctx, actionTimeout)
 	defer cancel()
 	msg, err := a.Act(actx, req.Action, req.Args)

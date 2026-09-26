@@ -94,6 +94,7 @@ pub fn run() {
             hover::hover_panel,
             hover::panel_layout,
             hover::panel_painted,
+            hover::panel_page,
             toast::toast_layout,
             toast::toast_dismiss,
             menu::dial_menu,
@@ -105,6 +106,7 @@ pub fn run() {
             overlay::init_scale(app);
             // Built once and reused: each webview is a WebKit process.
             overlay::build(app, "rail", "dock")?;
+            overlay::watch_compositor(app);
             for label in hover::PANELS {
                 let panel = overlay::build(app, label, "panel")?;
                 overlay::prime(&panel)?;

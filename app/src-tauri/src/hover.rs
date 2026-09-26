@@ -87,6 +87,8 @@ struct State {
     target: usize,
     /// The last panel whose page has painted it at its size.
     painted: u64,
+    /// Each widget's selected page, kept here for both panel windows.
+    pages: std::collections::HashMap<String, String>,
     size: Option<(f64, f64)>,
     /// Where the panel was put for this widget: its header edge stays there.
     anchor: Option<(i32, i32)>,
@@ -113,6 +115,9 @@ struct PanelOpen {
     seq: u64,
     side: Side,
     max_height: f64,
+    /// The page the user last chose for this widget: it follows the widget,
+    /// not whichever of the two windows draws it (dock-core §4).
+    page: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -195,16 +200,29 @@ pub fn panel_layout(app: AppHandle, seq: u64, width: f64, height: f64) {
 /// window. A panel drawn in the window not showing is shown now (after the
 /// dwell, if one runs).
 #[tauri::command]
-pub fn panel_painted(app: AppHandle, seq: u64) {
+pub fn panel_painted(app: AppHandle, seq: u64, width: f64, height: f64) {
     let hover = app.state::<Hover>();
     let Ok(mut st) = hover.0.lock() else { return };
-    if seq != st.seq || st.size.is_none() {
+    // A paint of an older size (a snapshot changed it since) shows nothing:
+    // the paint of the new size will.
+    if seq != st.seq || st.size != Some((width, height)) {
         return;
     }
     st.painted = seq;
     trace("panel painted");
     if matches!(st.phase, Phase::Open(_) | Phase::Grace(_)) && !(st.visible && st.target == st.front) {
         show(&app, &mut st);
+    }
+}
+
+/// A panel page's tab changed: remembered for the widget, so the other
+/// window opens it on the same page.
+#[tauri::command]
+pub fn panel_page(app: AppHandle, widget: String, page: String) {
+    let hover = app.state::<Hover>();
+    let Ok(mut st) = hover.0.lock() else { return };
+    if widget.len() <= 64 && page.len() <= 64 {
+        st.pages.insert(widget, page);
     }
 }
 
@@ -279,16 +297,24 @@ fn after(app: &AppHandle, delay: Duration, generation: u64, then: fn(&AppHandle,
 /// (`panel_layout`); the window is then staged (during a dwell) or placed.
 fn open(app: &AppHandle, st: &mut State, widget: String) {
     let Some(g) = Geometry::of(app, &widget) else { return };
-    st.seq += 1;
-    st.widget = Some(widget.clone());
     st.side = g.side();
+    let page = incoming(st, &widget, overlay::composited());
+    let max_height = (f64::from(g.area.height) - HEADROOM * g.scale) / g.scale;
+    let _ = app.emit_to(PANELS[st.target], "panel-open", PanelOpen { widget, seq: st.seq, side: st.side, max_height, page });
+}
+
+/// Starts drawing a widget: a new seq, the window to draw it in, and the
+/// page to open it on — the widget's own, whichever window draws it.
+fn incoming(st: &mut State, widget: &str, composited: bool) -> Option<String> {
+    st.seq += 1;
+    st.widget = Some(widget.to_owned());
     st.size = None;
     st.anchor = None;
     // Drawn where it cannot be seen: never in the window showing, or still
-    // fading out.
-    st.target = 1 - st.front;
-    let max_height = (f64::from(g.area.height) - HEADROOM * g.scale) / g.scale;
-    let _ = app.emit_to(PANELS[st.target], "panel-open", PanelOpen { widget, seq: st.seq, side: st.side, max_height });
+    // fading out. Without a compositor nothing can be parked: one window,
+    // resized in place.
+    st.target = if composited { 1 - st.front } else { st.front };
+    st.pages.get(widget).cloned()
 }
 
 /// Where the panel goes: centred on its dial when first placed for a
@@ -525,6 +551,29 @@ mod tests {
         // Grown past the bottom of the work area: up by the overflow only.
         let taller = position(&mut st, &g, (663, 1500));
         assert_eq!(taller.1, 2208 + 2112 - 12 - 1500);
+    }
+
+    /// Research M2 r2: a widget's tab follows the widget, not the window.
+    #[test]
+    fn a_widget_opens_on_its_own_page_in_either_window() {
+        let mut st = State::default();
+        let mut windows = Vec::new();
+        for widget in ["docker", "power", "claude", "docker"] {
+            let page = incoming(&mut st, widget, true);
+            windows.push(st.target);
+            st.front = st.target; // shown
+            if widget == "docker" && page.is_none() {
+                st.pages.insert("docker".into(), "stopped".into()); // the user picks Stopped
+            } else if widget == "docker" {
+                assert_eq!(page.as_deref(), Some("stopped"));
+            }
+        }
+        assert_ne!(windows[0], windows[3], "drawn in the other window, two dials later");
+        assert_eq!(st.pages.get("docker").map(String::as_str), Some("stopped"));
+        // Without a compositor there is one window.
+        let front = st.front;
+        incoming(&mut st, "power", false);
+        assert_eq!(st.target, front);
     }
 
     #[test]

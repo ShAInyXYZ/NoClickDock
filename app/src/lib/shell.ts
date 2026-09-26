@@ -19,6 +19,8 @@ export interface RailLayout {
 
 export interface PanelOpen {
   widget: string;
+  /** The page last chosen for this widget, in either panel window. */
+  page?: string | null;
   /** Echoed back with the panel's size, so a stale measurement is ignored. */
   seq: number;
   side: Side;
@@ -45,7 +47,11 @@ export const hoverDial = (widget: string | null) => invoke<void>("hover_dial", {
 export const hoverPanel = (inside: boolean) => invoke<void>("hover_panel", { inside });
 export const panelLayout = (seq: number, width: number, height: number) =>
   invoke<void>("panel_layout", { seq, width, height });
-export const panelPainted = (seq: number) => invoke<void>("panel_painted", { seq });
+/** Painted at this size (the one given to `panelLayout`); an older size shows nothing. */
+export const panelPainted = (seq: number, width: number, height: number) =>
+  invoke<void>("panel_painted", { seq, width, height });
+/** A tab chosen: the shell keeps it for the widget, for both panel windows. */
+export const panelPage = (widget: string, page: string) => invoke<void>("panel_page", { widget, page });
 export const startDrag = () => getCurrentWindow().startDragging();
 export const dialMenu = (widget: string) => invoke<void>("dial_menu", { widget });
 export const railMenu = () => invoke<void>("rail_menu");

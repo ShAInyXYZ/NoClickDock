@@ -37,6 +37,7 @@ class Core {
 
   #transport: Transport | null = null;
   #pending = new Map<string, (result: ActionResult) => void>();
+  #actionListeners: ((message: Extract<CoreMessage, { type: "running" | "result" }>) => void)[] = [];
   #toastKey = 0;
   #clock: ReturnType<typeof setInterval> | undefined;
 
@@ -68,6 +69,12 @@ class Core {
   isStale(snapshot: WidgetSnapshot): boolean {
     const last = this.heard[snapshot.id];
     return last !== undefined && this.now - last > STALE_POLLS * snapshot.pollSecs * 1000;
+  }
+
+  /** Hears every action start and end, whichever window sent it: both
+   *  panel windows show the same widget's buttons (M2-a). */
+  onAction(fn: (message: Extract<CoreMessage, { type: "running" | "result" }>) => void) {
+    this.#actionListeners.push(fn);
   }
 
   /** Runs a widget action and resolves with the core's answer. */
@@ -122,10 +129,14 @@ class Core {
       case "toast":
         this.toasts = [...this.toasts, { ...message.toast, key: ++this.#toastKey }].slice(-TOAST_HISTORY);
         break;
+      case "running":
+        for (const fn of this.#actionListeners) fn(message);
+        break;
       case "result": {
         const settle = this.#pending.get(message.id);
         this.#pending.delete(message.id);
         settle?.({ ok: message.ok, message: message.message });
+        for (const fn of this.#actionListeners) fn(message);
         break;
       }
     }

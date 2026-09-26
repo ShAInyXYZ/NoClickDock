@@ -122,7 +122,7 @@ pub fn reveal(window: &WebviewWindow, position: PhysicalPosition<i32>) -> tauri:
 pub fn prime(window: &WebviewWindow) -> tauri::Result<()> {
     crate::main_thread::assert();
     #[cfg(target_os = "linux")]
-    {
+    if composited() {
         use gtk::prelude::WidgetExt;
         window.gtk_window()?.set_opacity(0.0);
         window.show()?;
@@ -142,10 +142,55 @@ pub fn conceal(window: &WebviewWindow) -> tauri::Result<()> {
     #[cfg(windows)]
     return crate::win::hide(window);
     #[cfg(target_os = "linux")]
-    return park(window);
+    return if composited() { park(window) } else { unmap(window) };
     #[cfg(not(any(windows, target_os = "linux")))]
     window.hide()
 }
+
+/// Whether a compositor draws the desktop. Parking needs one: without it a
+/// window at opacity 0 is an opaque black rectangle (research M2 r2), so
+/// windows are unmapped instead, and the panel uses one window.
+pub fn composited() -> bool {
+    #[cfg(target_os = "linux")]
+    return gtk::gdk::Screen::default().is_some_and(|s| s.is_composited());
+    #[cfg(not(target_os = "linux"))]
+    true
+}
+
+/// Without a compositor: unmap, and forget it was shown, so the next reveal
+/// maps it again (placed first).
+#[cfg(target_os = "linux")]
+fn unmap(window: &WebviewWindow) -> tauri::Result<()> {
+    use gtk::prelude::WidgetExt;
+    let shown = window.app_handle().state::<Shown>();
+    if let Ok(mut set) = shown.0.lock() {
+        set.remove(window.label());
+    }
+    window.gtk_window()?.set_opacity(1.0);
+    window.hide()
+}
+
+/// The compositor went away: every parked window (invisible, still mapped)
+/// would now be a black rectangle — unmap them.
+#[cfg(target_os = "linux")]
+pub fn watch_compositor(app: &tauri::App) {
+    use gtk::prelude::WidgetExt;
+    let Some(screen) = gtk::gdk::Screen::default() else { return };
+    let app = app.handle().clone();
+    screen.connect_composited_changed(move |screen| {
+        if screen.is_composited() {
+            return;
+        }
+        for window in app.webview_windows().values() {
+            if window.gtk_window().is_ok_and(|w| w.opacity() == 0.0) {
+                let _ = unmap(window);
+            }
+        }
+    });
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn watch_compositor(_app: &tauri::App) {}
 
 /// The toast window is click-through for good; the others take the pointer
 /// while they show.
