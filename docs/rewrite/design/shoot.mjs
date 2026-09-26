@@ -163,10 +163,16 @@ for (const scale of opt.scales) {
   const ids = (await page.$$eval('[data-surface]', els => els.map(e => e.getAttribute('data-surface')))).filter(wanted);
   if (!ids.length) console.error('warn: no [data-surface] elements found on', base + opt.route);
   for (const id of ids) {
-    const el = await page.$(`[data-surface="${id}"]`);
-    await el.scrollIntoViewIfNeeded();
+    // A live gallery (mock data that keeps changing) may replace a surface's
+    // element between lookup and capture: resolve it at capture time, and
+    // retry a few times if it is swapped mid-shot.
+    const loc = page.locator(`[data-surface="${id}"]`).first();
     const file = path.join(out, `${safe(id)}@${scale}x.png`);
-    await el.screenshot({ path: file, animations: 'disabled' }); written.push(file);
+    for (let attempt = 1; ; attempt++) {
+      try { await loc.screenshot({ path: file, animations: 'disabled', timeout: 5000 }); break; }
+      catch (e) { if (attempt >= 4) throw e; await page.waitForTimeout(150); }
+    }
+    written.push(file);
     if (opt.audit && scale === opt.scales[0]) audit.surfaces[id] = await auditSurface(page, id);
   }
 
@@ -175,9 +181,9 @@ for (const scale of opt.scales) {
       const p2 = await ctx.newPage();
       await p2.goto(`${base}${opt.route}?surface=${encodeURIComponent(id)}`, { waitUntil: 'networkidle' });
       await ready(p2);
-      const el = (await p2.$(`[data-surface="${id}"]`)) || (await p2.$('body'));
+      const loc = (await p2.locator(`[data-surface="${id}"]`).count()) ? p2.locator(`[data-surface="${id}"]`).first() : p2.locator('body');
       const file = path.join(out, `${safe(id)}.isolated@${scale}x.png`);
-      await el.screenshot({ path: file, animations: 'disabled' }); written.push(file);
+      await loc.screenshot({ path: file, animations: 'disabled', timeout: 5000 }); written.push(file);
       await p2.close();
     }
   }
