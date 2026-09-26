@@ -45,7 +45,7 @@ func (Widget) Mock(now time.Time) model.Snapshot {
 			},
 			Rows: []model.TableRow{
 				{Cells: []model.Cell{cell("CPU"), cell("Ryzen 9 7950X"), cell("96W"), cell("61°C"), cell("")}},
-				{Cells: []model.Cell{cell("GPU0"), cell("RTX 4090"), cell("318/450W"), cell("71°C"), hot("92°C")}},
+				{Cells: []model.Cell{cell("GPU0"), cell("RTX 4090"), cell("318/450W"), hot("71°C"), hot("92°C")}},
 				{Cells: []model.Cell{cell("GPU1"), cell("RTX 3060"), cell("21/170W"), cell("41°C"), cell("46°C")}},
 				{Cells: []model.Cell{cell("Board"), cell("X670E board"), cell("30W"), cell(""), cell("")}},
 			},
@@ -62,8 +62,8 @@ func (Widget) Mock(now time.Time) model.Snapshot {
 		model.Table{
 			Columns: []model.Column{{Align: "left", Mono: true}, {Align: "left"}, {Align: "right", Mono: true}},
 			Rows: []model.TableRow{
-				{Cells: model.Cells("DP-0", `27" 2560×1440`, "~32W")},
-				{Cells: model.Cells("HDMI-0", `24" 1920×1080`, "~18W")},
+				{Cells: model.Cells("DP-0", `27" 2560×1440`, "~48W")},
+				{Cells: model.Cells("HDMI-0", `24" 1920×1080`, "~43W")},
 			},
 		},
 		model.Section{Title: "USB", Meta: "3"},

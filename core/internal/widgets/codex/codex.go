@@ -31,8 +31,8 @@ func (Widget) Mock(time.Time) model.Snapshot {
 			model.Limit{Label: "5h", Pct: 47, Resets: "resets 16:40"},
 			model.Limit{Label: "week", Pct: 31, Resets: "resets Sep 29, 9:12am"},
 			model.Note{Text: "codex-mini · 3d ago · never reports usage", Tone: idle},
-			model.Limit{Label: "5h", Pct: 0, Resets: "resets —"},
-			model.Limit{Label: "week", Pct: 0, Resets: "resets —"},
+			model.Limit{Label: "5h", Pct: 0},
+			model.Limit{Label: "week", Pct: 0},
 			model.Stats{Items: []model.Stat{
 				{Key: "1h", Value: "96K"}, {Key: "24h", Value: "2.3M"}, {Key: "7d", Value: "11.2M"}, {Key: "sessions", Value: "4"},
 			}},
