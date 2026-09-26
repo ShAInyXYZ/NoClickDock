@@ -7,10 +7,17 @@
 //! - off the dial and the panel → it closes after 280 ms, unless the pointer
 //!   comes back to either first.
 //!
-//! The panel is prepared during the dwell — the page draws and measures the
-//! widget, the hidden window is sized and placed — so the dwell's end only
-//! shows it. Once shown, its header never moves under the pointer: a page
-//! switch or a growing snapshot resizes it away from the header's edge.
+//! There are two panel windows. The widget asked for is drawn in the one not
+//! showing: its page draws and measures it, the parked window is sized and
+//! placed, the page says it has painted — and only then is it shown, with
+//! the other parked in the same main-loop turn. A switch between widgets of
+//! different sizes never resizes a visible window, so no frame shows an
+//! empty panel or one widget in another's geometry (WebKit repaints a
+//! resized window a frame or several late: design M1 r2). The first panel
+//! is prepared the same way during the dwell, whose end only shows it.
+//!
+//! Once shown, a panel's header never moves under the pointer: a page switch
+//! or a growing snapshot resizes it away from the header's edge.
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -24,6 +31,9 @@ const DWELL: Duration = Duration::from_millis(120);
 const GRACE: Duration = Duration::from_millis(280);
 /// The panel page fades out over this before its window is hidden.
 const FADE: Duration = Duration::from_millis(100);
+/// The two panel windows.
+pub const PANELS: [&str; 2] = ["panel", "panel2"];
+
 /// The panel sits 8 CSS px from the rail; each window keeps 1px of margin.
 const GAP: f64 = 8.0 - 2.0;
 /// The panel keeps this far from the work area's edges.
@@ -71,14 +81,18 @@ struct State {
     widget: Option<String>,
     side: Side,
     visible: bool,
+    /// The window showing, or last shown (an index into PANELS), and the one
+    /// the current widget is drawn in.
+    front: usize,
+    target: usize,
+    /// The last panel whose page has painted it at its size.
+    painted: u64,
     size: Option<(f64, f64)>,
-    /// Bumped by every close, so a fade that ends after a reopen hides nothing.
-    closes: u64,
     /// Where the panel was put for this widget: its header edge stays there.
     anchor: Option<(i32, i32)>,
-    /// The window's size and place as last set, to skip what did not change.
-    fitted: Option<(i32, i32)>,
-    at: Option<(i32, i32)>,
+    /// Each window's size and place as last set, to skip what did not change.
+    fitted: [Option<(i32, i32)>; 2],
+    at: [Option<(i32, i32)>; 2],
     /// Until then, pointer entries do not open a panel (a menu is popping).
     quiet_until: Option<Instant>,
 }
@@ -172,11 +186,25 @@ pub fn panel_layout(app: AppHandle, seq: u64, width: f64, height: f64) {
     }
     st.size = Some((width, height));
     trace(&format!("panel_layout {width}x{height}"));
-    match st.phase {
-        // During the dwell: size and place the hidden window, ready to show.
-        Phase::Dwell(_) => stage(&app, &mut st),
-        Phase::Open(_) | Phase::Grace(_) => place(&app, &mut st),
-        Phase::Closed => {}
+    if st.phase != Phase::Closed {
+        place(&app, &mut st);
+    }
+}
+
+/// The page has painted the panel at the size `panel_layout` gave its
+/// window. A panel drawn in the window not showing is shown now (after the
+/// dwell, if one runs).
+#[tauri::command]
+pub fn panel_painted(app: AppHandle, seq: u64) {
+    let hover = app.state::<Hover>();
+    let Ok(mut st) = hover.0.lock() else { return };
+    if seq != st.seq || st.size.is_none() {
+        return;
+    }
+    st.painted = seq;
+    trace("panel painted");
+    if matches!(st.phase, Phase::Open(_) | Phase::Grace(_)) && !(st.visible && st.target == st.front) {
+        show(&app, &mut st);
     }
 }
 
@@ -207,7 +235,7 @@ fn close_for(app: &AppHandle, quiet_until: Option<Instant>) {
 pub fn replace(app: &AppHandle) {
     let hover = app.state::<Hover>();
     let Ok(mut st) = hover.0.lock() else { return };
-    if st.visible {
+    if st.visible && st.target == st.front {
         place(app, &mut st);
     }
 }
@@ -218,8 +246,8 @@ fn dwell_done(app: &AppHandle, st: &mut State) {
         st.phase = Phase::Open(w.clone());
         if st.widget.as_deref() != Some(w.as_str()) {
             open(app, st, w);
-        } else if st.size.is_some() {
-            place(app, st); // measured during the dwell: show it now
+        } else if st.painted == st.seq {
+            show(app, st); // drawn during the dwell: show it now
         }
     }
 }
@@ -256,8 +284,11 @@ fn open(app: &AppHandle, st: &mut State, widget: String) {
     st.side = g.side();
     st.size = None;
     st.anchor = None;
+    // Drawn where it cannot be seen: never in the window showing, or still
+    // fading out.
+    st.target = 1 - st.front;
     let max_height = (f64::from(g.area.height) - HEADROOM * g.scale) / g.scale;
-    let _ = app.emit_to("panel", "panel-open", PanelOpen { widget, seq: st.seq, side: st.side, max_height });
+    let _ = app.emit_to(PANELS[st.target], "panel-open", PanelOpen { widget, seq: st.seq, side: st.side, max_height });
 }
 
 /// Where the panel goes: centred on its dial when first placed for a
@@ -285,55 +316,58 @@ fn position(st: &mut State, g: &Geometry, size: (i32, i32)) -> (i32, i32) {
     (x, y)
 }
 
-/// Sizes and places the hidden window during the dwell.
-fn stage(app: &AppHandle, st: &mut State) {
-    let (Some(widget), Some((width, height))) = (st.widget.clone(), st.size) else { return };
-    let (Some(panel), Some(g)) = (app.get_webview_window("panel"), Geometry::of(app, &widget)) else { return };
-    if st.visible {
-        return place(app, st);
-    }
-    st.side = g.side();
-    let size = ((width * g.scale).ceil() as i32, (height * g.scale).ceil() as i32);
-    let (x, y) = position(st, &g, size);
-    if st.fitted != Some(size) && overlay::fit(&panel, size.0, size.1).is_ok() {
-        st.fitted = Some(size);
-    }
-    if st.at != Some((x, y)) && panel.set_position(PhysicalPosition::new(x, y)).is_ok() {
-        st.at = Some((x, y));
-    }
-}
-
+/// Sizes and places the window the current panel is drawn in. A visible
+/// one (the shown widget grew, or its page changed) moves no further than
+/// its anchored header allows; one not showing waits for the page to paint.
 fn place(app: &AppHandle, st: &mut State) {
     let (Some(widget), Some((width, height))) = (st.widget.clone(), st.size) else { return };
-    let Some(panel) = app.get_webview_window("panel") else { return };
-    let Some(g) = Geometry::of(app, &widget) else { return };
+    let t = st.target;
+    let (Some(panel), Some(g)) = (app.get_webview_window(PANELS[t]), Geometry::of(app, &widget)) else { return };
     st.side = g.side();
     let size = ((width * g.scale).ceil() as i32, (height * g.scale).ceil() as i32);
     let (x, y) = position(st, &g, size);
-    if st.fitted != Some(size) {
+    if st.fitted[t] != Some(size) {
         if overlay::fit(&panel, size.0, size.1).is_err() {
             return;
         }
-        st.fitted = Some(size);
+        st.fitted[t] = Some(size);
     }
-    let at = PhysicalPosition::new(x, y);
-    let shown = if st.visible {
-        if st.at == Some((x, y)) { Ok(()) } else { panel.set_position(at) }
-    } else {
-        // The page starts its arrival animation as the window maps.
-        let _ = app.emit_to("panel", "panel-reveal", st.side);
-        trace("show");
-        overlay::reveal(&panel, at)
-    };
-    if shown.is_ok() {
-        st.at = Some((x, y));
-        let was_visible = st.visible;
-        st.visible = true;
-        if !was_visible {
-            toast::hold(app, &widget);
-        }
+    if st.at[t] != Some((x, y)) && panel.set_position(PhysicalPosition::new(x, y)).is_ok() {
+        st.at[t] = Some((x, y));
+    }
+    if st.visible && t == st.front {
         let _ = app.emit_to("rail", "panel-state", PanelState { widget: Some(widget), side: st.side });
     }
+}
+
+/// Shows the window the page has painted the current panel in, and parks
+/// the other in the same main-loop turn: the compositor sees one swap.
+fn show(app: &AppHandle, st: &mut State) {
+    let (t, old) = (st.target, st.front);
+    let (Some(widget), Some((x, y)), Some(panel)) = (st.widget.clone(), st.at[t], app.get_webview_window(PANELS[t])) else {
+        return;
+    };
+    let was_visible = st.visible;
+    if !was_visible {
+        // The page starts its arrival animation as the window shows; a
+        // switch is immediate (the menu-bar model).
+        let _ = app.emit_to(PANELS[t], "panel-reveal", st.side);
+    }
+    trace("show");
+    if overlay::reveal(&panel, PhysicalPosition::new(x, y)).is_err() {
+        return;
+    }
+    if was_visible && old != t {
+        if let Some(previous) = app.get_webview_window(PANELS[old]) {
+            let _ = overlay::conceal(&previous);
+        }
+    }
+    st.front = t;
+    st.visible = true;
+    if !was_visible {
+        toast::hold(app, &widget);
+    }
+    let _ = app.emit_to("rail", "panel-state", PanelState { widget: Some(widget), side: st.side });
 }
 
 /// Fades the panel out (the page does it on "panel-close"), then hides its
@@ -346,9 +380,8 @@ fn hide(app: &AppHandle, st: &mut State) {
     // A window hidden under the pointer may never hear it leave.
     st.in_panel = false;
     st.anchor = None;
-    st.closes += 1;
-    let close = st.closes;
-    let _ = app.emit_to("panel", "panel-close", ());
+    let front = PANELS[st.front];
+    let _ = app.emit_to(front, "panel-close", ());
     let _ = app.emit_to("rail", "panel-state", PanelState { widget: None, side: st.side });
     toast::release(app);
     if !was_visible {
@@ -360,8 +393,9 @@ fn hide(app: &AppHandle, st: &mut State) {
         main_thread::run(&app, move |app| {
             let hover = app.state::<Hover>();
             let Ok(st) = hover.0.lock() else { return };
-            if st.closes == close && !st.visible {
-                if let Some(panel) = app.get_webview_window("panel") {
+            // Parked unless it is showing again.
+            if !(st.visible && PANELS[st.front] == front) {
+                if let Some(panel) = app.get_webview_window(front) {
                     let _ = overlay::conceal(&panel);
                 }
             }

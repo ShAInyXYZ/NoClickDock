@@ -93,6 +93,7 @@ pub fn run() {
             hover::hover_dial,
             hover::hover_panel,
             hover::panel_layout,
+            hover::panel_painted,
             toast::toast_layout,
             toast::toast_dismiss,
             menu::dial_menu,
@@ -104,7 +105,10 @@ pub fn run() {
             overlay::init_scale(app);
             // Built once and reused: each webview is a WebKit process.
             overlay::build(app, "rail", "dock")?;
-            overlay::build(app, "panel", "panel")?;
+            for label in hover::PANELS {
+                let panel = overlay::build(app, label, "panel")?;
+                overlay::prime(&panel)?;
+            }
             overlay::build(app, "toast", "toast")?;
             if let Err(error) = menu::tray(app) {
                 // No tray host (vanilla GNOME): the rail's menu has everything.

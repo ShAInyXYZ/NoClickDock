@@ -45,6 +45,7 @@ export const hoverDial = (widget: string | null) => invoke<void>("hover_dial", {
 export const hoverPanel = (inside: boolean) => invoke<void>("hover_panel", { inside });
 export const panelLayout = (seq: number, width: number, height: number) =>
   invoke<void>("panel_layout", { seq, width, height });
+export const panelPainted = (seq: number) => invoke<void>("panel_painted", { seq });
 export const startDrag = () => getCurrentWindow().startDragging();
 export const dialMenu = (widget: string) => invoke<void>("dial_menu", { widget });
 export const railMenu = () => invoke<void>("rail_menu");
@@ -61,11 +62,15 @@ export const toastLayout = (seq: number, width: number, height: number, anchor: 
   invoke<void>("toast_layout", { seq, width, height, anchor });
 export const toastDismiss = () => invoke<void>("toast_dismiss");
 
+// The shell has two panel windows and addresses one at a time: a panel page
+// hears only what is sent to its own window (a listener without a target
+// would hear what is sent to the other one too).
+const own = () => ({ target: getCurrentWindow().label });
 export const onPanelOpen = (fn: (open: PanelOpen) => void): Promise<UnlistenFn> =>
-  listen<PanelOpen>("panel-open", (event) => fn(event.payload));
-export const onPanelClose = (fn: () => void): Promise<UnlistenFn> => listen("panel-close", () => fn());
+  listen<PanelOpen>("panel-open", (event) => fn(event.payload), own());
+export const onPanelClose = (fn: () => void): Promise<UnlistenFn> => listen("panel-close", () => fn(), own());
 /** The window is about to map: time for the arrival animation. */
 export const onPanelReveal = (fn: (side: Side) => void): Promise<UnlistenFn> =>
-  listen<Side>("panel-reveal", (event) => fn(event.payload));
+  listen<Side>("panel-reveal", (event) => fn(event.payload), own());
 export const onPanelState = (fn: (state: PanelState) => void): Promise<UnlistenFn> =>
   listen<PanelState>("panel-state", (event) => fn(event.payload));

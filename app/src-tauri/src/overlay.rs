@@ -116,6 +116,27 @@ pub fn reveal(window: &WebviewWindow, position: PhysicalPosition<i32>) -> tauri:
     Ok(())
 }
 
+/// Maps a window once, parked: WebKit runs no rendering updates (no
+/// ResizeObserver, no animation frames) in a window never shown, and a
+/// panel page must draw, measure and paint while still unseen.
+pub fn prime(window: &WebviewWindow) -> tauri::Result<()> {
+    crate::main_thread::assert();
+    #[cfg(target_os = "linux")]
+    {
+        use gtk::prelude::WidgetExt;
+        window.gtk_window()?.set_opacity(0.0);
+        window.show()?;
+        let shown = window.app_handle().state::<Shown>();
+        if let Ok(mut set) = shown.0.lock() {
+            set.insert(window.label().to_owned());
+        }
+        pass_through(window, true)?;
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = window;
+    Ok(())
+}
+
 pub fn conceal(window: &WebviewWindow) -> tauri::Result<()> {
     crate::main_thread::assert();
     #[cfg(windows)]

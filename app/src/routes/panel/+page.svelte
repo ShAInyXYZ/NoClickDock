@@ -3,12 +3,23 @@
   import { CORE_DIAL, core, coreDown } from "$lib/core.svelte";
   import type { Side } from "$lib/dock/side";
   import Panel from "$lib/panel/Panel.svelte";
-  import { hoverPanel, onPanelClose, onPanelOpen, onPanelReveal, panelLayout, report, reportUncaught } from "$lib/shell";
+  import {
+    hoverPanel,
+    onPanelClose,
+    onPanelOpen,
+    onPanelReveal,
+    panelLayout,
+    panelPainted,
+    report,
+    reportUncaught,
+  } from "$lib/shell";
 
-  // The panel window. The shell names the widget as soon as the pointer
-  // reaches its dial; the page draws it and answers with its size while the
-  // dwell runs, so the shell only has to show it. Arrival and the 100 ms
-  // close fade are animated here.
+  // One of the two panel windows. The shell names a widget in the one not
+  // showing as soon as the pointer reaches its dial; the page draws it,
+  // answers with its size, waits for the window to take that size and for
+  // two frames to paint it, and says so — only then is it shown, so no frame
+  // shows an empty panel or a widget in another's geometry. Arrival and the
+  // 100 ms close fade are animated here.
   let widget = $state<string | null>(null);
   let side = $state<Side>("right");
   let maxHeight = $state<number>();
@@ -30,15 +41,45 @@
   // header under the pointer.
   const steady = $derived(side === "top" && (snapshot?.pages.length ?? 0) > 1);
 
-  function measure() {
+  async function measure() {
     if (!frame || !widget || closing) return;
     let { width, height } = frame.getBoundingClientRect();
     if (steady && shadow) {
       tallest = Math.max(...[...shadow.children].map((c) => c.getBoundingClientRect().height)) || undefined;
       height = Math.max(height, (tallest ?? 0) + 2);
     }
-    panelLayout(seq, width, height).catch(report);
+    const asked = seq;
+    try {
+      await panelLayout(asked, width, height);
+      await sized(width, height);
+      await painted();
+      if (asked === seq) await panelPainted(asked);
+    } catch (error) {
+      report(error);
+    }
   }
+
+  // The window has taken the size it was given (or 200 ms have passed).
+  function sized(width: number, height: number) {
+    const fits = () => Math.abs(innerWidth - width) < 2 && Math.abs(innerHeight - height) < 2;
+    return new Promise<void>((done) => {
+      if (fits()) return done();
+      const finish = () => {
+        clearTimeout(timer);
+        removeEventListener("resize", check);
+        done();
+      };
+      const check = () => fits() && finish();
+      const timer = setTimeout(finish, 200);
+      addEventListener("resize", check);
+    });
+  }
+
+  // Two frames: the one that paints, and the next. A view that runs no
+  // frames gives up after 100 ms rather than never.
+  const nextFrame = () => new Promise<void>((done) => requestAnimationFrame(() => done()));
+  const painted = () =>
+    Promise.race([nextFrame().then(nextFrame), new Promise<void>((done) => setTimeout(done, 100))]);
 
   const SLIDE: Record<Side, string> = {
     right: "translateX(-3px)",
