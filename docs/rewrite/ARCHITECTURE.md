@@ -97,7 +97,7 @@ tones to tokens.
 | `chips` | `items:[{label,tone,value?}]`, `columns` | `Chips`, `Grid` |
 | `alert` | `title`, `meta?`, `body?`, `mono?`, `tone`, `actions?` | `Alert` |
 | `note` | `text`, `tone?`, `mono?` | `Note` |
-| `table` | `columns:[{label,align,mono}]`, `rows:[{cells[],tone?,led?,sub?}]` — a cell is `"text"` or `{"text","tone"}` | Power's draw table |
+| `table` | `columns:[{label,align,mono}]`, `rows:[{cells[],tone?,led?,sub?,group?,meta?}]` — a cell is `"text"` or `{"text","tone"}`; a row with `group` opens a row group (its title in the printed-strip style, `meta` on the right) so one table can hold several aligned groups | Power's draw table |
 | `donut` | `segments:[{label,value,display}]`, `center`, `unit` | Power's cost split |
 | `bars` | `values[]`, `labels?`, `highlight?`, `unit?` | Power's 24 h sparkline |
 | `split` | `columns:[[Block…],[Block…]]` | Power's two-column layout |
