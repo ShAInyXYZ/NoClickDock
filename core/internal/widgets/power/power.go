@@ -145,6 +145,7 @@ type reading struct {
 
 type alert struct {
 	id, label, text string
+	tone            model.Tone
 }
 
 func (w *Widget) Collect(ctx context.Context) (model.Snapshot, error) {
@@ -268,22 +269,44 @@ func derive(r *reading, cfg config.Power, reason string) {
 	for _, g := range r.gpus {
 		tag := gpuTag(g, len(r.gpus))
 		name := sensors.ShortGPUName(g.Name)
+		// One alert per card, naming its worse sensor (a tie goes to the
+		// core), so the cell, the lamp, the label and the toast agree
+		// (design M5 r1).
+		var core, vram model.Tone
+		if g.Temp != nil {
+			core = coreTone(*g.Temp)
+		}
+		if g.VRAMTemp != nil {
+			vram = vramTone(*g.VRAMTemp)
+		}
 		switch {
-		case g.VRAMTemp != nil && *g.VRAMTemp >= vramAlertC:
-			r.alerts = append(r.alerts, alert{
-				id: fmt.Sprintf("gpu:%d", g.Index), label: fmt.Sprintf("%s VRAM %.0f°C", tag, *g.VRAMTemp),
-				text: fmt.Sprintf("%s %s memory junction is at %.0f°C", tag, name, *g.VRAMTemp),
-			})
-		case g.Temp != nil && *g.Temp >= coreAlertC:
+		case core != model.ToneNone && severity(core) >= severity(vram):
 			r.alerts = append(r.alerts, alert{
 				id: fmt.Sprintf("gpu:%d", g.Index), label: fmt.Sprintf("%s core %.0f°C", tag, *g.Temp),
-				text: fmt.Sprintf("%s %s core is at %.0f°C", tag, name, *g.Temp),
+				text: fmt.Sprintf("%s %s core is at %.0f°C", tag, name, *g.Temp), tone: core,
+			})
+		case vram != model.ToneNone:
+			r.alerts = append(r.alerts, alert{
+				id: fmt.Sprintf("gpu:%d", g.Index), label: fmt.Sprintf("%s VRAM %.0f°C", tag, *g.VRAMTemp),
+				text: fmt.Sprintf("%s %s memory junction is at %.0f°C", tag, name, *g.VRAMTemp), tone: vram,
 			})
 		}
 	}
-	if r.cpuTemp != nil && *r.cpuTemp >= cpuAlertC {
-		r.alerts = append(r.alerts, alert{id: "cpu", label: fmt.Sprintf("CPU %.0f°C", *r.cpuTemp), text: fmt.Sprintf("CPU is at %.0f°C", *r.cpuTemp)})
+	if r.cpuTemp != nil {
+		if tone := cpuTone(*r.cpuTemp); tone != model.ToneNone {
+			r.alerts = append(r.alerts, alert{id: "cpu", label: fmt.Sprintf("CPU %.0f°C", *r.cpuTemp), text: fmt.Sprintf("CPU is at %.0f°C", *r.cpuTemp), tone: tone})
+		}
 	}
+}
+
+func severity(t model.Tone) int {
+	switch t {
+	case model.ToneCrit:
+		return 2
+	case model.ToneWarn:
+		return 1
+	}
+	return 0
 }
 
 // gpuTag is "GPU" when there is one card, "GPU0", "GPU1"… when several.

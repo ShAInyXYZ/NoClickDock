@@ -306,3 +306,27 @@ func TestEstimatesAndNothing(t *testing.T) {
 }
 
 func testCfg() config.Power { return config.Default().Widgets.Power }
+
+// Design M5 r1: the alert names the card's worse sensor (a tie goes to the
+// core), so the cell, the lamp, the label and the toast agree.
+func TestTheWorseSensorIsNamed(t *testing.T) {
+	for _, x := range []struct {
+		core, vram float64
+		label      string
+		state      model.State
+	}{
+		{92, 92, "GPU0 core 92°C", model.StateCrit}, // core crit (> 85), VRAM warn (< 94)
+		{75, 96, "GPU0 VRAM 96°C", model.StateCrit}, // VRAM crit, core fine
+		{82, 91, "GPU0 core 82°C", model.StateWarn}, // both warn: the core
+		{60, 91, "GPU0 VRAM 91°C", model.StateWarn},
+	} {
+		r := steady(mon(10, 15, 0))
+		r.gpus[0].Temp, r.gpus[0].VRAMTemp = &x.core, &x.vram
+		r.gpuW, r.nvmeW, r.periph, r.total, r.alerts, r.monitors = 0, 0, 0, nil, nil, 0
+		derive(&r, testCfg(), "")
+		s := render(r)
+		if s.StateLabel != x.label || s.State != x.state || s.Issues[0].Tone != model.Tone(x.state) {
+			t.Errorf("core %v vram %v: %q %q %+v", x.core, x.vram, s.StateLabel, s.State, s.Issues)
+		}
+	}
+}

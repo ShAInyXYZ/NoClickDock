@@ -2,6 +2,8 @@ package disk
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -62,8 +64,22 @@ func (w *Widget) dockerSpace() *dockerSpace {
 	return w.docker
 }
 
+// dockerBinary is docker on PATH, or where Docker Desktop installs it on
+// Windows (not always on the PATH a GUI-launched process inherits).
+func dockerBinary() string {
+	var fallbacks []string
+	if pf := os.Getenv("ProgramFiles"); runtime.GOOS == "windows" && pf != "" {
+		fallbacks = append(fallbacks, filepath.Join(pf, "Docker", "Docker", "resources", "bin", "docker.exe"))
+	}
+	return sys.Find("docker", fallbacks...)
+}
+
 func queryDocker(ctx context.Context) *dockerSpace {
-	out, err := sys.Run(ctx, 25*time.Second, "docker", "system", "df", "--format", "{{.Type}}\t{{.Reclaimable}}")
+	bin := dockerBinary()
+	if bin == "" {
+		return nil
+	}
+	out, err := sys.Run(ctx, 25*time.Second, bin, "system", "df", "--format", "{{.Type}}\t{{.Reclaimable}}")
 	if err != nil || strings.TrimSpace(out) == "" {
 		return nil
 	}
@@ -72,7 +88,7 @@ func queryDocker(ctx context.Context) *dockerSpace {
 	if runtime.GOOS == "windows" {
 		// Docker Desktop's data directory is a path inside its VM.
 		d.root = "Docker Desktop's disk image"
-	} else if root, err := sys.Run(ctx, 10*time.Second, "docker", "info", "--format", "{{.DockerRootDir}}"); err == nil && strings.TrimSpace(root) != "" {
+	} else if root, err := sys.Run(ctx, 10*time.Second, bin, "info", "--format", "{{.DockerRootDir}}"); err == nil && strings.TrimSpace(root) != "" {
 		d.root = strings.TrimSpace(root)
 	}
 	return d

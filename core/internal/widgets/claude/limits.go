@@ -125,16 +125,44 @@ func binary() (name string, prefix []string) {
 	return command(sys.Find("claude", fallbacks...))
 }
 
-// command runs a found CLI: a batch shim through cmd.exe, anything else
-// directly.
+// command runs a found CLI. An npm shim (claude.cmd) is not run through
+// cmd.exe, which would read &, ^, %, ( and ) in the path (a user name
+// "A&B" split it — research M4 r1): the shim's own target is run instead,
+// node with the package's cli.js, as the shim itself would. Only when that
+// cannot be found is the shim run by cmd.exe — and never with a path cmd
+// would misread.
 func command(path string) (name string, prefix []string) {
+	return commandWith(path, fileExists, func() string { return sys.Find("node") })
+}
+
+func commandWith(path string, exists func(string) bool, node func() string) (name string, prefix []string) {
 	if path == "" {
 		return "", nil
 	}
-	if ext := strings.ToLower(filepath.Ext(path)); ext == ".cmd" || ext == ".bat" {
-		return "cmd.exe", []string{"/d", "/c", path}
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext != ".cmd" && ext != ".bat" {
+		return path, nil
 	}
-	return path, nil
+	dir := filepath.Dir(path)
+	cli := filepath.Join(dir, "node_modules", "@anthropic-ai", "claude-code", "cli.js")
+	if exists(cli) {
+		runtime := filepath.Join(dir, "node.exe") // npm's shim prefers a node beside it
+		if !exists(runtime) {
+			runtime = node()
+		}
+		if runtime != "" {
+			return runtime, []string{cli}
+		}
+	}
+	if strings.ContainsAny(path, "&|<>^%\"()!") {
+		return "", nil // cmd.exe would split or expand it: no limits rather than a wrong command
+	}
+	return "cmd.exe", []string{"/d", "/c", path}
+}
+
+func fileExists(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && !st.IsDir()
 }
 
 // noPersist keeps `claude -p` from writing a transcript and from firing the

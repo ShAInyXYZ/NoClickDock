@@ -144,7 +144,7 @@ func chooseLogDir(production bool, configDir string, once bool) (string, error) 
 		if err != nil {
 			return "", err
 		}
-		return filepath.Join(home, "Documents", "PM-Log"), nil
+		return filepath.Join(documentsDir(home), "PM-Log"), nil
 	case once:
 		base, err := os.UserCacheDir()
 		if err != nil {

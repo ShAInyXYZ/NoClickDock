@@ -62,19 +62,13 @@ func render(r reading) model.Snapshot {
 		s.State, s.StateLabel = model.StateOK, fmt.Sprintf("%s · %.0fW", lv, *r.total)
 		s.Glance = model.Glance{Text: fmt.Sprintf("%.0fW", *r.total)}
 	}
-	alerts := r.alerts
-	crit := map[string]bool{}
-	for _, g := range r.gpus {
-		id := fmt.Sprintf("gpu:%d", g.Index)
-		crit[id] = (g.VRAMTemp != nil && vramTone(*g.VRAMTemp) == model.ToneCrit) || (g.Temp != nil && coreTone(*g.Temp) == model.ToneCrit)
-	}
-	crit["cpu"] = r.cpuTemp != nil && cpuTone(*r.cpuTemp) == model.ToneCrit
-	sort.SliceStable(alerts, func(i, j int) bool { return crit[alerts[i].id] && !crit[alerts[j].id] })
+	alerts := append([]alert(nil), r.alerts...)
+	sort.SliceStable(alerts, func(i, j int) bool { return severity(alerts[i].tone) > severity(alerts[j].tone) })
 	var top model.Blocks
 	for i, a := range alerts {
-		tone := model.ToneWarn
-		if crit[a.id] {
-			tone = model.ToneCrit
+		tone := a.tone
+		if tone == model.ToneNone {
+			tone = model.ToneWarn
 		}
 		if i == 0 {
 			s.State, s.StateLabel = model.State(tone), a.label

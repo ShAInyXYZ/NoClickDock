@@ -369,9 +369,34 @@ func TestStatusPageFetchIsPartial(t *testing.T) {
 }
 
 func TestTheCLIIsRunWithAFixedArgv(t *testing.T) {
-	name, prefix := command(`C:\Users\someone\AppData\Roaming\npm\claude.cmd`)
+	none := func(string) bool { return false }
+	noNode := func() string { return "" }
+	name, prefix := commandWith(`C:\Users\someone\AppData\Roaming\npm\claude.cmd`, none, noNode)
 	if name != "cmd.exe" || !reflect.DeepEqual(prefix, []string{"/d", "/c", `C:\Users\someone\AppData\Roaming\npm\claude.cmd`}) {
 		t.Errorf("npm shim: %q %q", name, prefix)
+	}
+	// The shim's target, run directly: node beside it, else on PATH.
+	shim := filepath.Join("npm", "claude.cmd")
+	cli := filepath.Join("npm", "node_modules", "@anthropic-ai", "claude-code", "cli.js")
+	has := func(set ...string) func(string) bool {
+		return func(p string) bool {
+			for _, s := range set {
+				if p == s {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	if name, prefix := commandWith(shim, has(cli), func() string { return "node" }); name != "node" || !reflect.DeepEqual(prefix, []string{cli}) {
+		t.Errorf("node + cli.js: %q %q", name, prefix)
+	}
+	if name, _ := commandWith(shim, has(cli, filepath.Join("npm", "node.exe")), noNode); name != filepath.Join("npm", "node.exe") {
+		t.Errorf("node beside the shim: %q", name)
+	}
+	// A path cmd.exe would misread is never handed to it.
+	if name, _ := commandWith(`C:\Users\A&B\AppData\Roaming\npm\claude.cmd`, none, noNode); name != "" {
+		t.Errorf("a path with & went to cmd.exe: %q", name)
 	}
 	if name, prefix := command("/home/someone/.local/bin/claude"); name != "/home/someone/.local/bin/claude" || prefix != nil {
 		t.Errorf("native: %q %q", name, prefix)
