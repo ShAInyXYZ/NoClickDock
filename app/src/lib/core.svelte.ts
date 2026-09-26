@@ -2,7 +2,7 @@
 // snapshot, when each was last checked, the config, recent toasts. Each
 // window keeps its own copy, fed by its own transport; none of it is ever
 // edited here, only replaced.
-import type { Action, Config, CoreMessage, Toast, UiMessage, WidgetSnapshot } from "./protocol";
+import type { Action, Config, CoreMessage, DeepPartial, Toast, UiMessage, WidgetSnapshot } from "./protocol";
 import { createTransport, type Transport } from "./transport";
 
 export interface ActionResult {
@@ -12,6 +12,8 @@ export interface ActionResult {
 
 /** Longer than the core's own action timeout, so the core always answers first. */
 const RESULT_TIMEOUT_MS = 150_000;
+/** An ask probes a server for at most 15 s in the core. */
+const ANSWER_TIMEOUT_MS = 20_000;
 const TOAST_HISTORY = 20;
 /** A widget unheard of for this many poll intervals is stale (DESIGN.md A11). */
 const STALE_POLLS = 3;
@@ -30,8 +32,13 @@ class Core {
   /** A one-second clock: staleness is a matter of time passing. */
   now = $state(Date.now());
 
-  /** The rail, in order. A widget appears once it has reported. */
-  widgets = $derived(Object.values(this.snapshots).sort((a, b) => a.order - b.order));
+  /** The rail, in order. A widget appears once it has reported, and not at
+   *  all while Settings has turned it off. */
+  widgets = $derived(
+    Object.values(this.snapshots)
+      .filter((w) => (this.config?.widgets as Record<string, { enabled?: boolean }> | undefined)?.[w.id]?.enabled !== false)
+      .sort((a, b) => a.order - b.order),
+  );
   /** Widgets the core runs; the gallery waits for all of them. */
   expected = $state<string[]>([]);
 
@@ -83,6 +90,38 @@ class Core {
    *  never answer (research M2 r3: a pill stayed busy forever). */
   onReset(fn: () => void) {
     this.#resetListeners.push(fn);
+  }
+
+  /** Saves part of the config: the core validates it and answers, naming
+   *  the field it refused. */
+  patchConfig(patch: DeepPartial<Config>): Promise<{ ok: boolean; field?: string; message?: string }> {
+    return this.#ask({ type: "config.patch", id: crypto.randomUUID(), patch });
+  }
+
+  /** A question for a widget that changes nothing (Settings: probe an
+   *  endpoint, list the peers seen). */
+  ask(widget: string, what: string, args?: Record<string, string>): Promise<{ ok: boolean; message?: string; items?: string[] }> {
+    return this.#ask({ type: "ask", id: crypto.randomUUID(), widget, what, args });
+  }
+
+  #answers = new Map<string, (answer: any) => void>();
+
+  #ask<T>(message: UiMessage & { id: string }): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#answers.delete(message.id);
+        reject(new Error("ncd-core did not answer."));
+      }, ANSWER_TIMEOUT_MS);
+      this.#answers.set(message.id, (answer) => {
+        clearTimeout(timer);
+        resolve(answer);
+      });
+      this.send(message).catch((error) => {
+        clearTimeout(timer);
+        this.#answers.delete(message.id);
+        reject(error);
+      });
+    });
   }
 
   /** Runs a widget action and resolves with the core's answer. */
@@ -151,6 +190,13 @@ class Core {
       case "running":
         for (const fn of this.#actionListeners) fn(message);
         break;
+      case "config.result":
+      case "answer": {
+        const settle = this.#answers.get(message.id);
+        this.#answers.delete(message.id);
+        settle?.(message);
+        break;
+      }
       case "result": {
         const settle = this.#pending.get(message.id);
         this.#pending.delete(message.id);

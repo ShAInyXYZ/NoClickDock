@@ -6,6 +6,8 @@
   import type { Side } from "$lib/dock/side";
   import Panel from "$lib/panel/Panel.svelte";
   import type { State, Tone, WidgetSnapshot } from "$lib/protocol";
+  import Settings from "$lib/settings/Settings.svelte";
+  import { titles } from "$lib/settings/titles";
   import ToastStack from "$lib/toast/ToastStack.svelte";
   import { coreURL } from "$lib/transport";
 
@@ -158,6 +160,24 @@
       </div>
     </section>
 
+    {#if show("settings")}
+      <!-- The Settings window at its size, on the mock core's config. Save
+           here changes nothing; Test and the peer list ask the mock core,
+           which invents its answers. -->
+      <section class="Sheet-row">
+        <figure class="Sheet-window" data-surface="settings">
+          <Settings
+            config={core.config}
+            {titles}
+            platform={core.platform}
+            save={async () => ({ ok: true })}
+            ask={(widget, what, args) => core.ask(widget, what, args)}
+            controls={{ drag: () => {}, minimize: () => {}, close: () => {} }}
+          />
+        </figure>
+      </section>
+    {/if}
+
     <section class="Sheet-panels">
       {#each panels as p (p.id)}
         {#if show(p.id)}
@@ -212,6 +232,7 @@
     text-transform: uppercase;
     color: var(--dim);
   }
+  .Sheet-window { width: 560px; height: 680px; border-radius: var(--r-lg); overflow: hidden; box-shadow: 0 0 0 1px var(--line2), var(--elev-2); }
   .Sheet-panels { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px; }
   .Sheet-panel { padding: 1px; border-radius: var(--r-panel); }
   .Sheet-panel.is-open { box-shadow: 0 0 0 2px var(--accent-line); }

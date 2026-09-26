@@ -74,16 +74,45 @@ export interface WidgetSnapshot {
   menu?: { id: string; label: string; url?: string; copy?: string }[];
 }
 
+/** What every widget's section has: whether it runs, and its place. */
+export interface WidgetConfig {
+  enabled: boolean;
+  order: number;
+}
+
+export interface PowerConfig extends WidgetConfig {
+  price_per_kwh: number;
+  currency: string;
+  overhead_watts: number;
+  peripheral_watts: number;
+  poll_interval: number;
+  log_interval: "off" | "hourly" | "daily" | "weekly" | "monthly";
+  tou: boolean;
+  peak_rate: number | null;
+  off_peak_rate: number | null;
+  peak_hours: string;
+  tou_weekend_offpeak: boolean;
+}
+
+export type Edge = "left" | "right" | "top" | "bottom" | "";
+
 export interface Config {
   dock: {
     orientation: "vertical" | "horizontal";
     density: "compact" | "normal" | "large";
     readouts: boolean;
-    position?: { x: number; y: number };
+    position?: { monitor?: string; edge?: Edge; along?: number; x: number; y: number };
   };
+  start?: { launchAtLogin: boolean };
   widgets?: {
-    /** null watches every peer seen online since the core started. */
-    tailscale?: { watch: string[] | null };
+    claude?: WidgetConfig;
+    codex?: WidgetConfig;
+    comfyui?: WidgetConfig & { host: string; port: number };
+    disk?: WidgetConfig;
+    docker?: WidgetConfig;
+    power?: PowerConfig;
+    /** watch: null watches every peer seen online since the core started. */
+    tailscale?: WidgetConfig & { watch: string[] | null };
   };
 }
 
@@ -102,14 +131,17 @@ export type CoreMessage =
   | { type: "tick"; widget: string; at: string }
   | { type: "config"; config: Config }
   | { type: "running"; id: string; widget: string; action: string; args?: Record<string, string> }
-  | { type: "result"; id: string; ok: boolean; message: string; widget?: string; action?: string; args?: Record<string, string> };
+  | { type: "result"; id: string; ok: boolean; message: string; widget?: string; action?: string; args?: Record<string, string> }
+  | { type: "config.result"; id: string; ok: boolean; field?: string; message?: string }
+  | { type: "answer"; id: string; ok: boolean; message?: string; items?: string[] };
 
 /** UI → core: one stdin line, or one POST /v1/send. */
 export type UiMessage =
   | { type: "action"; id: string; widget: string; action: string; args?: Record<string, string> }
   | { type: "refresh"; widget?: string }
-  | { type: "config.patch"; patch: DeepPartial<Config> };
+  | { type: "config.patch"; id?: string; patch: DeepPartial<Config> }
+  | { type: "ask"; id: string; widget: string; what: string; args?: Record<string, string> };
 
-type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> | null : T[K] | null };
+export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> | null : T[K] | null };
 
-export const CORE_MESSAGE_TYPES = ["hello", "snapshot", "tick", "toast", "config", "running", "result"] as const;
+export const CORE_MESSAGE_TYPES = ["hello", "snapshot", "tick", "toast", "config", "running", "result", "config.result", "answer"] as const;
