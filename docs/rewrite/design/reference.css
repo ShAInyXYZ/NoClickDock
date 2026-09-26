@@ -189,7 +189,7 @@ body { font-variant-numeric: tabular-nums; }
   overflow: visible; pointer-events: none;
   transform: rotate(-90deg);            /* arcs start at 12 o'clock */
 }
-.Dial-ring circle { fill: none; stroke-width: 2; }
+.Dial-ring circle { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }   /* 2px at 32, 40 and 48 */
 .Dial[data-state="crit"] .Dial-ring circle {
   stroke: var(--err);
   animation: ncd-breathe 2.4s var(--ease-mech) infinite;
@@ -286,6 +286,8 @@ body { font-variant-numeric: tabular-nums; }
   font: 600 var(--fs-body)/1 var(--font-sans);
   color: var(--tone);
 }
+.PanelHeader-state { min-width: 0; }
+.PanelHeader-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .PanelHeader-state[data-tone="ok"],
 .PanelHeader-state[data-tone="idle"] { color: var(--muted); }
 .Panel-tabs { padding: 0 var(--inset) 12px; }
@@ -332,6 +334,8 @@ body { font-variant-numeric: tabular-nums; }
   color: var(--dim);
 }
 .Section[data-tone] .Section-title { color: var(--tone); }
+.Section-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.Section-meta { flex: none; }
 .Section-meta {
   font: 400 var(--fs-micro)/1 var(--font-mono);
   letter-spacing: .04em; color: var(--dim);
@@ -345,8 +349,12 @@ body { font-variant-numeric: tabular-nums; }
   display: flex; align-items: center; gap: 10px;
   min-height: var(--row-h); padding: 4px 0;
 }
-.Row > .Led { align-self: flex-start; margin-top: 10px; }   /* on the name line, not between lines */
-.Row-text { flex: 1; }
+.Row-text { flex: 1; position: relative; }
+/* The lamp lives inside Row-text, centred on the 18px name line — the same
+   in a 32px single-line row and a 40px row with a sub line. (A fixed
+   margin on a flex child sat 1px low in one and 4px low in the other.) */
+.Row-text.has-led { padding-left: 16px; }
+.Row-text > .Led { position: absolute; left: 0; top: calc((18px - var(--led)) / 2); }
 .Row::before {                                /* hover wash, bleeds 8px so text stays on the inset */
   content: ''; position: absolute; inset: 0 -8px; border-radius: var(--r);
   background: transparent; transition: background var(--t-fast) var(--ease-mech);
@@ -505,12 +513,17 @@ body { font-variant-numeric: tabular-nums; }
    Stats.svelte — one mono line. Replaces the Python tiles; no KPI tiles.
    ============================================================================ */
 .Stats {
-  display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0; row-gap: 2px;
+  display: flex; flex-wrap: wrap; align-items: baseline; row-gap: 2px;
   min-height: 28px; padding: 5px 0;
   font: 400 var(--fs-small)/18px var(--font-mono);
+  /* Every item carries its 16px separator in front. The box is pulled left
+     by one separator (into the panel's 16px inset, never past it) and its
+     leftmost 16px are clipped, so the separator that starts any line —
+     the first, or one that wrapped — is never seen. */
+  margin-left: -16px; clip-path: inset(0 0 0 16px);
 }
 .Stats-item { white-space: nowrap; }
-.Stats-item + .Stats-item::before { content: '·'; color: var(--faint); margin: 0 8px; }
+.Stats-item::before { content: "·"; display: inline-block; width: 16px; text-align: center; color: var(--faint); }
 .Stats-key { color: var(--dim); margin-right: 6px; }
 .Stats-value { color: var(--text); }
 .Stats-value[data-tone="warn"] { color: var(--warn); }

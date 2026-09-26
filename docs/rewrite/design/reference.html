@@ -93,7 +93,7 @@
           <div class="PanelHeader">
             <svg class="PanelHeader-mark" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-docker"/></svg>
             <span class="PanelHeader-title">Docker</span>
-            <span class="PanelHeader-state" data-tone="crit"><span class="Led" data-tone="crit"></span>2 need attention</span>
+            <span class="PanelHeader-state" data-tone="crit"><span class="Led" data-tone="crit"></span><span class="PanelHeader-label">2 need attention</span></span>
           </div>
           <div class="Panel-tabs">
             <div class="Segmented" role="tablist">
@@ -120,26 +120,22 @@
 
           <div class="Section"><span class="Section-title">Running</span><span class="Section-meta">4 stacks · 11 containers</span></div>
           <div class="Row is-hover">
-            <span class="Led" data-tone="ok"></span>
-            <span class="Row-text"><span class="Row-name">shopfront</span><span class="Row-sub">web · api · worker · cache</span></span>
+                        <span class="Row-text has-led"><span class="Led" data-tone="ok"></span><span class="Row-name">shopfront</span><span class="Row-sub">web · api · worker · cache</span></span>
             <span class="Row-value">4/4 · 1.2G · 6%</span>
             <span class="Row-actions"><button class="PillButton"><span class="PillButton-label">restart</span><span class="PillButton-confirm">restart?</span></button><button class="PillButton is-armed"><span class="PillButton-label">stop</span><span class="PillButton-confirm">stop?</span></button></span>
           </div>
           <div class="Row">
-            <span class="Led" data-tone="ok"></span>
-            <span class="Row-text"><span class="Row-name">postgres</span><span class="Row-sub">postgres:16 · :5432 · healthy</span></span>
+                        <span class="Row-text has-led"><span class="Led" data-tone="ok"></span><span class="Row-name">postgres</span><span class="Row-sub">postgres:16 · :5432 · healthy</span></span>
             <span class="Row-value">12d · 384M</span>
             <span class="Row-actions"><button class="PillButton"><span class="PillButton-label">restart</span><span class="PillButton-confirm">restart?</span></button><button class="PillButton"><span class="PillButton-label">stop</span><span class="PillButton-confirm">stop?</span></button></span>
           </div>
           <div class="Row">
-            <span class="Led" data-tone="ok"></span>
-            <span class="Row-text"><span class="Row-name">metrics</span><span class="Row-sub">prometheus · grafana</span></span>
+                        <span class="Row-text has-led"><span class="Led" data-tone="ok"></span><span class="Row-name">metrics</span><span class="Row-sub">prometheus · grafana</span></span>
             <span class="Row-value">2/2 · 612M · 2%</span>
             <span class="Row-actions"><button class="PillButton"><span class="PillButton-label">restart</span><span class="PillButton-confirm">restart?</span></button><button class="PillButton"><span class="PillButton-label">stop</span><span class="PillButton-confirm">stop?</span></button></span>
           </div>
           <div class="Row">
-            <span class="Led" data-tone="ok"></span>
-            <span class="Row-text"><span class="Row-name">redis</span><span class="Row-sub">redis:7 · :6379</span></span>
+                        <span class="Row-text has-led"><span class="Led" data-tone="ok"></span><span class="Row-name">redis</span><span class="Row-sub">redis:7 · :6379</span></span>
             <span class="Row-value">12d · 41M</span>
             <span class="Row-actions"><button class="PillButton"><span class="PillButton-label">restart</span><span class="PillButton-confirm">restart?</span></button><button class="PillButton"><span class="PillButton-label">stop</span><span class="PillButton-confirm">stop?</span></button></span>
           </div>
@@ -214,7 +210,7 @@
           <div class="PanelHeader">
             <svg class="PanelHeader-mark" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-power"/></svg>
             <span class="PanelHeader-title">Power</span>
-            <span class="PanelHeader-state" data-tone="warn"><span class="Led" data-tone="warn"></span>VRAM 94°</span>
+            <span class="PanelHeader-state" data-tone="warn"><span class="Led" data-tone="warn"></span><span class="PanelHeader-label">VRAM 94°</span></span>
           </div>
         </div>
         <div class="Panel-body">
@@ -306,7 +302,7 @@
             <div class="PanelHeader">
               <svg class="PanelHeader-mark" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-claude"/></svg>
               <span class="PanelHeader-title">Claude</span>
-              <span class="PanelHeader-state" data-tone="warn"><span class="Led" data-tone="warn"></span>Console degraded</span>
+              <span class="PanelHeader-state" data-tone="warn"><span class="Led" data-tone="warn"></span><span class="PanelHeader-label">Console degraded</span></span>
             </div>
           </div>
           <div class="Panel-body">
@@ -332,8 +328,7 @@
 
             <div class="Section" data-tone="warn"><span class="Section-title">Services</span><span class="Section-meta">1 of 6 degraded</span></div>
             <div class="Row">
-              <span class="Led" data-tone="warn"></span>
-              <span class="Row-text"><span class="Row-name">Console</span><span class="Row-sub">degraded performance</span></span>
+                            <span class="Row-text has-led"><span class="Led" data-tone="warn"></span><span class="Row-name">Console</span><span class="Row-sub">degraded performance</span></span>
               <span class="Row-value" data-tone="warn">since 13:48</span>
             </div>
             <div class="Chips" style="--cols: 3">
@@ -376,7 +371,7 @@
             <div class="PanelHeader">
               <svg class="PanelHeader-mark" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-tailscale"/></svg>
               <span class="PanelHeader-title">Tailscale</span>
-              <span class="PanelHeader-state" data-tone="idle"><span class="Led" data-tone="idle"></span>not running</span>
+              <span class="PanelHeader-state" data-tone="idle"><span class="Led" data-tone="idle"></span><span class="PanelHeader-label">not running</span></span>
             </div>
           </div>
           <div class="Panel-body">
@@ -390,7 +385,7 @@
             <div class="PanelHeader">
               <svg class="PanelHeader-mark" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-disk"/></svg>
               <span class="PanelHeader-title">Disk</span>
-              <span class="PanelHeader-state" data-tone="warn"><span class="Led" data-tone="warn"></span>/mnt/archive 88%</span>
+              <span class="PanelHeader-state" data-tone="warn"><span class="Led" data-tone="warn"></span><span class="PanelHeader-label">/mnt/archive 88%</span></span>
             </div>
           </div>
           <div class="Panel-body">

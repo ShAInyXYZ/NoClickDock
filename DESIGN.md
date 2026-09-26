@@ -164,8 +164,9 @@ One surface, no nested cards.
   gap, fills the column, drawn as an SVG of integer rects with
   `shape-rendering: crispEdges`) · value in mono. Lit segments are `--muted`
   when the tone is `ok` or absent, `--warn`/`--err` only for warn/crit;
-  unlit `--line2`. Consecutive `meter` or `limit` blocks render as **one
-  grid** so every bar starts on the same x. Thresholds belong to the core.
+  unlit `--line2`. All `meter` blocks on **one page** (and, separately, all
+  `limit` blocks) share one label column, so every bar on the page starts on
+  the same x even across sections. Thresholds belong to the core.
 - **Limit**: label · segmented meter · `54%` · `resets 14:00` in `--dim`.
 - **Stats**: one mono line, `key value · key value`, keys `--dim`, values
   `--text`. It replaces the Python "tiles"; there are no KPI tiles.

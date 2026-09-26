@@ -114,9 +114,13 @@ async function auditSurface(page, id) {
     for (const el of root.querySelectorAll('*')) {
       const s = cs(el);
       if (s.display === 'none' || s.visibility === 'hidden') continue;
-      // text clipped without an ellipsis
-      if (el.childElementCount === 0 && el.textContent.trim() && el.scrollWidth > el.clientWidth + 1 && s.textOverflow !== 'ellipsis' && s.overflow !== 'visible')
-        find.push({ kind: 'clip', text: el.textContent.trim().slice(0, 60), w: el.clientWidth, need: el.scrollWidth });
+      // text clipped without an ellipsis. `text-overflow` does nothing on a
+      // flex or grid container (its text is an anonymous item), so an element
+      // that holds text directly and is flex/grid counts as un-ellipsized.
+      const ownText = [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim());
+      const flexish = /flex|grid/.test(s.display);
+      if (ownText && el.scrollWidth > el.clientWidth + 1 && s.overflow !== 'visible' && (s.textOverflow !== 'ellipsis' || flexish))
+        find.push({ kind: flexish ? 'clip-in-flex' : 'clip', text: el.textContent.trim().slice(0, 60), w: el.clientWidth, need: el.scrollWidth });
       // digits in a proportional face without tabular figures (a mono face is tabular already)
       if (el.childElementCount === 0 && /\d/.test(el.textContent) && !/tabular-nums/.test(s.fontVariantNumeric) && !/mono/i.test(s.fontFamily))
         find.push({ kind: 'proportional-digits', text: el.textContent.trim().slice(0, 40), font: s.fontFamily.split(',')[0] });

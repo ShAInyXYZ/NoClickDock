@@ -118,3 +118,24 @@ console errors.
   generation. Watch it live.
 - The tailscale mark's hollow dots become a grey haze at 1×. It is the real
   mark, so leave it unless it reads as dirt on the actual display.
+
+## Corrections found by the M1 review (the implementation inherited them)
+
+Measuring the executor's build against the reference exposed defects in the
+reference itself:
+
+1. **The row lamp sat 4px below the name line in two-line rows** and 1px
+   below in single-line rows. A fixed `margin-top` on a flex child cannot
+   fit both heights. → The lamp moved inside `.Row-text`, absolutely placed
+   at `top: (18 − led)/2`, and now measures 0.0px in every row.
+2. **Ring stroke scaled with density** (1.6px at compact, 2.4px at large). →
+   `vector-effect: non-scaling-stroke`.
+3. **A wrapped stats line could start with `·`.** → Each item owns a 16px
+   separator; the box is pulled into the inset and its first 16px are
+   clipped with `clip-path`.
+4. **The header state label and section title could not ellipsize.** → A
+   text child (`.PanelHeader-label`) and `min-width: 0` on the section title.
+
+The audit still reports 0 findings and 0 console errors. `shoot.mjs --audit`
+now also reports text clipped inside a flex or grid container
+(`clip-in-flex`), which is what hid item 4 in round 1.
