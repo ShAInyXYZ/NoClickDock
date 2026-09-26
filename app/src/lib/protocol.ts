@@ -27,18 +27,22 @@ export interface AlertBlock {
   kind: "alert"; title: string; meta?: string; body?: string; mono?: boolean; tone: Tone; actions?: Action[];
 }
 export interface NoteBlock { kind: "note"; text: string; tone?: Tone; mono?: boolean }
+/** A table cell: text, or text with its own tone (a hot VRAM junction). */
+export type TableCell = string | { text: string; tone?: Tone };
 export interface TableBlock {
   kind: "table";
   columns: { label: string; align?: "left" | "right"; mono?: boolean }[];
-  rows: { cells: string[]; tone?: Tone; led?: Tone; sub?: string }[];
+  rows: { cells: TableCell[]; tone?: Tone; led?: Tone; sub?: string }[];
 }
 export interface DonutBlock { kind: "donut"; segments: { label: string; value: number; display: string }[]; center: string; unit?: string }
 export interface BarsBlock { kind: "bars"; values: number[]; labels?: string[]; highlight?: number; unit?: string }
 export interface SplitBlock { kind: "split"; columns: Block[][] }
+/** One honest sentence when there is nothing to list; `backticks` mark a command. */
+export interface EmptyBlock { kind: "empty"; text: string }
 
 export type Block =
   | SectionBlock | RowBlock | MeterBlock | LimitBlock | StatsBlock | ChipsBlock
-  | AlertBlock | NoteBlock | TableBlock | DonutBlock | BarsBlock | SplitBlock;
+  | AlertBlock | NoteBlock | TableBlock | DonutBlock | BarsBlock | SplitBlock | EmptyBlock;
 
 export interface Page {
   id: string;
@@ -64,7 +68,8 @@ export interface WidgetSnapshot {
   width?: number;
   pages: Page[];
   footer?: string;
-  menu?: { id: string; label: string }[];
+  /** Right-click entries; one with `url` or `copy` is handled by the shell itself. */
+  menu?: { id: string; label: string; url?: string; copy?: string }[];
 }
 
 export interface Config {

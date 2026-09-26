@@ -19,18 +19,26 @@
   // <html> gets data-gallery-ready once fonts and every widget have drawn,
   // and ?surface=<id> renders that surface alone.
   //
-  // Dial specimens, the error panel, the stale panel and the toast stack are
-  // the mock's snapshots with one thing forced (a state, an error, staleness)
-  // so every state can be judged without waiting for it to happen.
+  // The mocks' named variants (a daemon unreachable, a server offline) come
+  // from GET /v1/variants. Dial specimens, the error panel, the stale panel
+  // and a toast stack without live toasts are the mock's snapshots with one
+  // thing forced (a state, an error, staleness), so every state can be
+  // judged without waiting for it to happen.
 
   const only = new URLSearchParams(location.search).get("surface");
   const show = (id: string) => !only || only === id;
 
   let open = $state<string | null>(null);
-  const pages = $state<Record<string, string>>({});
+  let variants = $state<Record<string, Record<string, WidgetSnapshot>> | null>(null);
 
   const byId = $derived(Object.fromEntries(core.widgets.map((w) => [w.id, w])));
-  const pick = (state: State) => core.widgets.find((w) => w.state === state);
+  const variantList = $derived(
+    Object.entries(variants ?? {}).flatMap(([widget, byName]) =>
+      Object.entries(byName).map(([name, snapshot]) => ({ id: `panel/${widget}/${name}`, snapshot })),
+    ),
+  );
+  const pick = (state: State) =>
+    core.widgets.find((w) => w.state === state) ?? variantList.find((v) => v.snapshot.state === state)?.snapshot;
 
   interface Specimen { name: string; snapshot: WidgetSnapshot; open?: boolean; side?: Side; hover?: boolean; focus?: boolean; stale?: boolean }
   const specimens = $derived.by(() => {
@@ -42,7 +50,7 @@
       pick("crit") && { name: "crit", snapshot: pick("crit")! },
       busy && { name: "busy", snapshot: busy },
       busy && { name: "spin", snapshot: { ...busy, progress: undefined } },
-      ok && { name: "idle", snapshot: { ...ok, state: "idle", stateLabel: "not running", glance: { text: "off", tone: "idle" as Tone } } },
+      pick("idle") && { name: "idle", snapshot: pick("idle")! },
       ok && { name: "hover", snapshot: ok, hover: true },
       ok && { name: "open", snapshot: ok, open: true, side: "top" },
       ok && { name: "focus", snapshot: ok, focus: true },
@@ -74,15 +82,20 @@
 
   onMount(() => {
     const disconnect = core.connect();
+    fetch(`${coreURL()}/v1/variants`)
+      .then((response) => (response.ok ? response.json() : {}))
+      .catch(() => ({}))
+      .then((found) => (variants = found));
     return () => {
       disconnect.then((stop) => stop());
     };
   });
 
-  // Ready once the fonts are in and every widget the core runs has drawn.
+  // Ready once the fonts are in, every widget the core runs has drawn, and
+  // the variants have arrived.
   let ready = false;
   $effect(() => {
-    if (ready || !core.expected.length || core.expected.some((id) => !core.snapshots[id])) return;
+    if (ready || !variants || !core.expected.length || core.expected.some((id) => !core.snapshots[id])) return;
     ready = true;
     document.fonts.ready.then(tick).then(() => document.documentElement.setAttribute("data-gallery-ready", ""));
   });
@@ -144,6 +157,11 @@
           <div class="Sheet-panel" class:is-open={open === p.snapshot.id} data-surface={p.id}>
             <Panel snapshot={p.snapshot} page={p.page} />
           </div>
+        {/if}
+      {/each}
+      {#each variantList as v (v.id)}
+        {#if show(v.id)}
+          <div class="Sheet-panel" data-surface={v.id}><Panel snapshot={v.snapshot} stale={false} /></div>
         {/if}
       {/each}
       {#if failing && show("panel/disk/collector-error")}
