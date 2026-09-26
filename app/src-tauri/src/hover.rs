@@ -29,8 +29,6 @@ use crate::{main_thread, overlay, toast};
 
 const DWELL: Duration = Duration::from_millis(120);
 const GRACE: Duration = Duration::from_millis(280);
-/// The panel page fades out over this before its window is hidden.
-const FADE: Duration = Duration::from_millis(100);
 /// The two panel windows.
 pub const PANELS: [&str; 2] = ["panel", "panel2"];
 
@@ -47,6 +45,7 @@ const MENU_QUIET: Duration = Duration::from_millis(400);
 /// `NCD_TRACE=1` prints hover timings (wall-clock ms) to stderr, for
 /// measuring the path from pointer to panel against an outside clock.
 fn trace(what: &str) {
+    crate::watchdog::note(format!("hover {what}"));
     if std::env::var_os("NCD_TRACE").is_some() {
         let ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -97,6 +96,9 @@ struct State {
     at: [Option<(i32, i32)>; 2],
     /// Until then, pointer entries do not open a panel (a menu is popping).
     quiet_until: Option<Instant>,
+    /// A menu popped over this dial (None: over the rail): its panel stays
+    /// shut until the pointer really leaves or reaches another dial.
+    menu_block: Option<(Option<String>, Instant)>,
 }
 
 #[derive(Default, Clone, PartialEq)]
@@ -135,6 +137,18 @@ pub fn hover_dial(app: AppHandle, widget: Option<String>) {
     st.over_dial = widget.clone();
     st.generation += 1;
     let generation = st.generation;
+    if let Some((blocked, since)) = st.menu_block.clone() {
+        // The menu's pointer grab sends leaves and enters as it pops and as
+        // it closes: none of them opens a panel. After that, only a real
+        // leave or another dial does.
+        let settled = since.elapsed() >= MENU_QUIET;
+        match &widget {
+            Some(w) if !settled || blocked.as_deref() == Some(w.as_str()) => return,
+            Some(_) => st.menu_block = None,
+            None if settled => st.menu_block = None,
+            None => {}
+        }
+    }
     if widget.is_some() && st.quiet_until.is_some_and(|t| Instant::now() < t) {
         return;
     }
@@ -201,18 +215,33 @@ pub fn panel_layout(app: AppHandle, seq: u64, width: f64, height: f64) {
 /// dwell, if one runs).
 #[tauri::command]
 pub fn panel_painted(app: AppHandle, seq: u64, width: f64, height: f64) {
-    let hover = app.state::<Hover>();
-    let Ok(mut st) = hover.0.lock() else { return };
-    // A paint of an older size (a snapshot changed it since) shows nothing:
-    // the paint of the new size will.
-    if seq != st.seq || st.size != Some((width, height)) {
-        return;
-    }
-    st.painted = seq;
-    trace("panel painted");
-    if matches!(st.phase, Phase::Open(_) | Phase::Grace(_)) && !(st.visible && st.target == st.front) {
-        show(&app, &mut st);
-    }
+    let target = {
+        let hover = app.state::<Hover>();
+        let Ok(st) = hover.0.lock() else { return };
+        // A paint of an older size (a snapshot changed it since) shows
+        // nothing: the paint of the new size will.
+        if seq != st.seq || st.size != Some((width, height)) {
+            return;
+        }
+        st.target
+    };
+    // The page has painted; the window has it once GTK has drawn a frame
+    // after that (design M1 r3: a sweep once showed a panel whose lower part
+    // was not drawn yet).
+    let Some(panel) = app.get_webview_window(PANELS[target]) else { return };
+    let app2 = app.clone();
+    overlay::after_next_frame(&panel, move || {
+        let hover = app2.state::<Hover>();
+        let Ok(mut st) = hover.0.lock() else { return };
+        if seq != st.seq || st.size != Some((width, height)) {
+            return;
+        }
+        st.painted = seq;
+        trace("panel painted");
+        if matches!(st.phase, Phase::Open(_) | Phase::Grace(_)) && !(st.visible && st.target == st.front) {
+            show(&app2, &mut st);
+        }
+    });
 }
 
 /// A panel page's tab changed: remembered for the widget, so the other
@@ -232,14 +261,22 @@ pub fn close(app: &AppHandle) {
     close_for(app, None);
 }
 
-pub fn close_for_menu(app: &AppHandle) {
+/// A menu is about to pop over `widget`'s dial (None: over the rail): any
+/// pending dwell is cancelled, an open panel shuts, and it stays shut under
+/// the menu and after it until the pointer leaves or reaches another dial.
+pub fn close_for_menu(app: &AppHandle, widget: Option<String>) {
     close_for(app, Some(Instant::now() + MENU_QUIET));
+    let hover = app.state::<Hover>();
+    if let Ok(mut st) = hover.0.lock() {
+        st.menu_block = Some((widget, Instant::now()));
+    };
 }
 
 fn close_for(app: &AppHandle, quiet_until: Option<Instant>) {
     let hover = app.state::<Hover>();
     let Ok(mut st) = hover.0.lock() else { return };
     st.generation += 1;
+    trace("close");
     if quiet_until.is_some() {
         st.quiet_until = quiet_until;
     }
@@ -374,19 +411,16 @@ fn show(app: &AppHandle, st: &mut State) {
         return;
     };
     let was_visible = st.visible;
-    if !was_visible {
-        // The page starts its arrival animation as the window shows; a
-        // switch is immediate (the menu-bar model).
-        let _ = app.emit_to(PANELS[t], "panel-reveal", st.side);
-    }
     trace("show");
-    if overlay::reveal(&panel, PhysicalPosition::new(x, y)).is_err() {
+    // Open and switch are instant (DESIGN, amended): a switch is one change
+    // at the compositor, the incoming window shown as the outgoing parks.
+    let at = PhysicalPosition::new(x, y);
+    let shown = match app.get_webview_window(PANELS[old]).filter(|_| was_visible && old != t) {
+        Some(previous) => overlay::swap(&panel, &previous, at),
+        None => overlay::reveal(&panel, at),
+    };
+    if shown.is_err() {
         return;
-    }
-    if was_visible && old != t {
-        if let Some(previous) = app.get_webview_window(PANELS[old]) {
-            let _ = overlay::conceal(&previous);
-        }
     }
     st.front = t;
     st.visible = true;
@@ -396,8 +430,7 @@ fn show(app: &AppHandle, st: &mut State) {
     let _ = app.emit_to("rail", "panel-state", PanelState { widget: Some(widget), side: st.side });
 }
 
-/// Fades the panel out (the page does it on "panel-close"), then hides its
-/// window — unless it has been asked open again meanwhile.
+/// Closes the panel: parked at once (close is instant, DESIGN amended).
 fn hide(app: &AppHandle, st: &mut State) {
     let was_visible = st.visible;
     st.visible = false;
@@ -406,27 +439,14 @@ fn hide(app: &AppHandle, st: &mut State) {
     // A window hidden under the pointer may never hear it leave.
     st.in_panel = false;
     st.anchor = None;
-    let front = PANELS[st.front];
-    let _ = app.emit_to(front, "panel-close", ());
+    if was_visible {
+        if let Some(panel) = app.get_webview_window(PANELS[st.front]) {
+            let _ = overlay::conceal(&panel);
+        }
+    }
+    trace("hide");
     let _ = app.emit_to("rail", "panel-state", PanelState { widget: None, side: st.side });
     toast::release(app);
-    if !was_visible {
-        return;
-    }
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(FADE).await;
-        main_thread::run(&app, move |app| {
-            let hover = app.state::<Hover>();
-            let Ok(st) = hover.0.lock() else { return };
-            // Parked unless it is showing again.
-            if !(st.visible && PANELS[st.front] == front) {
-                if let Some(panel) = app.get_webview_window(front) {
-                    let _ = overlay::conceal(&panel);
-                }
-            }
-        });
-    });
 }
 
 /// Where the rail and one of its dials are, in physical px.

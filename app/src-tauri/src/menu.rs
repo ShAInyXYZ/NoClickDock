@@ -10,7 +10,7 @@
 use std::sync::Mutex;
 
 use serde_json::{json, Value};
-use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Wry};
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -22,76 +22,177 @@ use crate::{core, dock, hover, toast};
 #[derive(Default)]
 pub struct Tray(Mutex<Option<MenuItem<Wry>>>);
 
+/// One entry of a context menu, whatever draws it.
+enum Entry {
+    Item(String, String),        // id, label
+    Check(String, String, bool), // id, label, on
+    Radio(String, String, bool), // one of a set: id, label, chosen
+    Separator,
+    Sub(String, Vec<Entry>),
+}
+
+fn item(id: impl Into<String>, label: impl Into<String>) -> Entry {
+    Entry::Item(id.into(), label.into())
+}
+
 /// Right-click on a dial: refresh it, its own items, then the app's.
 #[tauri::command]
 pub fn dial_menu(window: WebviewWindow, widget: String) -> Result<(), String> {
     let app = window.app_handle();
-    hover::close_for_menu(app);
-    let e = |error: tauri::Error| error.to_string();
-    let mut items: Vec<Box<dyn IsMenuItem<Wry>>> =
-        vec![Box::new(MenuItem::with_id(app, format!("refresh:{widget}"), "Refresh now", true, None::<&str>).map_err(e)?)];
-    for item in app.state::<core::Core>().menu_of(&widget) {
-        let (Some(id), Some(label)) = (item.get("id").and_then(Value::as_str), item.get("label").and_then(Value::as_str))
-        else {
+    hover::close_for_menu(app, Some(widget.clone()));
+    let mut entries = vec![item(format!("refresh:{widget}"), "Refresh now")];
+    for it in app.state::<core::Core>().menu_of(&widget) {
+        let (Some(id), Some(label)) = (it.get("id").and_then(Value::as_str), it.get("label").and_then(Value::as_str)) else {
             continue;
         };
-        items.push(Box::new(MenuItem::with_id(app, format!("item:{widget}:{id}"), label, true, None::<&str>).map_err(e)?));
+        entries.push(item(format!("item:{widget}:{id}"), label));
     }
-    items.push(Box::new(PredefinedMenuItem::separator(app).map_err(e)?));
-    items.extend(app_items(app).map_err(e)?);
-    popup(&window, items)
+    entries.push(Entry::Separator);
+    entries.extend(app_entries());
+    popup(&window, entries)
 }
 
 /// Right-click on the rail itself: how the rail looks, then the app's items.
 #[tauri::command]
 pub fn rail_menu(window: WebviewWindow) -> Result<(), String> {
     let app = window.app_handle();
-    hover::close_for_menu(app);
-    let e = |error: tauri::Error| error.to_string();
+    hover::close_for_menu(app, None);
     let dock = app.state::<core::Core>().dock_config().unwrap_or(Value::Null);
     let is = |key: &str, value: &str| dock.get(key).and_then(Value::as_str) == Some(value);
-    let check = |id: &str, label: &str, on: bool| CheckMenuItem::with_id(app, id, label, true, on, None::<&str>);
-
-    let orientation = Submenu::with_items(
-        app,
-        "Orientation",
-        true,
-        &[
-            &check("dock:orientation:vertical", "Vertical", is("orientation", "vertical")).map_err(e)?,
-            &check("dock:orientation:horizontal", "Horizontal", is("orientation", "horizontal")).map_err(e)?,
-        ],
-    )
-    .map_err(e)?;
-    let density = Submenu::with_items(
-        app,
-        "Density",
-        true,
-        &[
-            &check("dock:density:compact", "Compact", is("density", "compact")).map_err(e)?,
-            &check("dock:density:normal", "Normal", is("density", "normal")).map_err(e)?,
-            &check("dock:density:large", "Large", is("density", "large")).map_err(e)?,
-        ],
-    )
-    .map_err(e)?;
+    let check = |id: &str, label: &str, on: bool| Entry::Check(id.into(), label.into(), on);
+    let radio = |id: &str, label: &str, on: bool| Entry::Radio(id.into(), label.into(), on);
     let readouts = dock.get("readouts").and_then(Value::as_bool).unwrap_or(true);
-    let mut items: Vec<Box<dyn IsMenuItem<Wry>>> = vec![
-        Box::new(orientation),
-        Box::new(density),
-        Box::new(check("dock:readouts:toggle", "Readouts", readouts).map_err(e)?),
-        Box::new(PredefinedMenuItem::separator(app).map_err(e)?),
+    let mut entries = vec![
+        Entry::Sub(
+            "Orientation".into(),
+            vec![
+                radio("dock:orientation:vertical", "Vertical", is("orientation", "vertical")),
+                radio("dock:orientation:horizontal", "Horizontal", is("orientation", "horizontal")),
+            ],
+        ),
+        Entry::Sub(
+            "Density".into(),
+            vec![
+                radio("dock:density:compact", "Compact", is("density", "compact")),
+                radio("dock:density:normal", "Normal", is("density", "normal")),
+                radio("dock:density:large", "Large", is("density", "large")),
+            ],
+        ),
+        check("dock:readouts:toggle", "Readouts", readouts),
+        Entry::Separator,
     ];
-    items.extend(app_items(app).map_err(e)?);
-    popup(&window, items)
+    entries.extend(app_entries());
+    popup(&window, entries)
 }
 
-fn app_items(app: &AppHandle) -> tauri::Result<Vec<Box<dyn IsMenuItem<Wry>>>> {
-    Ok(vec![
-        Box::new(MenuItem::with_id(app, "app:settings", "Settings…", true, None::<&str>)?),
-        Box::new(MenuItem::with_id(app, "app:quit", "Quit NoClickDock", true, None::<&str>)?),
-    ])
+fn app_entries() -> Vec<Entry> {
+    vec![item("app:settings", "Settings…"), item("app:quit", "Quit NoClickDock")]
 }
 
-fn popup(window: &WebviewWindow, items: Vec<Box<dyn IsMenuItem<Wry>>>) -> Result<(), String> {
+/// Linux: a GTK menu of our own, popped up without blocking. muda's
+/// context menu spins a nested main loop until the menu reports done — and
+/// GTK reports nothing when it cannot grab the keyboard (another client
+/// holds it: a shell popover, the overview, a password prompt, a VM), so
+/// the loop spun forever inside this IPC call and starved every timer,
+/// toast and message to the main thread (the ~27-minute freeze; research).
+/// Here the call returns at once; a choice arrives on the item's `activate`.
+#[cfg(target_os = "linux")]
+fn popup(window: &WebviewWindow, entries: Vec<Entry>) -> Result<(), String> {
+    use gtk::prelude::*;
+    thread_local! {
+        // The menu showing (if any): kept alive until the next one.
+        static SHOWING: std::cell::RefCell<Option<gtk::Menu>> = const { std::cell::RefCell::new(None) };
+    }
+    crate::main_thread::assert();
+    fn build(app: &AppHandle, entries: Vec<Entry>) -> gtk::Menu {
+        let menu = gtk::Menu::new();
+        for entry in entries {
+            let radio = matches!(entry, Entry::Radio(..));
+            let widget: gtk::MenuItem = match entry {
+                Entry::Item(id, label) => {
+                    let it = gtk::MenuItem::with_label(&label);
+                    let app = app.clone();
+                    it.connect_activate(move |_| chosen(&app, &id));
+                    it
+                }
+                Entry::Check(id, label, on) | Entry::Radio(id, label, on) => {
+                    let it = gtk::CheckMenuItem::with_label(&label);
+                    it.set_draw_as_radio(radio);
+                    it.set_active(on);
+                    let app = app.clone();
+                    it.connect_activate(move |_| chosen(&app, &id));
+                    it.upcast()
+                }
+                Entry::Separator => gtk::SeparatorMenuItem::new().upcast(),
+                Entry::Sub(label, children) => {
+                    let it = gtk::MenuItem::with_label(&label);
+                    it.set_submenu(Some(&build(app, children)));
+                    it
+                }
+            };
+            menu.append(&widget);
+        }
+        menu
+    }
+    let app = window.app_handle();
+    let menu = build(app, entries);
+    menu.show_all();
+    // At the pointer, over the window that asked. There is no GDK event
+    // here (the request came through IPC), so the rectangle is the pointer
+    // itself and GTK grabs with the seat's pointer.
+    let gtk_window = window.gtk_window().map_err(|e| e.to_string())?;
+    menu.set_attach_widget(Some(&gtk_window));
+    let gdk_window = gtk_window.window().ok_or("the window is not realised")?;
+    let pointer = gdk_window.display().default_seat().and_then(|seat| seat.pointer());
+    let (x, y) = pointer.map(|p| {
+        let (_, x, y, _) = gdk_window.device_position(&p);
+        (x, y)
+    })
+    .unwrap_or((0, 0));
+    menu.popup_at_rect(
+        &gdk_window,
+        &gtk::gdk::Rectangle::new(x, y, 1, 1),
+        gtk::gdk::Gravity::SouthEast,
+        gtk::gdk::Gravity::NorthWest,
+        None,
+    );
+    if !menu.is_visible() {
+        // Could not grab: another client holds the keyboard. Say so, never wait.
+        eprintln!("ncd: the menu could not open (another application holds the keyboard)");
+        crate::watchdog::note("menu: no grab");
+    }
+    SHOWING.with(|showing| {
+        if let Some(old) = showing.borrow_mut().replace(menu) {
+            old.detach();
+        }
+    });
+    Ok(())
+}
+
+/// Elsewhere: the system menu (TrackPopupMenu on Windows returns when the
+/// menu closes, or at once when it cannot open).
+#[cfg(not(target_os = "linux"))]
+fn popup(window: &WebviewWindow, entries: Vec<Entry>) -> Result<(), String> {
+    use tauri::menu::{CheckMenuItem, IsMenuItem, Submenu};
+    fn build(app: &AppHandle, entries: Vec<Entry>) -> tauri::Result<Vec<Box<dyn IsMenuItem<Wry>>>> {
+        let mut out: Vec<Box<dyn IsMenuItem<Wry>>> = Vec::new();
+        for entry in entries {
+            out.push(match entry {
+                Entry::Item(id, label) => Box::new(MenuItem::with_id(app, id, label, true, None::<&str>)?),
+                Entry::Check(id, label, on) | Entry::Radio(id, label, on) => {
+                    Box::new(CheckMenuItem::with_id(app, id, label, true, on, None::<&str>)?)
+                }
+                Entry::Separator => Box::new(PredefinedMenuItem::separator(app)?),
+                Entry::Sub(label, children) => {
+                    let items = build(app, children)?;
+                    let refs: Vec<&dyn IsMenuItem<Wry>> = items.iter().map(|i| i.as_ref()).collect();
+                    Box::new(Submenu::with_items(app, label, true, &refs)?)
+                }
+            });
+        }
+        Ok(out)
+    }
+    let items = build(window.app_handle(), entries).map_err(|e| e.to_string())?;
     let refs: Vec<&dyn IsMenuItem<Wry>> = items.iter().map(|item| item.as_ref()).collect();
     let menu = Menu::with_items(window.app_handle(), &refs).map_err(|e| e.to_string())?;
     #[cfg(windows)]
@@ -135,10 +236,11 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
             &MenuItem::with_id(app, "app:quit", "Quit NoClickDock", true, None::<&str>)?,
         ],
     )?;
-    let mut builder = TrayIconBuilder::with_id("ncd").tooltip("NoClickDock").menu(&menu).show_menu_on_left_click(true);
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
-    }
+    // The mark as a light monochrome glyph on transparent, like the symbolic
+    // icons beside it on a dark top bar (design M2 r1b: the app icon was a
+    // dark square there). The dark variant is for light taskbars (M7).
+    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-light-44.png"))?;
+    let builder = TrayIconBuilder::with_id("ncd").tooltip("NoClickDock").menu(&menu).show_menu_on_left_click(true).icon(icon);
     builder.build(app)?;
     if let Ok(mut slot) = app.state::<Tray>().0.lock() {
         *slot = Some(toggle);
@@ -148,6 +250,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
 /// Every menu choice, from any menu.
 pub fn chosen(app: &AppHandle, id: &str) {
+    crate::watchdog::note(format!("menu {id}"));
     let mut parts = id.splitn(3, ':');
     match (parts.next(), parts.next(), parts.next()) {
         (Some("refresh"), Some(widget), None) => send(app, json!({"type": "refresh", "widget": widget})),

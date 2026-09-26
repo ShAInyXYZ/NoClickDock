@@ -16,7 +16,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2.11", features = ["tray-icon"] }
+tauri = { version = "2.11", features = ["tray-icon", "image-png"] }
 tauri-plugin-shell = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-clipboard-manager = "2"
@@ -33,6 +33,10 @@ libloading = "0.7"
 # Mutter publishes per-monitor work areas as root properties without
 # always telling GDK.
 x11rb = "0.13"
+# The X window of a GTK toplevel, for compositor-side opacity.
+gdkx11 = "0.18"
+# To relate the overlays' webviews: one WebKit web process for all four.
+webkit2gtk = "2.0"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell"] }

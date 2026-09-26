@@ -23,6 +23,9 @@ use crate::{main_thread, overlay};
 
 const VISIBLE: Duration = Duration::from_millis(5000);
 const FADE: Duration = Duration::from_millis(160);
+/// The window parks only once the fade has certainly been drawn: WebKit's
+/// frames can trail the clock, and parking mid-fade looked like a pop.
+const SETTLE: Duration = Duration::from_millis(140);
 const MAX: usize = 3;
 const TICK: Duration = Duration::from_millis(100);
 /// A waiting toast older than this is no longer news.
@@ -91,6 +94,7 @@ pub fn push(app: &AppHandle, widget: String, tone: String, text: String) {
 
 fn push_here(app: &AppHandle, widget: String, tone: String, text: String) {
     main_thread::assert();
+    crate::watchdog::note(format!("toast push {widget}"));
     let toasts = app.state::<Toasts>();
     let Ok(mut st) = toasts.0.lock() else { return };
     if st.held.as_deref() == Some(widget.as_str()) {
@@ -136,6 +140,7 @@ fn requeue(st: &mut State) {
 /// A panel opened: its widget's toasts are dropped, the rest wait.
 pub fn hold(app: &AppHandle, widget: &str) {
     main_thread::assert();
+    crate::watchdog::note(format!("toast hold {widget}"));
     let toasts = app.state::<Toasts>();
     let Ok(mut st) = toasts.0.lock() else { return };
     st.held = Some(widget.to_owned());
@@ -147,6 +152,7 @@ pub fn hold(app: &AppHandle, widget: &str) {
 /// The panel closed: waiting toasts come out.
 pub fn release(app: &AppHandle) {
     main_thread::assert();
+    crate::watchdog::note("toast release");
     let toasts = app.state::<Toasts>();
     let Ok(mut st) = toasts.0.lock() else { return };
     st.held = None;
@@ -233,7 +239,7 @@ fn tick(app: &AppHandle, st: &mut State) -> bool {
         changed = true;
     }
     let before = st.shown.len();
-    st.shown.retain(|s| !(s.leaving && now >= s.until + FADE));
+    st.shown.retain(|s| !(s.leaving && now >= s.until + FADE + SETTLE));
     changed |= st.shown.len() != before;
     if st.shown.is_empty() {
         st.widget = None;

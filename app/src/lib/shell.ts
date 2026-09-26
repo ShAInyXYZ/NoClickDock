@@ -74,9 +74,5 @@ export const toastDismiss = () => invoke<void>("toast_dismiss");
 const own = () => ({ target: getCurrentWindow().label });
 export const onPanelOpen = (fn: (open: PanelOpen) => void): Promise<UnlistenFn> =>
   listen<PanelOpen>("panel-open", (event) => fn(event.payload), own());
-export const onPanelClose = (fn: () => void): Promise<UnlistenFn> => listen("panel-close", () => fn(), own());
-/** The window is about to map: time for the arrival animation. */
-export const onPanelReveal = (fn: (side: Side) => void): Promise<UnlistenFn> =>
-  listen<Side>("panel-reveal", (event) => fn(event.payload), own());
 export const onPanelState = (fn: (state: PanelState) => void): Promise<UnlistenFn> =>
   listen<PanelState>("panel-state", (event) => fn(event.payload));

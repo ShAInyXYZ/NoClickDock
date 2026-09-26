@@ -7,8 +7,11 @@ mod main_thread;
 mod menu;
 mod overlay;
 mod toast;
+mod watchdog;
 #[cfg(windows)]
 mod win;
+#[cfg(target_os = "linux")]
+mod x11;
 
 use tauri::{Manager, RunEvent, WebviewWindow, WindowEvent};
 
@@ -85,6 +88,7 @@ pub fn run() {
         .manage(menu::Tray::default())
         .manage(overlay::Scale::default())
         .manage(overlay::Shown::default())
+        .manage(overlay::Parked::default())
         .invoke_handler(tauri::generate_handler![
             core::core_state,
             core::core_send,
@@ -104,19 +108,20 @@ pub fn run() {
         .setup(|app| {
             main_thread::init();
             overlay::init_scale(app);
-            // Built once and reused: each webview is a WebKit process.
-            overlay::build(app, "rail", "dock")?;
+            // Built once and reused, all four in one WebKit web process.
+            let rail = overlay::build(app, "rail", "dock", None)?;
             overlay::watch_compositor(app);
             for label in hover::PANELS {
-                let panel = overlay::build(app, label, "panel")?;
+                let panel = overlay::build(app, label, "panel", Some(&rail))?;
                 overlay::prime(&panel)?;
             }
-            overlay::build(app, "toast", "toast")?;
+            overlay::build(app, "toast", "toast", Some(&rail))?;
             if let Err(error) = menu::tray(app) {
                 // No tray host (vanilla GNOME): the rail's menu has everything.
                 eprintln!("ncd: no tray: {error}");
             }
             dock::observe_monitors(app.handle());
+            watchdog::start(app.handle());
             core::supervise(app.handle().clone());
             Ok(())
         })

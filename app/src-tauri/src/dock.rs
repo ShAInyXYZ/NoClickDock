@@ -142,6 +142,7 @@ pub fn rail_layout(app: AppHandle, layout: RailLayout) -> Result<(), String> {
         let (x, y) = restore(&app, size, vertical);
         placing(&app);
         rail.set_position(PhysicalPosition::new(x, y)).map_err(|e| e.to_string())?;
+        resettle_soon(&app);
     }
     // An open panel follows its dial.
     hover::replace(&app);
@@ -214,6 +215,29 @@ fn placing(app: &AppHandle) {
     if let Ok(mut state) = app.state::<Dock>().0.lock() {
         state.placing_until = Some(Instant::now() + PLACING);
     }
+}
+
+/// A change of orientation or density resizes the rail in a burst of
+/// layouts (and the window manager may still move it): once the burst has
+/// settled, the rail is put back on its saved edge at its final size, and
+/// where it then rests is saved — the screen and the config agree
+/// (design M2 r1b: vertical → horizontal → vertical left it 470 px off).
+fn resettle_soon(app: &AppHandle) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static BURSTS: AtomicU64 = AtomicU64::new(0);
+    let burst = BURSTS.fetch_add(1, Ordering::AcqRel) + 1;
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(350)).await;
+        if BURSTS.load(Ordering::Acquire) != burst {
+            return;
+        }
+        main_thread::run(&app, replace);
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        if BURSTS.load(Ordering::Acquire) == burst {
+            main_thread::run(&app, settle);
+        }
+    });
 }
 
 /// Monitors or work areas changed: the rail goes back where it belongs.

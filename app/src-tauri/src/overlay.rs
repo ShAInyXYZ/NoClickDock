@@ -8,9 +8,19 @@ use std::sync::Mutex;
 
 use tauri::{Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
-/// Built once at startup and reused: each webview is a WebKit process.
-pub fn build(app: &tauri::App, label: &str, route: &str) -> tauri::Result<WebviewWindow> {
-    let window = WebviewWindowBuilder::new(app, label, WebviewUrl::App(route.into()))
+/// Built once at startup and reused. On Linux every overlay after the first
+/// is related to it, so the four share one WebKit web process instead of
+/// one each (design M2 r1b: 370 MB PSS with four).
+pub fn build(app: &tauri::App, label: &str, route: &str, related: Option<&WebviewWindow>) -> tauri::Result<WebviewWindow> {
+    #[allow(unused_mut)]
+    let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(route.into()));
+    #[cfg(target_os = "linux")]
+    if let Some(view) = related.and_then(webkit_view) {
+        builder = builder.with_related_view(view);
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = related;
+    let window = builder
         .title(format!("NoClickDock {label}"))
         .inner_size(64.0, 64.0) // the real size comes from fit()
         .transparent(true)
@@ -28,6 +38,10 @@ pub fn build(app: &tauri::App, label: &str, route: &str) -> tauri::Result<Webvie
         .build()?;
     window.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)))?;
     #[cfg(target_os = "linux")]
+    if label == "toast" {
+        pass_through(&window, true)?; // for good, from the first map
+    }
+    #[cfg(target_os = "linux")]
     {
         use gtk::prelude::GtkWindowExt;
         // Before the first show: the hint is read at map time. UTILITY, not
@@ -43,6 +57,19 @@ pub fn build(app: &tauri::App, label: &str, route: &str) -> tauri::Result<Webvie
     #[cfg(windows)]
     crate::win::harden(&window)?;
     Ok(window)
+}
+
+/// The WebKit view inside an overlay's GTK window.
+#[cfg(target_os = "linux")]
+fn webkit_view(window: &WebviewWindow) -> Option<webkit2gtk::WebView> {
+    use gtk::prelude::*;
+    fn find(widget: &gtk::Widget) -> Option<webkit2gtk::WebView> {
+        if let Ok(view) = widget.clone().downcast::<webkit2gtk::WebView>() {
+            return Some(view);
+        }
+        widget.clone().downcast::<gtk::Container>().ok()?.children().iter().find_map(find)
+    }
+    find(window.gtk_window().ok()?.upcast_ref())
 }
 
 /// Sizes a window exactly, in physical pixels. On Linux `set_size` cannot
@@ -78,6 +105,24 @@ pub fn fit(window: &WebviewWindow, width: i32, height: i32) -> tauri::Result<()>
 /// whose `show()` activates the window.
 #[derive(Default)]
 pub struct Shown(Mutex<HashSet<String>>);
+
+/// Windows parked right now (Linux): mapped, invisible at the compositor,
+/// taking no input.
+#[derive(Default)]
+pub struct Parked(#[cfg_attr(not(target_os = "linux"), allow(dead_code))] Mutex<HashSet<String>>);
+
+#[cfg(target_os = "linux")]
+fn set_parked(window: &WebviewWindow, parked: bool) {
+    let app = window.app_handle();
+    let state = app.state::<Parked>();
+    if let Ok(mut set) = state.0.lock() {
+        if parked {
+            set.insert(window.label().to_owned());
+        } else {
+            set.remove(window.label());
+        }
+    };
+}
 
 /// Places, then shows: Mutter re-places a re-mapped window that was not
 /// moved first. Never focuses.
@@ -118,23 +163,105 @@ pub fn reveal(window: &WebviewWindow, position: PhysicalPosition<i32>) -> tauri:
 
 /// Maps a window once, parked: WebKit runs no rendering updates (no
 /// ResizeObserver, no animation frames) in a window never shown, and a
-/// panel page must draw, measure and paint while still unseen.
+/// panel page must draw, measure and paint while still unseen. Parked
+/// before it is ever mapped — invisible, taking no input, 1×1 — so it is
+/// never an inert rectangle on screen that swallows clicks (design M2 r1b).
 pub fn prime(window: &WebviewWindow) -> tauri::Result<()> {
     crate::main_thread::assert();
     #[cfg(target_os = "linux")]
     if composited() {
-        use gtk::prelude::WidgetExt;
-        window.gtk_window()?.set_opacity(0.0);
+        pass_through(window, true)?;
+        if let Some(id) = crate::x11::xid(window) {
+            crate::x11::set_visible(&[(id, false)]);
+        }
+        fit(window, 1, 1)?;
+        set_parked(window, true);
         window.show()?;
-        let shown = window.app_handle().state::<Shown>();
+        let app = window.app_handle();
+        let shown = app.state::<Shown>();
         if let Ok(mut set) = shown.0.lock() {
             set.insert(window.label().to_owned());
-        }
-        pass_through(window, true)?;
+        };
     }
     #[cfg(not(target_os = "linux"))]
     let _ = window;
     Ok(())
+}
+
+/// Runs `f` once GTK has drawn a frame of this window from now on (at most
+/// 50 ms later, whatever happens): what the page painted is then in the
+/// window's buffer, not only in WebKit's.
+pub fn after_next_frame(window: &WebviewWindow, f: impl FnOnce() + 'static) {
+    crate::main_thread::assert();
+    #[cfg(target_os = "linux")]
+    {
+        use gtk::glib;
+        use gtk::prelude::*;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        type Job = Rc<RefCell<Option<Box<dyn FnOnce()>>>>;
+        let job: Job = Rc::new(RefCell::new(Some(Box::new(f))));
+        let run = |job: &Job| {
+            let f = job.borrow_mut().take();
+            if let Some(f) = f {
+                f();
+            }
+        };
+        if let Some((gtk_window, clock)) = window.gtk_window().ok().and_then(|w| w.frame_clock().map(|c| (w, c))) {
+            let handler: Rc<RefCell<Option<glib::SignalHandlerId>>> = Rc::new(RefCell::new(None));
+            let (j, h, c) = (job.clone(), handler.clone(), clock.clone());
+            let id = clock.connect_after_paint(move |_| {
+                run(&j);
+                if let Some(id) = h.borrow_mut().take() {
+                    let c = c.clone();
+                    glib::idle_add_local_once(move || c.disconnect(id));
+                }
+            });
+            *handler.borrow_mut() = Some(id);
+            gtk_window.queue_draw();
+            let j = job.clone();
+            glib::timeout_add_local_once(std::time::Duration::from_millis(50), move || run(&j));
+            return;
+        }
+        run(&job);
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = window;
+        f();
+    }
+}
+
+/// Shows `incoming` where it is and parks `outgoing`, as one change at the
+/// compositor: no frame with neither, none with both.
+pub fn swap(incoming: &WebviewWindow, outgoing: &WebviewWindow, position: PhysicalPosition<i32>) -> tauri::Result<()> {
+    crate::main_thread::assert();
+    #[cfg(target_os = "linux")]
+    if composited() && is_parked(incoming) {
+        if incoming.outer_position().ok() != Some(position) {
+            incoming.set_position(position)?;
+        }
+        if let (Some(a), Some(b)) = (crate::x11::xid(incoming), crate::x11::xid(outgoing)) {
+            if crate::x11::set_visible(&[(a, true), (b, false)]) {
+                if clickable(incoming) {
+                    pass_through(incoming, false)?;
+                }
+                pass_through(outgoing, true)?;
+                set_parked(incoming, false);
+                set_parked(outgoing, true);
+                return Ok(());
+            }
+        }
+    }
+    reveal(incoming, position)?;
+    conceal(outgoing)
+}
+
+#[cfg(target_os = "linux")]
+fn is_parked(window: &WebviewWindow) -> bool {
+    let set = window.app_handle().state::<Parked>();
+    let parked = set.0.lock().map(|set| set.contains(window.label())).unwrap_or(false);
+    parked
 }
 
 pub fn conceal(window: &WebviewWindow) -> tauri::Result<()> {
@@ -162,6 +289,9 @@ pub fn composited() -> bool {
 #[cfg(target_os = "linux")]
 fn unmap(window: &WebviewWindow) -> tauri::Result<()> {
     use gtk::prelude::WidgetExt;
+    if let Some(id) = crate::x11::xid(window) {
+        crate::x11::set_visible(&[(id, true)]); // a mapped window is never left invisible
+    }
     let shown = window.app_handle().state::<Shown>();
     if let Ok(mut set) = shown.0.lock() {
         set.remove(window.label());
@@ -174,7 +304,6 @@ fn unmap(window: &WebviewWindow) -> tauri::Result<()> {
 /// would now be a black rectangle — unmap them.
 #[cfg(target_os = "linux")]
 pub fn watch_compositor(app: &tauri::App) {
-    use gtk::prelude::WidgetExt;
     let Some(screen) = gtk::gdk::Screen::default() else { return };
     let app = app.handle().clone();
     screen.connect_composited_changed(move |screen| {
@@ -182,7 +311,8 @@ pub fn watch_compositor(app: &tauri::App) {
             return;
         }
         for window in app.webview_windows().values() {
-            if window.gtk_window().is_ok_and(|w| w.opacity() == 0.0) {
+            if is_parked(window) {
+                set_parked(window, false);
                 let _ = unmap(window);
             }
         }
@@ -201,22 +331,27 @@ fn clickable(window: &WebviewWindow) -> bool {
 
 #[cfg(target_os = "linux")]
 fn park(window: &WebviewWindow) -> tauri::Result<()> {
-    use gtk::prelude::WidgetExt;
     let shown = window.app_handle().state::<Shown>();
     if !shown.0.lock().map(|set| set.contains(window.label())).unwrap_or(false) {
-        return Ok(()); // never shown: nothing to hide (and no GdkWindow yet)
+        return Ok(()); // never shown: nothing to hide
     }
-    window.gtk_window()?.set_opacity(0.0);
-    pass_through(window, true)
+    pass_through(window, true)?;
+    if let Some(id) = crate::x11::xid(window) {
+        crate::x11::set_visible(&[(id, false)]);
+    }
+    set_parked(window, true);
+    Ok(())
 }
 
 #[cfg(target_os = "linux")]
 fn unpark(window: &WebviewWindow) -> tauri::Result<()> {
-    use gtk::prelude::WidgetExt;
+    if let Some(id) = crate::x11::xid(window) {
+        crate::x11::set_visible(&[(id, true)]);
+    }
     if clickable(window) {
         pass_through(window, false)?;
     }
-    window.gtk_window()?.set_opacity(1.0);
+    set_parked(window, false);
     Ok(())
 }
 
@@ -224,16 +359,16 @@ fn unpark(window: &WebviewWindow) -> tauri::Result<()> {
 /// takes them again. Not tao's `set_ignore_cursor_events`: that keeps a 1×1
 /// input region at the window's corner, and a parked window stays mapped
 /// and on top — that pixel would swallow a click meant for what is below.
-/// A window not realised yet has nothing to shape.
+/// Set on the GTK widget, which applies it at every realize and map — set
+/// only on the X window, the first map reset it (design M2 r1b: the
+/// never-shown panels swallowed clicks at 0,0).
 #[cfg(target_os = "linux")]
 pub fn pass_through(window: &WebviewWindow, through: bool) -> tauri::Result<()> {
     use gtk::prelude::WidgetExt;
     crate::main_thread::assert();
     let gtk_window = window.gtk_window()?;
     if through {
-        if let Some(gdk_window) = gtk_window.window() {
-            gdk_window.input_shape_combine_region(&gtk::cairo::Region::create(), 0, 0);
-        }
+        gtk_window.input_shape_combine_region(Some(&gtk::cairo::Region::create()));
     } else {
         gtk_window.input_shape_combine_region(None);
     }

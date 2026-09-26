@@ -28,8 +28,10 @@ pub struct Core {
     link: Mutex<Link>,
     /// The core's last line on stderr: usually the reason it stopped.
     last_err: Mutex<Option<String>>,
-    /// Counts starts, so a watchdog knows which start it is watching.
+    /// Counts starts, so a watchdog knows which start it is watching, and
+    /// the start whose process is running now (0: none).
     starts: AtomicU64,
+    running: AtomicU64,
     actions: AtomicU64,
 }
 
@@ -62,6 +64,7 @@ impl Core {
             link: Mutex::new(Link::default()),
             last_err: Mutex::new(None),
             starts: AtomicU64::new(0),
+            running: AtomicU64::new(0),
             actions: AtomicU64::new(0),
         }
     }
@@ -128,6 +131,7 @@ pub fn supervise(app: AppHandle) {
                         }
                     }
                     CommandEvent::Terminated(status) => {
+                        app.state::<Core>().running.store(0, Ordering::Release);
                         eprintln!("ncd: ncd-core exited (code {:?}, signal {:?})", status.code, status.signal);
                         if !app.state::<Core>().quitting.load(Ordering::Acquire) {
                             let mut why = match (status.code, status.signal) {
@@ -158,14 +162,19 @@ pub fn supervise(app: AppHandle) {
 }
 
 /// Starts a watchdog for this start: a core that runs but never says hello
-/// is as broken as one that does not start.
+/// is as broken as one that does not start. Only a process that is still
+/// running is "not answering"; one that exited has already said why
+/// (design M2 r1b: the watchdog's words replaced an exit's).
 fn watch_hello(app: &AppHandle) {
     let start = app.state::<Core>().starts.fetch_add(1, Ordering::AcqRel) + 1;
+    app.state::<Core>().running.store(start, Ordering::Release);
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(HELLO_WITHIN).await;
         let core = app.state::<Core>();
-        let silent = core.starts.load(Ordering::Acquire) == start && !core.link.lock().map(|l| l.up).unwrap_or(false);
+        let silent = core.starts.load(Ordering::Acquire) == start
+            && core.running.load(Ordering::Acquire) == start
+            && !core.link.lock().map(|l| l.up).unwrap_or(false);
         if silent {
             set_link(&app, false, Some("ncd-core started but has not answered".to_owned()));
         }
@@ -204,6 +213,7 @@ fn relay(app: &AppHandle, line: &str) {
         return;
     };
     let kind = message.get("type").and_then(Value::as_str);
+    crate::watchdog::note(format!("core → {}", kind.unwrap_or("?")));
     if let Ok(mut cache) = app.state::<Core>().cache.lock() {
         match kind {
             Some("hello") => {
@@ -272,6 +282,7 @@ pub fn core_send(app: AppHandle, line: String) -> Result<(), String> {
 
 /// Writes one message to the core's stdin.
 pub fn send(app: &AppHandle, message: &Value) -> Result<(), String> {
+    crate::watchdog::note(format!("core ← {}", message.get("type").and_then(Value::as_str).unwrap_or("?")));
     let mut bytes = serde_json::to_vec(message).map_err(|e| e.to_string())?;
     bytes.push(b'\n');
     let core = app.state::<Core>();

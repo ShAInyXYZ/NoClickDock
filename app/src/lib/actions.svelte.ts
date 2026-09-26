@@ -31,6 +31,10 @@ class Actions {
       delete this.running[key];
       if (!message.ok) this.#fail(key, message.message);
     });
+    // A core that died, or started again, finishes nothing it was running.
+    core.onReset(() => {
+      for (const key of Object.keys(this.running)) delete this.running[key];
+    });
   }
 
   key(widget: string, action: Action) {

@@ -38,6 +38,7 @@ class Core {
   #transport: Transport | null = null;
   #pending = new Map<string, (result: ActionResult) => void>();
   #actionListeners: ((message: Extract<CoreMessage, { type: "running" | "result" }>) => void)[] = [];
+  #resetListeners: (() => void)[] = [];
   #toastKey = 0;
   #clock: ReturnType<typeof setInterval> | undefined;
 
@@ -48,6 +49,7 @@ class Core {
     return this.#transport.connect(
       (message) => this.#apply(message),
       (up, error, since) => {
+        if (!up) for (const fn of this.#resetListeners) fn();
         this.linked = up;
         this.linkError = up ? null : (error ?? null);
         this.linkDownSince = up ? null : (since ?? this.linkDownSince ?? Date.now());
@@ -77,6 +79,12 @@ class Core {
     this.#actionListeners.push(fn);
   }
 
+  /** Hears the core go away or start again: whatever it was running will
+   *  never answer (research M2 r3: a pill stayed busy forever). */
+  onReset(fn: () => void) {
+    this.#resetListeners.push(fn);
+  }
+
   /** Runs a widget action and resolves with the core's answer. */
   act(widget: string, action: Pick<Action, "id" | "args">): Promise<ActionResult> {
     const id = crypto.randomUUID();
@@ -100,6 +108,7 @@ class Core {
   #apply(message: CoreMessage) {
     switch (message.type) {
       case "hello": {
+        for (const fn of this.#resetListeners) fn();
         // A (re)started core: forget widgets it no longer runs.
         this.platform = message.platform;
         this.config = message.config;
