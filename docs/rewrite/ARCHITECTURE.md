@@ -57,7 +57,7 @@ UI → core (stdin line / `POST /v1/send` body):
 {"type":"config.patch","patch":{"dock":{"orientation":"horizontal"}}}
 ```
 
-Dev HTTP: `GET /v1/state` (hello + every snapshot), `GET /v1/events` (SSE of
+Dev HTTP: `GET /v1/variants` (mock only: the named problem/empty variants the gallery renders), `GET /v1/state` (hello + every snapshot), `GET /v1/events` (SSE of
 the core→UI messages), `POST /v1/send` (one UI→core message).
 
 ### WidgetSnapshot
@@ -101,6 +101,7 @@ tones to tokens.
 | `donut` | `segments:[{label,value,display}]`, `center`, `unit` | Power's cost split |
 | `bars` | `values[]`, `labels?`, `highlight?`, `unit?` | Power's 24 h sparkline |
 | `split` | `columns:[[Block…],[Block…]]` | Power's two-column layout |
+| `empty` | `text`, `commands?:[string]` — one sentence, commands as mono chips | empty states (DESIGN.md) |
 
 An **action** is `{"id","label","confirm?","danger?","args"}`. With `confirm`,
 the first click arms it (label becomes the confirm text) and a second click
@@ -132,6 +133,10 @@ Snapshots are emitted **every poll**, changed or not (as a lightweight
 | Q6 | **Overrides the recommendation.** Disk includes network filesystems (`cifs`, `smb3`, `nfs`, `nfs4`) and `zfs` datasets, in their own `NETWORK` / `POOLS` sections, deduplicated by device id. Each network `statfs` runs with a 2 s timeout in its own goroutine so a hung share can never stall the poll; a share that times out is a `warn` row reading "not responding". A full share drives the dial like a local disk. |
 | Q7 | The installer stops the legacy Python widgets before first run; the core recreates `config.json` if it vanishes. |
 | Q8 | A new-alert toast replaces the generic transition toast in the same poll. |
+| M2-a | Action results also toast. For the widget whose panel is open, a **successful** result's toast is dropped (the refreshed row shows it); a **failed** result is never lost — the panel shows it inline on the row/alert that ran it (pill reads `failed`, the error as a one-line note under it) until the next action or 10 s. |
+| M2-b | Toasts show one widget's stack at a time, beside its dial; another widget's toasts queue. |
+| M2-c | The widget id `ncd` is reserved for the shell's own core-down dial. |
+| M2-d | Snapshot writers never repeat an item in two places on one page (e.g. a component already under *Degraded* is not also a chip). |
 
 ## Repository layout
 
