@@ -97,7 +97,7 @@ tones to tokens.
 | `chips` | `items:[{label,tone,value?}]`, `columns` | `Chips`, `Grid` |
 | `alert` | `title`, `meta?`, `body?`, `mono?`, `tone`, `actions?` | `Alert` |
 | `note` | `text`, `tone?`, `mono?` | `Note` |
-| `table` | `columns:[{label,align,mono}]`, `rows:[{cells[],tone?,led?,sub?}]` | Power's draw table |
+| `table` | `columns:[{label,align,mono}]`, `rows:[{cells[],tone?,led?,sub?}]` — a cell is `"text"` or `{"text","tone"}` | Power's draw table |
 | `donut` | `segments:[{label,value,display}]`, `center`, `unit` | Power's cost split |
 | `bars` | `values[]`, `labels?`, `highlight?`, `unit?` | Power's 24 h sparkline |
 | `split` | `columns:[[Block…],[Block…]]` | Power's two-column layout |
@@ -110,6 +110,28 @@ by `widget/id/args`, not by DOM node.
 The block set grows only when a widget genuinely cannot be expressed with
 the existing kinds; a new kind needs a Svelte renderer, a mock, and a line in
 this table.
+
+A **menu item** is `{"id","label"}` (routed to the core as an action) or
+`{"id","label","url"}` / `{"id","label","copy"}`, which the Rust shell handles
+itself (open with the system opener / put on the clipboard) without a round
+trip to the core.
+
+Snapshots are emitted **every poll**, changed or not (as a lightweight
+`{"type":"tick","widget","at"}` when unchanged), because the UI's stale rule
+(DESIGN.md A11) depends on hearing from each collector.
+
+## Decisions on the specs' open questions (2026-09-26)
+
+| # | decision |
+|---|---|
+| Q1 | Every Docker action is two-step, `start` and `resume` included — the user asked for confirmations on all of them. |
+| Q2 | A status-page indicator of `major`/`critical` maps to `crit`. |
+| Q3 | Power level-change toasts stay, with 60 s hysteresis. |
+| Q4 | Power utilisation tones: RAM/VRAM warn ≥ 90 %, crit ≥ 97 %; CPU utilisation carries no tone. |
+| Q5 | ComfyUI VRAM meters: warn ≥ 85 %, crit ≥ 95 %. |
+| Q6 | **Overrides the recommendation.** Disk includes network filesystems (`cifs`, `smb3`, `nfs`, `nfs4`) and `zfs` datasets, in their own `NETWORK` / `POOLS` sections, deduplicated by device id. Each network `statfs` runs with a 2 s timeout in its own goroutine so a hung share can never stall the poll; a share that times out is a `warn` row reading "not responding". A full share drives the dial like a local disk. |
+| Q7 | The installer stops the legacy Python widgets before first run; the core recreates `config.json` if it vanishes. |
+| Q8 | A new-alert toast replaces the generic transition toast in the same poll. |
 
 ## Repository layout
 
