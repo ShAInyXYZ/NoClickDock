@@ -45,7 +45,8 @@ var sections = []struct {
 // do not add up to Total: the difference is reserved for root.
 type Filesystem struct {
 	Mount  string // where it is mounted: "/", `C:\`
-	Label  string // what the panel calls it: "/", "C: System"
+	Label  string // what the panel calls it: "/", "C: System", a pool's dataset
+	Device string // what is mounted: /dev/nvme0n1p2, //server/share, tank/media
 	FSType string
 	Kind   Kind
 	Total  uint64
@@ -199,7 +200,7 @@ func sectionsFor(measured, silent []Filesystem) model.Blocks {
 				Frac:  sys.Clamp01(frac),
 				Value: sys.FmtBytes(float64(f.Free)) + " free",
 				Note: fmt.Sprintf("%s used of %s · %d%% · %s",
-					sys.FmtBytes(float64(f.Used)), sys.FmtBytes(float64(f.Total)), percent(frac), f.FSType),
+					sys.FmtBytes(float64(f.Used)), sys.FmtBytes(float64(f.Total)), percent(frac), origin(f)),
 				Tone: sys.RatioTone(frac, warnFrac, critFrac),
 			})
 		}
@@ -239,9 +240,21 @@ func issues(measured, silent []Filesystem) []model.Issue {
 		}
 	}
 	for _, f := range silent {
-		out = append(out, model.Issue{ID: "silent " + f.Mount, Text: f.Label + " is not responding", Tone: model.ToneWarn})
+		out = append(out, model.Issue{ID: "noresp:" + f.Mount, Text: f.Label + " is not responding", Tone: model.ToneWarn})
 	}
 	return out
+}
+
+// origin says where a filesystem comes from: its type, the share it
+// mounts, or where a pool's dataset is mounted.
+func origin(f Filesystem) string {
+	switch {
+	case f.Kind == Network && f.Device != "":
+		return f.Device + " · " + f.FSType
+	case f.Kind == Pool:
+		return "mounted at " + f.Mount
+	}
+	return f.FSType
 }
 
 // problemTone colours only what needs attention; a healthy readout is quiet.

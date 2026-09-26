@@ -74,7 +74,7 @@ func fs(mount string, total, used, free uint64) Filesystem {
 
 func TestStateFollowsTheFullestFilesystem(t *testing.T) {
 	share := fs("/mnt/nas", 1000, 930, 70)
-	share.Kind = Network
+	share.Kind, share.Device = Network, "//nas.example/share"
 	silent := Filesystem{Mount: "/mnt/offsite", Label: "/mnt/offsite", FSType: "nfs4", Kind: Network, Unresponsive: true}
 	cases := []struct {
 		name   string
@@ -109,7 +109,7 @@ func TestStateFollowsTheFullestFilesystem(t *testing.T) {
 
 func TestPanelSpellsOutEveryFilesystemBySection(t *testing.T) {
 	pool := fs("/srv/media", 8000, 7040, 560)
-	pool.Kind, pool.FSType = Pool, "zfs"
+	pool.Kind, pool.FSType, pool.Label, pool.Device = Pool, "zfs", "tank/media", "tank/media"
 	silent := Filesystem{Mount: "/mnt/offsite", Label: "/mnt/offsite", FSType: "nfs4", Kind: Network, Unresponsive: true}
 	s := build([]Filesystem{fs("/", 500, 300, 175), fs("/data", 100, 93, 2), pool, silent}, nil, nil)
 	blocks := s.Pages[0].Blocks
@@ -134,13 +134,16 @@ func TestPanelSpellsOutEveryFilesystemBySection(t *testing.T) {
 	if sec := blocks[3].(model.Section); sec.Title != "Pools" || sec.Meta != "1" {
 		t.Fatalf("pools = %+v", sec)
 	}
+	if m := blocks[4].(model.Meter); m.Label != "tank/media" || m.Note != "6.9T used of 7.8T · 88% · mounted at /srv/media" {
+		t.Fatalf("pool meter = %+v", m)
+	}
 	if row := blocks[6].(model.Row); row.Name != "/mnt/offsite" || row.Value != "not responding" || row.Tone != model.ToneWarn {
 		t.Fatalf("silent row = %+v", row)
 	}
 	want := []model.Issue{
 		{ID: "/data", Text: "/data: 93% full · 2.0G left", Tone: model.ToneCrit},
-		{ID: "/srv/media", Text: "/srv/media: 88% full · 560G left", Tone: model.ToneWarn},
-		{ID: "silent /mnt/offsite", Text: "/mnt/offsite is not responding", Tone: model.ToneWarn},
+		{ID: "/srv/media", Text: "tank/media: 88% full · 560G left", Tone: model.ToneWarn},
+		{ID: "noresp:/mnt/offsite", Text: "/mnt/offsite is not responding", Tone: model.ToneWarn},
 	}
 	if !reflect.DeepEqual(s.Issues, want) {
 		t.Fatalf("issues = %+v", s.Issues)

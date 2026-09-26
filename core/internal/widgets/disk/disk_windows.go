@@ -22,7 +22,8 @@ var (
 const (
 	driveFixed  = 3
 	driveRemote = 4
-	// A mapped drive whose server is gone can block for many seconds.
+	// A local drive that takes longer than this is dropped, as the Python
+	// widget did; a mapped drive gets the network timeout and says so.
 	driveTimeout = 3 * time.Second
 )
 
@@ -54,7 +55,11 @@ func (w *Widget) filesystems() ([]Filesystem, error) {
 		if kind == driveRemote {
 			fs.Kind, fs.FSType = Network, "network"
 		}
-		v, err, answered := probe(&w.probe, root, driveTimeout, func() (volume, error) { return query(path) })
+		timeout := driveTimeout
+		if fs.Kind == Network {
+			timeout = networkTimeout
+		}
+		v, err, answered := probe(&w.probe, root, timeout, func() (volume, error) { return query(path) })
 		if !answered {
 			// A share that does not answer is worth saying; a local drive
 			// that does not answer is dropped, as the Python widget did.

@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// networkTimeout is how long a share may take to say how full it is.
+const networkTimeout = 2 * time.Second
+
 // prober measures filesystems that may never answer. A network share whose
 // server is gone blocks statfs in the kernel, and no context can interrupt
 // it, so each such measurement runs in its own goroutine against a deadline.

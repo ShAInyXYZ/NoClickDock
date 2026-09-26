@@ -15,5 +15,6 @@ overlay /var/lib/docker/overlay2/0f3c9e/merged overlay rw,relatime,lowerdir=/x,u
 gvfsd-fuse /run/user/1000/gvfs fuse.gvfsd-fuse rw,nosuid,nodev,relatime,user_id=1000,group_id=1000 0 0
 /dev/sdb1 /run/media/someone/USB vfat rw,nosuid,nodev,relatime 0 0
 tank/media /srv/media zfs rw,xattr,noacl 0 0
+tank/docker/3f9a2c71e0 /var/lib/docker/zfs/graph/3f9a2c71e0 zfs rw,xattr,noacl 0 0
 nas.example:/export /mnt/nas nfs4 rw,relatime,vers=4.2 0 0
 //fileserver.example/share /mnt/share cifs rw,relatime,vers=3.1.1 0 0

@@ -16,12 +16,22 @@ func (*Widget) Mock(time.Time) model.Snapshot {
 		free := uint64(float64(total)*0.95) - min(used, uint64(float64(total)*0.95))
 		return Filesystem{Mount: mount, Label: mount, FSType: fstype, Kind: kind, Total: total, Used: used, Free: free}
 	}
+	pool := func(mount, dataset string, totalGB, usedFrac float64) Filesystem {
+		f := fs(mount, "zfs", Pool, totalGB, usedFrac)
+		f.Label, f.Device = dataset, dataset
+		return f
+	}
+	share := func(mount, device string, totalGB, usedFrac float64) Filesystem {
+		f := fs(mount, "cifs", Network, totalGB, usedFrac)
+		f.Device = device
+		return f
+	}
 	fss := []Filesystem{
 		fs("/", "ext4", Local, 500, 0.71),
 		fs("/home", "ext4", Local, 2000, 0.64),
 		fs("/mnt/scratch", "btrfs", Local, 1000, 0.52),
-		fs("/srv/media", "zfs", Pool, 8000, 0.88),
-		fs("/mnt/nas", "cifs", Network, 12000, 0.41),
+		pool("/srv/media", "tank/media", 8000, 0.88),
+		share("/mnt/nas", "//nas.example/archive", 12000, 0.41),
 		{Mount: "/mnt/offsite", Label: "/mnt/offsite", FSType: "nfs4", Kind: Network, Unresponsive: true},
 	}
 	docker := &dockerSpace{

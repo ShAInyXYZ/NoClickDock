@@ -3,11 +3,7 @@ package disk
 import (
 	"os"
 	"syscall"
-	"time"
 )
-
-// networkTimeout is how long a share may take to say how full it is.
-const networkTimeout = 2 * time.Second
 
 type usage struct {
 	dev               uint64
@@ -28,7 +24,10 @@ func (w *Widget) filesystems() ([]Filesystem, error) {
 	seen := map[uint64]bool{}
 	var out []Filesystem
 	for _, m := range parseMounts(f) {
-		fs := Filesystem{Mount: m.point, Label: m.point, FSType: m.fstype, Kind: m.kind}
+		fs := Filesystem{Mount: m.point, Label: m.point, Device: m.device, FSType: m.fstype, Kind: m.kind}
+		if m.kind == Pool {
+			fs.Label = m.device // the dataset: tank/media
+		}
 		var u usage
 		if m.kind == Network {
 			var answered bool

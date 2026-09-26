@@ -23,6 +23,10 @@ var networkFSTypes = map[string]bool{"cifs": true, "smb3": true, "nfs": true, "n
 
 var skipTrees = []string{"/snap", "/var/snap", "/run", "/sys", "/proc", "/dev"}
 
+// The zfs storage driver mounts one dataset per image layer under the
+// runtime's graph directory: those are Docker's, not the user's.
+var graphTrees = []string{"/var/lib/docker", "/var/lib/containers"}
+
 type mount struct {
 	device string
 	point  string
@@ -43,11 +47,14 @@ func parseMounts(r io.Reader) []mount {
 		}
 		m := mount{device: unescape(f[0]), point: unescape(f[1]), fstype: f[2]}
 		switch {
-		case skipFSTypes[m.fstype] || underSkippedTree(m.point):
+		case skipFSTypes[m.fstype] || underTree(m.point, skipTrees):
 			continue
 		case networkFSTypes[m.fstype]:
 			m.kind = Network
 		case m.fstype == "zfs":
+			if underTree(m.point, graphTrees) {
+				continue
+			}
 			m.kind = Pool
 		case strings.HasPrefix(m.device, "/"):
 			m.kind = Local
@@ -59,10 +66,10 @@ func parseMounts(r io.Reader) []mount {
 	return out
 }
 
-// underSkippedTree matches whole path components: /run/media is skipped,
-// /snapshots is not.
-func underSkippedTree(point string) bool {
-	for _, t := range skipTrees {
+// underTree matches whole path components: /run/media is under /run,
+// /snapshots is not under /snap.
+func underTree(point string, trees []string) bool {
+	for _, t := range trees {
 		if point == t || strings.HasPrefix(point, t+"/") {
 			return true
 		}
