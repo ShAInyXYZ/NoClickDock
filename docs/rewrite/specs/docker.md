@@ -302,8 +302,8 @@ else identical.
 ## Bugs not to carry
 
 - Template tab-splitting of `docker inspect` (use JSON).
-- `start` and `resume` are one-click in P; DESIGN.md requires two-step (**Q**
-  if main wants strict parity).
+- `start` and `resume` are one-click in P; decided (Q1): **every** Docker
+  action is two-step — `start?`, `resume?` included.
 - Alert meta strings far over DESIGN's 24-char budget (restructure as above).
 
 ## Tests (M3)

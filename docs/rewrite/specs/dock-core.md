@@ -238,8 +238,8 @@ toast (`OK`/`CRIT`), then an immediate refresh.
 
 N: arm state in the UI keyed by `widget/actionId/canonical(args)` (ARCHITECTURE),
 4 s. DESIGN.md says every world-changing click is two-step — so actions that
-P ran on one click (docker `start`, `resume`) get a confirm too (**Q** if
-main prefers strict parity). Core side:
+P ran on one click (docker `start`, `resume`) get a confirm too (decided,
+Q1). Core side:
 
 - `action` messages are validated against the **current snapshot**: the
   `(widget, id, args)` must correspond to an action the core itself put in the
@@ -289,7 +289,10 @@ the right. Stale (A11, no snapshot for 3 × pollSecs): `no reading since
 
 ### 5.8 Snapshot emission
 
-Emit a snapshot after **every** poll (not only on change): the footer's
+ARCHITECTURE.md (decided): every poll produces a message — the full
+snapshot when anything but `updatedAt` changed, otherwise the lightweight
+`{"type":"tick","widget","at"}`. Rationale as follows. Emit something after
+**every** poll (not only on change): the footer's
 time must be true, and DESIGN.md A11 marks a widget **stale** after 3 ×
 pollSecs without a snapshot — a change-only emitter would turn every quiet,
 healthy widget stale. At these sizes (≤ 10 KB, fastest cadence 2 s) change
@@ -436,7 +439,10 @@ Block/contract gaps found while mapping every panel:
 3. `section.meta` is used for counts and short phrases (docker "this week",
    power "own PSU") — already in the contract; no change.
 
-Open decisions (**Q**) — defaults recommended in each spec:
+Open decisions (**Q**) — **decided 2026-09-26, see ARCHITECTURE.md
+"Decisions on the specs' open questions"**; all as recommended below except
+**Q6** (disk now includes network filesystems and ZFS datasets — disk spec
+updated) and **Q1** (confirmed: every Docker action two-step):
 
 | # | question | recommendation |
 |---|---|---|

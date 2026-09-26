@@ -41,6 +41,10 @@ not be run here and is flagged for verification on Windows hardware in M7.
    tao's `show()` uses `SW_SHOW` after the first map (activates); subclass
    `WM_MOUSEACTIVATE → MA_NOACTIVATE`; add `WS_EX_TOOLWINDOW` (Alt+Tab) and
    re-apply it after any tao flag change because tao rewrites `GWL_EXSTYLE`.
+6. **Windows build**: `cargo tauri build --runner cargo-xwin --target
+   x86_64-pc-windows-msvc --no-bundle` works from this box with `llvm-rc` on
+   `PATH` → one 6.1 MB GUI exe, no `WebView2Loader.dll`, no VC runtime DLL.
+   The Go core cross-compiles with `-H=windowsgui`. See "Cross-building".
 
 Also proven: `set_ignore_cursor_events(true)` **aborts the app on Linux if
 called before the window was ever shown** (tao unwraps a missing GdkWindow);
@@ -577,11 +581,154 @@ cannot reach the dev server at all, which is the intent.
 
 ---
 
+## Cross-building the Windows exe from this Linux box — proven
+
+Built the scratch probe (three overlay windows, tray, context menu, the
+`win.rs` helpers wired in, `tauri-plugin-shell` sidecar with `externalBin`)
+for Windows from Linux, both ways. Neither could be **run** here (no Windows,
+no Wine); runtime behaviour on Windows remains an M7 verification item.
+
+### Recommended: MSVC target with cargo-xwin (single portable exe)
+
+One-time setup (no sudo; LLVM 14 is already on this machine):
+
+```bash
+rustup target add x86_64-pc-windows-msvc
+cargo install cargo-xwin --locked          # 0.23.1; first build downloads the MSVC CRT + Windows SDK
+                                           # into ~/.cache/cargo-xwin (1.1 GB; accepts the MS licence)
+```
+
+Build (from `app/src-tauri`, frontend already built into `frontendDist`):
+
+```bash
+PATH=/usr/lib/llvm-14/bin:$PATH \
+  cargo tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --no-bundle
+# → target/x86_64-pc-windows-msvc/release/ncd.exe  (+ ncd-core.exe copied from externalBin)
+```
+
+- `llvm-rc` must be on `PATH` — `tauri-winres` compiles the icon/manifest
+  resource with it and panics with `NotAttempted("llvm-rc")` otherwise. Here
+  it is `/usr/lib/llvm-14/bin/llvm-rc` (also `/usr/bin/llvm-rc-14`, which is
+  not found under that name). The Tauri docs' `apt install lld llvm` is not
+  needed: cargo-xwin puts its own `clang-cl` (→ clang 14) and `lld-link` (→
+  the toolchain's `rust-lld`) shims in `~/.cache/cargo-xwin`.
+- Result (probe, production profile `lto = true, opt-level = 3,
+  codegen-units = 1, panic = "abort", strip = true`): **6.1 MB** `ncd.exe`,
+  PE32+ **GUI** subsystem. Imports only system DLLs and the Universal CRT
+  api-sets (`api-ms-win-crt-*`, present on Windows 10/11): **no
+  `WebView2Loader.dll`** (webview2-com links `WebView2LoaderStatic.lib` on
+  msvc) and **no `VCRUNTIME140.dll`** (the Tauri CLI sets
+  `STATIC_VCRUNTIME=true`; a plain `cargo build` would not — always build
+  through `cargo tauri build`).
+- Build time: 1 m 10 s first time (incl. the SDK download), ~30 s
+  incremental, 1 m 17 s for the production profile.
+- `--no-bundle` gives the portable exe. `cargo tauri build … --bundles nsis`
+  (needs `makensis`, not installed) would make a setup.exe; MSI cannot be
+  cross-built ([Tauri docs](https://v2.tauri.app/distribute/windows-installer/)).
+  ARCHITECTURE's plan (portable exe + `install.ps1`) needs neither.
+
+### Alternative: GNU target with mingw (works, worse artefact)
+
+```bash
+rustup target add x86_64-pc-windows-gnu
+cargo tauri build --target x86_64-pc-windows-gnu --no-bundle
+```
+
+Builds with the installed `x86_64-w64-mingw32-gcc` (30 s), but the exe is
+28.5 MB unstripped, imports `msvcrt.dll`, and **needs `WebView2Loader.dll`
+shipped next to it** (tauri-build copies the 160 KB DLL into the target
+dir). The sidecar must then be named `…-x86_64-pc-windows-gnu.exe`. Use only
+if cargo-xwin ever breaks.
+
+### Go sidecar
+
+```bash
+cd core
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+  -ldflags "-H=windowsgui -s -w" \
+  -o ../app/src-tauri/binaries/ncd-core-x86_64-pc-windows-msvc.exe ./cmd/ncd-core
+go build -trimpath -ldflags "-s -w" \
+  -o ../app/src-tauri/binaries/ncd-core-x86_64-unknown-linux-gnu ./cmd/ncd-core
+```
+
+- Proven: the probe core cross-compiles to a 5.4 MB PE32+ **GUI** exe
+  (`-H=windowsgui`), no cgo. `GOOS=windows go vet ./...` is the cheap check that
+  Windows-tagged files compile.
+- `-buildvcs=false` only matters outside a git checkout (the scratch build
+  failed without it); harmless inside the repo.
+- A GUI-subsystem Go process still reads/writes the stdin/stdout **pipes** it
+  is given (the handles come from `STARTUPINFO`); with no pipes (double-click)
+  writes are silently dropped — ncd-core must therefore treat stdin EOF at
+  start as "no parent" and exit, not spin.
+- Exec helper, proven on Linux (timeouts kill grandchildren: a `sh -c 'sleep
+  30 &'` child was reaped after the 2 s timeout with no orphan left), and
+  cross-compiled for Windows:
+
+```go
+// internal/sys/run.go
+func Run(ctx context.Context, timeout time.Duration, name string, args ...string) (Result, error) {
+    ctx, cancel := context.WithTimeout(ctx, timeout)
+    defer cancel()
+    cmd := exec.CommandContext(ctx, name, args...)   // argv only, never a shell
+    var out, errb bytes.Buffer
+    cmd.Stdout, cmd.Stderr = &out, &errb
+    platform(cmd)
+    cmd.WaitDelay = 2 * time.Second                 // a grandchild holding the pipe cannot block Wait
+    err := cmd.Run()
+    res := Result{Stdout: out.String(), Stderr: errb.String(), Code: -1}
+    if cmd.ProcessState != nil { res.Code = cmd.ProcessState.ExitCode() }
+    return res, err
+}
+
+// run_windows.go
+const createNoWindow = 0x08000000
+func platform(cmd *exec.Cmd) {
+    cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow}
+}
+
+// run_unix.go (!windows)
+func platform(cmd *exec.Cmd) {
+    cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+    cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+}
+```
+
+  On Windows a timeout kills only the direct child; for tools that fork
+  (`claude.cmd` → node, `docker compose`) assign the child to a Job object with
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` if orphans show up in M7 testing.
+
+### WebView2 and the portable layout
+
+- `ncd.exe` needs the **Evergreen WebView2 Runtime**. It ships with Windows
+  11 and is on "the vast majority" of Windows 10 devices, not all
+  ([Microsoft: distribution](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution)).
+- `install.ps1` must detect it before first start: `pv` (REG_SZ, > 0.0.0.0)
+  under
+  `HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}`
+  or
+  `HKCU\Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}`;
+  if missing, download the Evergreen bootstrapper and run
+  `MicrosoftEdgeWebview2Setup.exe /silent /install` (per-user when not
+  elevated), or tell the user where to get it.
+- Layout: `%LOCALAPPDATA%\NoClickDock\ncd.exe` + `ncd-core.exe` side by side
+  (the shell plugin resolves the sidecar next to `current_exe()`), autostart via
+  `tauri-plugin-autostart` (HKCU Run key). The installer must first stop the
+  Python generation and remove its Startup shortcuts — see
+  [specs/dock-core.md §8](../specs/dock-core.md) for why (it deletes
+  unknown `*.json` files in `%APPDATA%\NoClickDock`).
+- The exes are unsigned: a downloaded copy carries Mark-of-the-Web and
+  SmartScreen will warn; `install.ps1` should `Unblock-File` what it copies.
+  Unsigned `-H=windowsgui` Go binaries are a known source of antivirus false
+  positives — keep the sidecar's name and location stable and document it.
+
+---
+
 ## Scratch-app provenance
 
 Every Rust snippet in this file (`overlay`, `fit`, `supervise`, `core_send`,
 `dial_menu`, the exit hook, `win.rs`) was compiled with `cargo check` for
-`x86_64-unknown-linux-gnu` and `x86_64-pc-windows-msvc` against tauri 2.11.5.
+`x86_64-unknown-linux-gnu` and `x86_64-pc-windows-msvc` against tauri 2.11.5,
+and `win.rs` is linked into the cross-built probe exe.
 
 Probe sources (not committed): a Tauri app with three overlay windows driven
 over a FIFO, a Go echo sidecar, and `xprop`/`xwininfo`/`xdotool` scripts that

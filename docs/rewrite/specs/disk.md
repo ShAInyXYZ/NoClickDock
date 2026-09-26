@@ -19,22 +19,34 @@ viewBox 24) — monochrome in N.
 2. Skip `fstype` in: `tmpfs devtmpfs squashfs overlay proc sysfs cgroup
    cgroup2 devpts efivarfs autofs fuse.gvfsd-fuse fuse.portal ramfs mqueue
    hugetlbfs debugfs tracefs securityfs pstore bpf configfs fusectl
-   binfmt_misc nsfs`.
+   binfmt_misc nsfs`. (P list; N adds nothing here.)
 3. Skip mount points starting with `/snap /var/snap /run /sys /proc /dev`
    (string prefix — note `/snapshots` is also skipped by P; N: match whole
    path components, `mnt == p || HasPrefix(mnt, p+"/")`).
-4. Skip devices not starting with `/` (keeps `/dev/…`, drops `rpool/…` ZFS
-   datasets and network `server:/share` — **Q**: P drops NFS/CIFS/ZFS; keep
-   parity unless main wants network mounts).
+4. Classify (P simply skipped devices not starting with `/`; **N follows the
+   Q6 decision in ARCHITECTURE.md**, which overrides P):
+   - device starts with `/` → **local** (`Filesystems` section);
+   - fstype ∈ {`cifs`, `smb3`, `nfs`, `nfs4`} → **network** (`Network`
+     section), device like `//server/share` or `server:/export`;
+   - fstype `zfs` → **pool** dataset (`Pools` section), device like
+     `tank/data`; skip datasets mounted under container-runtime graph
+     directories (`/var/lib/docker/`, `/var/lib/containers/`) — the zfs
+     storage driver mounts one dataset per image layer;
+   - anything else without a leading `/` → skipped (as P).
 5. De-duplicate by `stat(mnt).st_dev` (bind mounts, btrfs subvolumes of one
    fs), first wins; unstat-able mounts are dropped.
 6. Sort: `/` first, then by mount path.
-7. Usage per mount = `statfs`: `total = f_blocks·f_frsize`, `free =
+7. Network mounts: each `statfs` runs in its own goroutine with a **2 s**
+   timeout; a mount that does not answer is reported as a `warn` row
+   "not responding" (never blocks the poll, never retried more than once per
+   poll; a goroutine stuck in the kernel is abandoned, and that mount is not
+   queried again until the previous call returned).
+8. Usage per mount = `statfs`: `total = f_blocks·f_frsize`, `free =
    f_bavail·f_frsize` (space available to the user), `used = (f_blocks −
    f_bfree)·f_frsize` — exactly `shutil.disk_usage`. Note `used + free <
    total` on ext4 (root-reserved blocks): **frac = used / total**, as P.
-8. Drop mounts with `total <= 0`.
-9. Mount point strings in `/proc/mounts` escape spaces as `\040` — decode
+9. Drop mounts with `total <= 0`.
+10. Mount point strings in `/proc/mounts` escape spaces as `\040` — decode
    `\040 \011 \012 \134` (P shows them raw — **BUG**, minor).
 
 ### Filesystems — Windows
@@ -48,9 +60,9 @@ not sort Windows; `/` does not exist).
 
 N: same calls from Go (`golang.org/x/sys/windows`). Label mounts `C:` (no
 trailing backslash) and add the volume label when present (`C: System`).
-Remote drives can block for seconds when the server is gone — query each
-drive with its own 3 s timeout (goroutine) and drop drives that time out
-(P could hang the whole poll).
+Remote drives (`DRIVE_REMOTE`) go in the `Network` section and follow the
+same 2 s timeout / "not responding" rule as Linux network mounts (P could hang
+the whole poll on a dead share).
 
 ### Docker reclaimable (both OSes)
 
@@ -77,12 +89,15 @@ Per disk: `mount, fstype, total, used, free, frac`.
 
 | state | condition | stateLabel (N; P upper-cased in a badge) |
 |---|---|---|
-| `idle` | no filesystems | `no filesystems` (P `NO FILESYSTEMS`) |
+| `idle` | no filesystems at all | `no filesystems` (P `NO FILESYSTEMS`) |
 | `crit` | worst `frac ≥ 0.92` | `<mount> <pct>% full` of the worst disk, e.g. `/ 93% full` |
 | `warn` | worst `frac ≥ 0.85` | same wording |
 | `ok` | otherwise | `<fmt_bytes(min free over all disks)> free` — the **smallest** free space of any disk, not root's |
 
-Percentages are rounded (`%.0f`).
+Percentages are rounded (`%.0f`). Local, network and pool rows all count for
+the worst fraction — a full share drives the dial like a local disk (Q6). A
+network mount that is not responding makes the state at least `warn`, label
+`<mount> not responding` when nothing is fuller.
 
 ## Glance
 
@@ -92,7 +107,9 @@ Percentages are rounded (`%.0f`).
 
 - Transition: default = stateLabel of the new state (`/ 93% full`,
   `41G free`).
-- Alert ids: every mount with `frac ≥ 0.85` → id = mount path.
+- Alert ids: every mount with `frac ≥ 0.85` → id = mount path; every
+  network mount not responding → id `noresp:<mount>`, message `<mount> is not
+  responding` (warn).
 - Alert message: `<mount>: <pct>% full · <fmt_bytes(free)> left`, tone warn
   (≥ 85) or crit (≥ 92) in N (P: always CRIT colour).
 
@@ -107,6 +124,11 @@ P, top to bottom → N blocks:
    <pct>%   ·   <fstype>")` → `meter {label, frac, value, note, tone}` with
    tone `ok`/`warn`/`crit` by 0.85/0.92 (DESIGN: the meter lights in the tone
    colour; ok meters are quiet).
+3b. N only: `section "Network"` then one meter per network mount (label =
+   mount point, note adds the device `//server/share · cifs`), or a row
+   `{name: mount, value: "not responding", tone: warn, led: warn}`.
+3c. N only: `section "Pools"` then one meter per zfs dataset (label = dataset
+   name, note `mounted at /tank/data`).
 4. If docker data: `Section("DOCKER · RECLAIMABLE")` → `section {title:
    "Docker · reclaimable"}`.
 5. `Note("<total> could be freed on <root>", AMBER if total > 20 GiB else
@@ -150,9 +172,12 @@ analyzer menu item. Everything else identical.
 - Binary multipliers for Docker's decimal sizes.
 - Raw `\040` escapes in mount names.
 - Hung network drive blocks the poll (Windows).
+- Network filesystems and ZFS datasets silently missing (Linux) — now shown
+  (Q6).
 
 ## Tests (M3)
 
-Fixture `/proc/mounts` with tmpfs, snap, bind mount, a `\040` path, ZFS
-dataset; fixture `docker system df` output with `0B`, `1.2kB`, `83.54GB (18%)`,
+Fixture `/proc/mounts` with tmpfs, snap, bind mount, a `\040` path, a ZFS
+dataset, a docker zfs graph dataset (skipped), cifs and nfs4 shares; a
+network `statfs` stub that blocks (must yield "not responding" within 2 s); fixture `docker system df` output with `0B`, `1.2kB`, `83.54GB (18%)`,
 `1.5TB`; state/label table tests at 0.849/0.85/0.919/0.92.
