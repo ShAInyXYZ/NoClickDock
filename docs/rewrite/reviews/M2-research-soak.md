@@ -43,6 +43,29 @@ At the end, SIGINT under `gdb` finds the main thread in tao's own
 `futex_do_wait` (parked tokio workers), 9 polling, 2 blocking reads on the
 core's pipes.
 
+## Round 5: `cbf7c57`, with web-process crashes
+
+| build | run | outcome |
+|---|---|---|
+| `cbf7c57` | **50 min (3,000 s), completed**, same setup as above | **No freeze.** 81/81 liveness probes passed; **11/11 `kill -9`s** of a random web process left the dock working again within 7 s (dwell and hide both ran); 15/15 right-clicks under a foreign keyboard grab fine; **0 `WATCHDOG` lines**. |
+
+- **What was added to the driver:** every 3.3–5.5 min, a random
+  `WebKitWebProcess` of the shell is SIGKILLed, half the time 0.1–0.9 s
+  after the pointer reaches a dial.
+  - The first kill takes down the shared process.
+  - From then on the four views run separate processes, so each later
+    kill takes one view's.
+  - Each crash was logged once and reloaded (11 `reloading in 250 ms`
+    lines, 11 `interface reloaded`).
+  - None came near the five-a-minute limit.
+- **Usage:** 1,237 moves, 74 sweeps, 234 tab hovers, 36 pill clicks and
+  79 menus (13 with an item chosen).
+- **Shell RSS:** 174 MB at start, then 187–194 MB from 5 min to the end
+  (193 MB at 50 min). There is no growth trend across 11 reloads.
+- **At the end:** SIGINT under `gdb` finds the main thread in tao's own
+  loop. The `xcb_wait_for_event` frames in the dump belong to the
+  work-area and opacity helper threads, idle as designed.
+
 ## Conditions
 
 - Private `Xvfb :98` (1600×1000), with **bare Mutter 42** as the X11
