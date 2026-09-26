@@ -1,14 +1,16 @@
 <script lang="ts">
   import type { EmptyBlock } from "$lib/protocol";
 
-  // What is true when there is nothing to list, in one sentence; a command
-  // to run is set apart as a mono chip.
+  // What is true when there is nothing to list, in one sentence, then the
+  // commands that would change it, each set apart as a mono chip.
   let { block }: { block: EmptyBlock } = $props();
-  const parts = $derived(block.text.split(/`([^`]+)`/));
 </script>
 
 <p class="Empty">
-  {#each parts as part, i (i)}{#if i % 2}<code>{part}</code>{:else}{part}{/if}{/each}
+  {block.text}
+  {#each block.commands ?? [] as command (command)}
+    <code>{command}</code>
+  {/each}
 </p>
 
 <style>

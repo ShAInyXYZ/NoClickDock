@@ -181,9 +181,11 @@ type Bars struct {
 }
 
 // Empty is a panel with nothing to list saying what is true, in one
-// sentence. Text in `backticks` is a command, drawn as a mono chip.
+// sentence, followed by any commands that would change it, drawn as mono
+// chips.
 type Empty struct {
-	Text string `json:"text"`
+	Text     string   `json:"text"`
+	Commands []string `json:"commands,omitempty"`
 }
 
 // Split lays blocks out in columns (Power's two-column body).

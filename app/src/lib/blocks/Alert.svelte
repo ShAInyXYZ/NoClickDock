@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { actions } from "$lib/actions.svelte";
   import Led from "$lib/kit/Led.svelte";
   import PillButton from "$lib/kit/PillButton.svelte";
   import type { AlertBlock } from "$lib/protocol";
@@ -8,6 +9,7 @@
   // its tone, never a coloured bar. It bleeds 8px so lamp and text stay on
   // the panel's inset; its height is always 8 + 24 + 16·n + 8.
   let { block, widget }: { block: AlertBlock; widget: string } = $props();
+  const failure = $derived(actions.failureOf(widget, block.actions));
 </script>
 
 <div class="Alert" data-tone={block.tone}>
@@ -20,6 +22,7 @@
     {#each block.actions ?? [] as action, i (`${i}:${action.id}`)}<PillButton {widget} {action} />{/each}
   </div>
   {#if block.body}<div class="Alert-body" class:is-mono={block.mono}>{block.body}</div>{/if}
+  {#if failure}<div class="Alert-error" title={failure}>{failure}</div>{/if}
 </div>
 
 <style>
@@ -73,4 +76,12 @@
     overflow-wrap: anywhere;
   }
   .Alert-body.is-mono { font-family: var(--font-mono); }
+  .Alert-error {
+    grid-column: 2 / 4;
+    font: 400 var(--fs-small)/16px var(--font-mono);
+    color: var(--err);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 </style>

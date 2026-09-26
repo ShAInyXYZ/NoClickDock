@@ -94,7 +94,12 @@ func (w mocked) Variants(time.Time) map[string]model.Snapshot {
 	return nil
 }
 
-func (w mocked) Act(_ context.Context, action string, args map[string]string) (string, error) {
+func (w mocked) Act(ctx context.Context, action string, args map[string]string) (string, error) {
+	// A mock may play out its own answers (a refusal, for review); it still
+	// never touches the machine.
+	if a, ok := w.m.(Actor); ok {
+		return a.Act(ctx, action, args)
+	}
 	keys := make([]string, 0, len(args))
 	for k := range args {
 		keys = append(keys, k)

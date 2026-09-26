@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { actions } from "$lib/actions.svelte";
   import Led from "$lib/kit/Led.svelte";
   import PillButton from "$lib/kit/PillButton.svelte";
   import type { RowBlock } from "$lib/protocol";
@@ -6,6 +7,8 @@
   // name ............ value: an optional lamp on the name line, a quiet line
   // under the name, and the row's actions as ghost pills at the right.
   let { block, widget }: { block: RowBlock; widget: string } = $props();
+  // A failed action says why under the row that ran it (M2-a).
+  const failure = $derived(actions.failureOf(widget, block.actions));
 </script>
 
 <div class="Row">
@@ -20,14 +23,16 @@
       {#each block.actions as action, i (`${i}:${action.id}`)}<PillButton {widget} {action} />{/each}
     </span>
   {/if}
+  {#if failure}<span class="Row-error" title={failure}>{failure}</span>{/if}
 </div>
 
 <style>
   .Row {
     position: relative;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    column-gap: 10px;
     min-height: var(--row-h);
     padding: 4px 0;
   }
@@ -79,4 +84,13 @@
   .Row-value[data-tone="warn"] { color: var(--warn); }
   .Row-value[data-tone="crit"] { color: var(--err); }
   .Row-actions { flex: none; display: flex; gap: 4px; }
+  .Row-error {
+    flex: 1 0 100%;
+    min-width: 0;
+    font: 400 var(--fs-small)/16px var(--font-mono);
+    color: var(--err);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 </style>

@@ -101,7 +101,7 @@ func (Widget) Variants(time.Time) map[string]model.Snapshot {
 			Pages: []model.Page{{ID: "main", Blocks: model.Blocks{
 				model.Stats{Items: []model.Stat{{Key: "running", Value: "0"}, {Key: "pending", Value: "0"}}},
 				model.Row{Name: "endpoint", Value: endpoint, Mono: true},
-				model.Empty{Text: "ComfyUI is not answering at `" + endpoint + "`."},
+				model.Empty{Text: "ComfyUI is not answering at", Commands: []string{endpoint}},
 			}}},
 		},
 	}

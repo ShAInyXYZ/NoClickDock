@@ -159,6 +159,7 @@ export function coreDown(error: string): WidgetSnapshot {
           {
             kind: "empty",
             text: `Nothing here can be measured: ${error}. NoClickDock keeps trying to start it.`,
+            commands: [],
           },
         ],
       },

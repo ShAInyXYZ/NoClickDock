@@ -70,7 +70,7 @@ func (Widget) Variants(time.Time) map[string]model.Snapshot {
 			State: model.StateIdle, StateLabel: "tailscaled unreachable",
 			Glance: model.Glance{Text: "off", Tone: model.ToneIdle}, Width: 420,
 			Pages: []model.Page{{ID: "main", Blocks: model.Blocks{
-				model.Empty{Text: "tailscaled is not running on this machine. Start it with `sudo systemctl start tailscaled`"},
+				model.Empty{Text: "tailscaled is not running on this machine. Start it with", Commands: []string{"sudo systemctl start tailscaled"}},
 			}}},
 		},
 	}

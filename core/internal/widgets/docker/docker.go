@@ -4,6 +4,9 @@
 package docker
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/hub"
@@ -143,8 +146,27 @@ func (Widget) Variants(time.Time) map[string]model.Snapshot {
 			State: model.StateIdle, StateLabel: "daemon unreachable",
 			Glance: model.Glance{Text: "off", Tone: model.ToneIdle}, Width: 440,
 			Pages: []model.Page{{ID: "now", Blocks: model.Blocks{
-				model.Empty{Text: "Docker is not running, or this user cannot reach its socket. Check with `docker info`."},
+				model.Empty{Text: "Docker is not running, or this user cannot reach its socket. Check with", Commands: []string{"docker info"}},
 			}}},
 		},
 	}
+}
+
+// Act plays the mock's actions out without touching anything: every one
+// succeeds, except removing the dormant legacy-cron stack, which is refused
+// the way a daemon refuses — so a failed action can be reviewed in place.
+func (Widget) Act(_ context.Context, action string, args map[string]string) (string, error) {
+	name := args["unit"] + args["container"]
+	if action == "unit.remove" && name == "legacy-cron" {
+		return "", errors.New("legacy-cron: Error response from daemon: volume is in use by another container")
+	}
+	verb := map[string]string{
+		"start": "started", "stop": "stopped", "restart": "restarted", "resume": "resumed", "remove": "removed",
+	}
+	for prefix, past := range verb {
+		if action == "unit."+prefix || action == "container."+prefix {
+			return fmt.Sprintf("%s %s (mock)", past, name), nil
+		}
+	}
+	return fmt.Sprintf("mock: %s", action), nil
 }

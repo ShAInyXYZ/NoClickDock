@@ -7,8 +7,9 @@ import type { Action } from "./protocol";
 
 /** A confirm stays armed this long; the second click must come within it. */
 const ARM_MS = 4000;
-/** A failed action keeps saying so this long. */
-const FAILED_MS = 6000;
+/** A failed action keeps saying so this long, unless another action on the
+ *  same widget runs first (ARCHITECTURE M2-a: a failure is never lost). */
+const FAILED_MS = 10_000;
 
 class Actions {
   armed = $state<Record<string, true>>({});
@@ -31,7 +32,10 @@ class Actions {
     }
     this.#clear(key);
     delete this.armed[key];
-    delete this.failed[key];
+    // A new action on this widget supersedes any failure it still shows.
+    for (const old of Object.keys(this.failed)) {
+      if (old.startsWith(`${widget}/`)) delete this.failed[old];
+    }
     this.running[key] = true;
     try {
       const result = await core.act(widget, action);
@@ -41,6 +45,15 @@ class Actions {
     } finally {
       delete this.running[key];
     }
+  }
+
+  /** The failure one of these actions still shows, if any. */
+  failureOf(widget: string, list: Action[] | undefined): string | undefined {
+    for (const action of list ?? []) {
+      const message = this.failed[this.key(widget, action)];
+      if (message) return message;
+    }
+    return undefined;
   }
 
   #fail(key: string, message: string) {
