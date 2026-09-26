@@ -2,6 +2,7 @@
 package widgets
 
 import (
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/config"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/hub"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/widgets/claude"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/widgets/codex"
@@ -13,9 +14,11 @@ import (
 )
 
 // Real is every widget that measures this machine. A widget joins this list
-// when its collector reaches parity with the Python one.
-func Real() []hub.Collector {
-	return []hub.Collector{disk.New(), docker.New()}
+// when its collector reaches parity with the Python one. Options are read
+// from the config on every poll, so a change applies without a restart.
+func Real(cfg *config.Store) []hub.Collector {
+	watch := func() *[]string { return cfg.Get().Widgets.Tailscale.Watch }
+	return []hub.Collector{disk.New(), docker.New(), tailscale.New(watch)}
 }
 
 // Mocks is every widget, each inventing its data: still (one fixed instant,
@@ -25,7 +28,7 @@ func Mocks(live bool) []hub.Collector {
 	var out []hub.Collector
 	for _, m := range []hub.Mocker{
 		claude.Widget{}, codex.Widget{}, comfyui.Widget{}, disk.New(),
-		docker.Mock{}, power.Widget{}, tailscale.Widget{},
+		docker.Mock{}, power.Widget{}, tailscale.Mock{},
 	} {
 		out = append(out, hub.Mocked(m, live))
 	}

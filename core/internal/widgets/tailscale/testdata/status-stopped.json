@@ -1,0 +1,43 @@
+{
+ "Version": "1.80.2-t1234abcd-g5678ef90",
+ "BackendState": "Stopped",
+ "TailscaleIPs": [
+  "100.64.0.10"
+ ],
+ "Self": {
+  "ID": "n11CNTRL",
+  "PublicKey": "nodekey:000000000000000000000000000000000000000000000000000000000000000b",
+  "HostName": "workstation",
+  "DNSName": "",
+  "OS": "linux",
+  "UserID": 1001,
+  "TailscaleIPs": [
+   "100.64.0.10",
+   "fd7a:115c:a1e0::b"
+  ],
+  "AllowedIPs": [
+   "100.64.0.10/32"
+  ],
+  "Addrs": null,
+  "CurAddr": "",
+  "Relay": "",
+  "RxBytes": 0,
+  "TxBytes": 0,
+  "Created": "2025-01-10T09:00:00Z",
+  "LastWrite": "0001-01-01T00:00:00Z",
+  "LastSeen": "0001-01-01T00:00:00Z",
+  "LastHandshake": "0001-01-01T00:00:00Z",
+  "Online": false,
+  "ExitNode": false,
+  "ExitNodeOption": false,
+  "Active": false,
+  "InNetworkMap": true,
+  "InMagicSock": true,
+  "InEngine": true,
+  "KeyExpiry": "2027-03-01T00:00:00Z"
+ },
+ "Health": null,
+ "MagicDNSSuffix": "tail0c4fe.ts.net",
+ "Peer": null,
+ "ClientVersion": null
+}

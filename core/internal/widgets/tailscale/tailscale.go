@@ -1,77 +1,118 @@
-// Package tailscale watches tailscaled, this node and every peer. Parity:
-// docs/rewrite/specs/tailscale.md. Until its collector is ported (M3) it
-// only has a mock.
+// Package tailscale watches tailscaled, this node and every peer. It is
+// deliberately narrow: most peers of a long-lived tailnet are dormant, and
+// alerting on them is noise. What matters is whether this node is up and
+// logged in, whether the peers you depend on are reachable, what this
+// machine exposes, and whether an exit node is routing your traffic.
+// Parity: docs/rewrite/specs/tailscale.md.
 package tailscale
 
 import (
+	"context"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/hub"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/model"
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/sys"
 )
 
-type Widget struct{}
-
-func (Widget) Meta() hub.Meta {
-	return hub.Meta{ID: "tailscale", Title: "Tailscale", Order: 70, PollSecs: 30}
-}
+var meta = hub.Meta{ID: "tailscale", Title: "Tailscale", Order: 70, PollSecs: 30}
 
 const (
-	address = "100.101.1.7"
-	dnsName = "workstation.tail0c4fe.ts.net"
+	statusTimeout = 15 * time.Second
+	serveTimeout  = 5 * time.Second
 )
 
-// Mock is an invented tailnet with one watched peer that has dropped off.
-// Every host name and address here is made up.
-func (Widget) Mock(time.Time) model.Snapshot {
-	ok, warn, idle := model.ToneOK, model.ToneWarn, model.ToneIdle
-	return model.Snapshot{
-		State:      model.StateWarn,
-		StateLabel: "fileserver offline",
-		Glance:     model.Glance{Text: "3/4", Tone: warn},
-		Width:      420,
-		Pages: []model.Page{{ID: "main", Blocks: model.Blocks{
-			model.Section{Title: "This node"},
-			model.Row{Name: "workstation", Value: "Running", LED: ok},
-			model.Row{Name: "address", Value: address, Mono: true},
-			model.Row{Name: "magicdns", Value: dnsName, Mono: true},
-			model.Row{Name: "version", Value: "1.80.2"},
-			model.Row{Name: "key expires", Value: "143d"},
-			model.Section{Title: "Exposure"},
-			model.Row{Name: "serve", Value: "https://" + dnsName + " → :3000", Tone: warn, LED: warn},
-			model.Row{Name: "exit nodes available", Value: "exit-fra, exit-ams"},
-			model.Section{Title: "Online", Meta: "4"},
-			model.Row{Name: "atlas", Value: "linux · direct · 1.2 MB/s", LED: ok, Mono: true},
-			model.Row{Name: "build-agent", Value: "linux · relay fra · 340.0 KB/s", LED: ok, Tone: warn, Mono: true},
-			model.Row{Name: "laptop", Value: "macOS · direct", LED: idle, Mono: true},
-			model.Row{Name: "phone", Value: "iOS · direct", LED: idle, Mono: true},
-			model.Section{Title: "Watched · offline", Meta: "1", Tone: warn},
-			model.Row{Name: "fileserver", Value: "12m ago", Tone: warn, LED: warn, Mono: true},
-			model.Section{Title: "Dormant", Meta: "4"},
-			model.Row{Name: "old-vm", Value: "key expired", Tone: warn, Mono: true},
-			model.Chips{Columns: 2, Items: []model.Chip{
-				{Label: "old-desktop", Tone: idle, Value: "12d ago"},
-				{Label: "test-vm", Tone: idle, Value: "3w ago"},
-				{Label: "pi-garage", Tone: idle, Value: "2mo ago"},
-			}},
-		}}},
-		Menu: []model.MenuItem{
-			{ID: "copy-ip", Label: "Copy address  " + address, Copy: address},
-			{ID: "copy-dns", Label: "Copy MagicDNS name", Copy: dnsName},
-		},
-		Issues: []model.Issue{{ID: "down:fileserver", Text: "fileserver is offline", Tone: warn}},
-	}
+type Widget struct {
+	// watch is the config's list of pinned peers: nil watches every peer
+	// seen online since the core started.
+	watch func() *[]string
+
+	mu   sync.Mutex
+	seen map[string]bool   // peers seen online this run (lower-cased)
+	prev map[string]sample // counters at the previous poll, per peer
 }
 
-// Variants: the daemon not running.
-func (Widget) Variants(time.Time) map[string]model.Snapshot {
-	return map[string]model.Snapshot{
-		"unavailable": {
-			State: model.StateIdle, StateLabel: "tailscaled unreachable",
-			Glance: model.Glance{Text: "off", Tone: model.ToneIdle}, Width: 420,
-			Pages: []model.Page{{ID: "main", Blocks: model.Blocks{
-				model.Empty{Text: "tailscaled is not running on this machine. Start it with", Commands: []string{"sudo systemctl start tailscaled"}},
-			}}},
-		},
+type sample struct {
+	at     time.Time
+	rx, tx int64
+}
+
+func New(watch func() *[]string) *Widget {
+	if watch == nil {
+		watch = func() *[]string { return nil }
 	}
+	return &Widget{watch: watch, seen: map[string]bool{}, prev: map[string]sample{}}
+}
+
+func (*Widget) Meta() hub.Meta { return meta }
+
+// binary is tailscale on PATH, or where the Windows installer puts it (not
+// always on the PATH a GUI-launched process inherits).
+func binary() string {
+	var fallbacks []string
+	if pf := os.Getenv("ProgramFiles"); runtime.GOOS == "windows" && pf != "" {
+		fallbacks = append(fallbacks, filepath.Join(pf, "Tailscale", "tailscale.exe"))
+	}
+	return sys.Find("tailscale", fallbacks...)
+}
+
+func (w *Widget) Collect(ctx context.Context) (model.Snapshot, error) {
+	p := &poll{windows: runtime.GOOS == "windows", now: time.Now()}
+	bin := binary()
+	if bin == "" {
+		p.missing = true
+		return render(p), nil
+	}
+	// A stopped or logged-out daemon still answers in JSON (and may exit
+	// non-zero): what it says is the news. No JSON is "unreachable".
+	out, _ := sys.Run(ctx, statusTimeout, bin, "status", "--json")
+	st, err := parseStatus([]byte(out), p.now)
+	if err != nil {
+		return render(p), nil
+	}
+	p.available, p.st = true, st
+	if out, err := sys.Run(ctx, serveTimeout, bin, "serve", "status", "--json"); err == nil {
+		p.exposure, _ = parseServe(out)
+	}
+	p.pinned = w.observe(st, p.now)
+	return render(p), nil
+}
+
+// observe marks the watched peers and their rates. Every peer seen online
+// is remembered for the run, pinned or not, so going back to automatic
+// watching loses nothing; a peer already dormant at start is never
+// watched automatically.
+func (w *Widget) observe(st *status, now time.Time) (pinned bool) {
+	list := w.watch()
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, p := range st.Peers {
+		if p.Online {
+			w.seen[p.id] = true
+		}
+		if prev, ok := w.prev[p.id]; ok {
+			if dt := now.Sub(prev.at).Seconds(); dt > 0 && p.rx >= prev.rx && p.tx >= prev.tx {
+				// A counter that went backwards is a reset: no rate, never a
+				// negative one.
+				p.Rate, p.HasRate = float64(p.rx-prev.rx+p.tx-prev.tx)/dt, true
+			}
+		}
+		w.prev[p.id] = sample{now, p.rx, p.tx}
+	}
+	watched := w.seen
+	if list != nil {
+		watched = map[string]bool{}
+		for _, h := range *list {
+			watched[strings.ToLower(strings.TrimSpace(h))] = true
+		}
+	}
+	for _, p := range st.Peers {
+		p.Watched = watched[p.id]
+	}
+	return list != nil
 }

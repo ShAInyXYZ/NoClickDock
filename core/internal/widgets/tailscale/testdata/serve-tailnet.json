@@ -1,0 +1,29 @@
+{
+ "TCP": {
+  "443": {
+   "HTTPS": true
+  },
+  "8443": {
+   "HTTPS": true
+  },
+  "2222": {
+   "TCPForward": "127.0.0.1:22"
+  }
+ },
+ "Web": {
+  "workstation.tail0c4fe.ts.net:443": {
+   "Handlers": {
+    "/": {
+     "Proxy": "http://127.0.0.1:3000"
+    }
+   }
+  },
+  "workstation.tail0c4fe.ts.net:8443": {
+   "Handlers": {
+    "/": {
+     "Proxy": "http://localhost:8080"
+    }
+   }
+  }
+ }
+}
