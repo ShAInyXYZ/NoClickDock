@@ -40,7 +40,8 @@ not be run here and is flagged for verification on Windows hardware in M7.
    run): show/hide through `ShowWindow(SW_SHOWNOACTIVATE / SW_HIDE)` because
    tao's `show()` uses `SW_SHOW` after the first map (activates); subclass
    `WM_MOUSEACTIVATE → MA_NOACTIVATE`; add `WS_EX_TOOLWINDOW` (Alt+Tab) and
-   re-apply it after any tao flag change because tao rewrites `GWL_EXSTYLE`.
+   keep it through tao's `GWL_EXSTYLE` rewrites (first `show()` included) by
+   handling `WM_STYLECHANGING` in the same subclass.
 6. **Windows build**: `cargo tauri build --runner cargo-xwin --target
    x86_64-pc-windows-msvc --no-bundle` works from this box with `llvm-rc` on
    `PATH` → one 6.1 MB GUI exe, no `WebView2Loader.dll`, no VC runtime DLL.
@@ -258,7 +259,7 @@ What tao/wry do (source read, `tao-0.35.3/src/platform_impl/windows/`):
 | WebView2 grabbing focus on click | WebView2 moves focus into its child HWND on click; `Focusable=false` does not stop it ([WebView2Feedback #5049](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5049), [#1526](https://github.com/MicrosoftEdge/WebView2Feedback/issues/1526), [#862](https://github.com/MicrosoftEdge/WebView2Feedback/issues/862)) | residual risk: a click on a pill may still activate NCD. Hover never does. Accept (clicks are deliberate, two-step) and verify in M7 |
 | `focus: false` in config | ignored on Windows in early 2.x ([tauri #11566](https://github.com/tauri-apps/tauri/issues/11566), fixed by [#11569](https://github.com/tauri-apps/tauri/pull/11569)) | build windows in Rust with `.focused(false)` (we do) |
 | not in taskbar / Alt+Tab | `skip_taskbar` → `ITaskbarList::DeleteTab` only; Alt+Tab still lists the window | add `WS_EX_TOOLWINDOW` ("does not appear in the taskbar or in ALT+TAB") |
-| keep custom ex-styles | tao recomputes and `SetWindowLongW(GWL_EXSTYLE)` on **every** flag change (`window_state.rs:440`) | call `win::harden` after the last tao flag call (always-on-top, ignore-cursor, …) |
+| keep custom ex-styles | tao recomputes and `SetWindowLongW(GWL_EXSTYLE)` on **every** flag change (`window_state.rs:440`) — **including the first `show()`**, which sets tao's VISIBLE flag | guard the bits in the subclass: on `WM_STYLECHANGING` for `GWL_EXSTYLE`, OR `WS_EX_TOOLWINDOW \| WS_EX_NOACTIVATE` into `styleNew` (corrected in the M1 review: calling `harden` once before the first show is not enough) |
 | transparency | `transparent(true)` → WebView2 `DefaultBackgroundColor` alpha 0; undecorated windows get a DWM shadow + 1 px border unless `shadow(false)` ([WindowConfig docs](https://docs.rs/tauri-utils/latest/tauri_utils/config/struct.WindowConfig.html)) | `shadow(false)` (we do) — also removes Windows 11 corner rounding |
 | click-through toast | `set_ignore_cursor_events` → `WS_EX_TRANSPARENT \| WS_EX_LAYERED`; reported not to pass clicks through a WebView2 window ([tauri #11461](https://github.com/tauri-apps/tauri/issues/11461)); invisible alpha-0 WebView2 windows swallow input ([WebView2Feedback #5668](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5668)) | size the toast window to the toast stack only, and dismiss the toasts (fade + `win::hide`) on `mouseenter`. Never leave an invisible overlay mapped. |
 | context menu | muda calls `SetForegroundWindow(owner)` before `TrackPopupMenu` (`muda-0.19.3/src/platform_impl/windows/mod.rs:1038`) → NCD becomes foreground | remember `GetForegroundWindow()` before `popup_menu` and restore it after (it is modal) — `win::popup_menu_keep_foreground` |
@@ -274,18 +275,29 @@ use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetForegroundWindow, GetWindowLongPtrW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos,
-    ShowWindow, GWL_EXSTYLE, HWND_TOPMOST, MA_NOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-    SWP_SHOWWINDOW, SW_HIDE, SW_SHOWNOACTIVATE, WM_MOUSEACTIVATE, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    ShowWindow, GWL_EXSTYLE, HWND_TOPMOST, MA_NOACTIVATE, STYLESTRUCT, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOWNOACTIVATE, WM_MOUSEACTIVATE, WM_STYLECHANGING,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
 unsafe extern "system" fn refuse_activation(
     hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM, _id: usize, _data: usize,
 ) -> LRESULT {
-    if msg == WM_MOUSEACTIVATE { return LRESULT(MA_NOACTIVATE as isize); }
+    match msg {
+        WM_MOUSEACTIVATE => return LRESULT(MA_NOACTIVATE as isize),
+        // tao rewrites GWL_EXSTYLE from its own flags on every flag change
+        // (the first show() included): keep our two bits in every rewrite.
+        WM_STYLECHANGING if wparam.0 as i32 == GWL_EXSTYLE.0 => {
+            let style = &mut *(lparam.0 as *mut STYLESTRUCT);
+            style.styleNew |= WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0;
+        }
+        _ => {}
+    }
     DefSubclassProc(hwnd, msg, wparam, lparam)
 }
 
-/// Main thread only (window.run_on_main_thread). Re-run after tao flag changes.
+/// Main thread only (window.run_on_main_thread): SetWindowSubclass must run
+/// on the window's own thread. Once is enough — the subclass keeps the bits.
 pub fn harden(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     let hwnd = window.hwnd()?;
     unsafe {
@@ -654,6 +666,12 @@ go build -trimpath -ldflags "-s -w" \
 - Proven: the probe core cross-compiles to a 5.4 MB PE32+ **GUI** exe
   (`-H=windowsgui`), no cgo. `GOOS=windows go vet ./...` is the cheap check that
   Windows-tagged files compile.
+- Tauri exports `TAURI_ENV_TARGET_TRIPLE` (and `TAURI_ENV_PLATFORM`,
+  `TAURI_ENV_ARCH`) to `beforeBuildCommand`/`beforeDevCommand` — measured:
+  `x86_64-pc-windows-msvc` for a `--target x86_64-pc-windows-msvc` build.
+  A sidecar build hook must build for that triple, not for the host, or the
+  bundle picks up whatever stale `ncd-core-<triple>.exe` is lying in
+  `binaries/`.
 - `-buildvcs=false` only matters outside a git checkout (the scratch build
   failed without it); harmless inside the repo.
 - A GUI-subsystem Go process still reads/writes the stdin/stdout **pipes** it
