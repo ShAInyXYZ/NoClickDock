@@ -42,7 +42,7 @@ allowlist must therefore accept `http://127.0.0.1:{1420,1430,1440}` and
 
 ```bash
 # 1. core with invented data, on my port (flag names follow the executor's M1 CLI)
-go run ./core/cmd/ncd-core --mock --port 127.0.0.1:47811
+go run ./core/cmd/ncd-core --mock --port 47811
 
 # 2. the UI in a plain browser, on my port, pointed at my core
 #    (env var name follows app/src/lib/transport.ts once it exists)
