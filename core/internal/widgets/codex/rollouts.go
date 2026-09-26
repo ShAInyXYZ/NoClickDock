@@ -263,14 +263,17 @@ var (
 	markCount = []byte(`"token_count"`)
 )
 
-// readRollout streams one rollout. Two kinds of history are replayed under
-// a single timestamp, and their turns are dropped (a deliberate under-count:
-// their real times are lost, and counting them would charge a whole
-// session to one moment, or count it twice):
-//   - a resumed session rewrites its history into the new file: the same
-//     timestamp on several turns;
-//   - a forked rollout (session_meta names a parent) begins by replaying
-//     the parent's turns at the moment of the fork.
+// readRollout streams one rollout. History replayed under a single
+// timestamp is dropped (a deliberate under-count: its real times are lost,
+// and counting it would charge a whole session to one moment, or count it
+// twice):
+//   - the same timestamp on several turns (a resumed session rewrote its
+//     history);
+//   - any turn in the same second as a session_meta record: a fork replays
+//     its parent's turns at the moment of the fork, and a resume replays at
+//     the moment it starts — even a single turn, which the first rule
+//     cannot see (research M4 r1). A real turn never completes within a
+//     second of its session starting.
 func readRollout(path string) *fileData {
 	d := &fileData{newest: map[string]sample{}, live: map[string]bool{}}
 	f, err := os.Open(path)
@@ -286,24 +289,27 @@ func readRollout(path string) *fileData {
 	}
 	var turns []pending
 	count := map[string]int{}
-	var model, forkSecond string
+	var model string
 	metaSeen := false
+	metaSeconds := map[string]bool{}
 
 	r := bufio.NewReaderSize(f, 256<<10)
 	for {
 		line, err := r.ReadBytes('\n')
 		if len(line) > 0 {
 			switch {
-			case !metaSeen && bytes.Contains(line, markMeta):
+			case bytes.Contains(line, markMeta):
 				var rec record
 				if json.Unmarshal(line, &rec) == nil && rec.Type == "session_meta" {
-					metaSeen = true
-					d.session = rec.Payload.SessionID
-					if d.session == "" {
-						d.session = rec.Payload.ID
+					if !metaSeen {
+						metaSeen = true
+						d.session = rec.Payload.SessionID
+						if d.session == "" {
+							d.session = rec.Payload.ID
+						}
 					}
-					if rec.Payload.ParentThreadID != "" || rec.Payload.ForkedFromID != "" {
-						forkSecond = second(rec.Timestamp)
+					if rec.Timestamp != "" {
+						metaSeconds[second(rec.Timestamp)] = true
 					}
 				}
 			case bytes.Contains(line, markTurn):
@@ -343,7 +349,7 @@ func readRollout(path string) *fileData {
 		}
 	}
 	for _, t := range turns {
-		if count[t.ts] > 1 || (forkSecond != "" && second(t.ts) == forkSecond) {
+		if count[t.ts] > 1 || metaSeconds[second(t.ts)] {
 			continue // replayed history
 		}
 		at, err := time.Parse(time.RFC3339Nano, t.ts)

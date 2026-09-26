@@ -45,14 +45,23 @@ func FmtCount(n int64) string {
 // FmtTokens is a compact token count: 1.2B, 1.2M, 348K, 912.
 func FmtTokens(n int64) string {
 	switch f := float64(n); {
-	case n >= 1_000_000_000:
-		return fmt.Sprintf("%.1fB", f/1e9)
-	case n >= 1_000_000:
-		return fmt.Sprintf("%.1fM", f/1e6)
+	case n >= 999_950_000:
+		return scaled(f/1e9, "B")
+	case n >= 999_500:
+		return scaled(f/1e6, "M")
 	case n >= 1_000:
 		return fmt.Sprintf("%.0fK", f/1e3)
 	}
 	return fmt.Sprint(n)
+}
+
+// scaled keeps a reading within the dial's five characters: one decimal
+// below 100 ("18.5M"), none from there ("185M", not "185.2M").
+func scaled(v float64, unit string) string {
+	if v >= 99.95 {
+		return fmt.Sprintf("%.0f%s", v, unit)
+	}
+	return fmt.Sprintf("%.1f%s", v, unit)
 }
 
 // Age is how long ago, with no "ago", for a meta beside a status word:

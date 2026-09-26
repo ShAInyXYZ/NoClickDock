@@ -23,9 +23,19 @@ func TestStateLabelNamesTheFact(t *testing.T) {
 		{Page{Reached: true, Indicator: "minor", Incidents: []Incident{{ID: "1"}}}, "1 active incident"},
 		{Page{Reached: true, Indicator: "maintenance", Components: []Component{c("Batch", "under_maintenance")}}, "Batch maintenance"},
 		{Page{Reached: true, Indicator: "minor", Description: "Minor Service Outage"}, "minor service outage"},
+		// Over the 28-character budget: a shorter word, then the count form.
+		{Page{Reached: true, Indicator: "minor", Components: []Component{c("Compliance API", "partial_outage")}}, "Compliance API degraded"},
+		{Page{Reached: true, Indicator: "minor", Components: []Component{c("Claude for Government", "partial_outage")}}, "1 service degraded"},
+		{Page{Reached: true, Indicator: "major", Components: []Component{c("Image Generation Pipelines", "major_outage")}}, "1 service down"},
+		{Page{Reached: true, Indicator: "maintenance", Components: []Component{c("Regional Data Residency", "under_maintenance")}}, "1 service in maintenance"},
+		{Page{Reached: true, Indicator: "critical", Description: "Multiple Systems Are Experiencing An Outage"}, "service disruption"},
 	} {
-		if got := StateLabel(x.page, Trim); got != x.want {
+		got := StateLabel(x.page, Trim)
+		if got != x.want {
 			t.Errorf("%+v → %q, want %q", x.page, got, x.want)
+		}
+		if utf8.RuneCountInString(got) > LabelBudget {
+			t.Errorf("%q is over the budget", got)
 		}
 	}
 }

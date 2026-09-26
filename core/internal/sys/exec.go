@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -48,7 +49,13 @@ func OutputIn(ctx context.Context, dir string, timeout time.Duration, name strin
 	cmd.Stdout = &out
 	cmd.Stderr = &errOut
 
-	if err := cmd.Run(); err != nil {
+	err = cmd.Start()
+	if err == nil {
+		track(cmd, true)
+		err = cmd.Wait()
+		track(cmd, false)
+	}
+	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return out.String(), errOut.String(), fmt.Errorf("%s timed out after %s", filepath.Base(name), timeout)
 		}
@@ -58,6 +65,35 @@ func OutputIn(ctx context.Context, dir string, timeout time.Duration, name strin
 		return out.String(), errOut.String(), fmt.Errorf("%s: %w", filepath.Base(name), err)
 	}
 	return out.String(), errOut.String(), nil
+}
+
+// running is every command the core waits for, so none outlives it.
+var running = struct {
+	sync.Mutex
+	cmds map[*exec.Cmd]struct{}
+}{cmds: map[*exec.Cmd]struct{}{}}
+
+func track(cmd *exec.Cmd, on bool) {
+	running.Lock()
+	defer running.Unlock()
+	if on {
+		running.cmds[cmd] = struct{}{}
+	} else {
+		delete(running.cmds, cmd)
+	}
+}
+
+// StopAll ends every command still running (and, on Linux and macOS, its
+// process group): called as the core exits, so a CLI it started — a
+// `claude -p` reading limits — never outlives it (research M4 r1).
+func StopAll() {
+	running.Lock()
+	defer running.Unlock()
+	for cmd := range running.cmds {
+		if cmd.Process != nil {
+			_ = stop(cmd)
+		}
+	}
 }
 
 // Start launches a program for the user (an "Open …" menu item) and does not

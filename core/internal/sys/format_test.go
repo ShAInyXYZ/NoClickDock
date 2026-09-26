@@ -84,9 +84,12 @@ func TestClock(t *testing.T) {
 }
 
 func TestFmtTokensAndAge(t *testing.T) {
-	for n, want := range map[int64]string{912: "912", 348_000: "348K", 1_234_567: "1.2M", 2_300_000_000: "2.3B", 0: "0"} {
-		if got := FmtTokens(n); got != want {
-			t.Errorf("FmtTokens(%d) = %q, want %q", n, got, want)
+	for n, want := range map[int64]string{
+		912: "912", 348_000: "348K", 999_499: "999K", 999_500: "1.0M", 1_234_567: "1.2M", 99_949_999: "99.9M",
+		99_950_000: "100M", 185_234_567: "185M", 2_300_000_000: "2.3B", 123_456_789_012: "123B", 0: "0",
+	} {
+		if got := FmtTokens(n); got != want || len(got) > 5 {
+			t.Errorf("FmtTokens(%d) = %q, want %q (at most 5 characters)", n, got, want)
 		}
 	}
 	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)

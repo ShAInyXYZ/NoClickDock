@@ -26,6 +26,7 @@ import (
 
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/config"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/hub"
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/sys"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/transport"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/widgets"
 )
@@ -77,8 +78,12 @@ func main() {
 		collectors = widgets.Mocks(*live)
 	}
 
+	// No command the core started outlives it (a `claude -p` reading limits).
+	defer sys.StopAll()
+
 	if *once != "" {
 		if err := printOnce(ctx, collectors, *once); err != nil {
+			sys.StopAll()
 			log.Fatal(err)
 		}
 		return
@@ -94,6 +99,7 @@ func main() {
 		err = transport.Stdio(ctx, h, os.Stdin, os.Stdout)
 	}
 	if err != nil {
+		sys.StopAll()
 		log.Fatal(err)
 	}
 }

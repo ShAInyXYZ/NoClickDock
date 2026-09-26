@@ -125,27 +125,49 @@ func StateLabel(p Page, short Short) string {
 			failing = append(failing, c)
 		}
 	}
+	word := func(c Component) string {
+		if c.Status == "major_outage" {
+			return "down"
+		}
+		return "degraded"
+	}
 	switch {
 	case len(failing) == 1:
-		return short(failing[0].Name) + " " + Label(failing[0].Status)
-	case len(failing) > 1:
-		word := "degraded"
-		if failing[0].Status == "major_outage" {
-			word = "down"
+		// The name when it fits the label's budget; the problems-first
+		// block below the header carries it whole either way.
+		if l := short(failing[0].Name) + " " + Label(failing[0].Status); fits(l) {
+			return l
 		}
-		return fmt.Sprintf("%d services %s", len(failing), word)
+		if l := short(failing[0].Name) + " " + word(failing[0]); fits(l) {
+			return l
+		}
+		return "1 service " + word(failing[0])
+	case len(failing) > 1:
+		return fmt.Sprintf("%d services %s", len(failing), word(failing[0]))
 	case len(p.Incidents) > 0:
 		n := len(p.Incidents)
 		return fmt.Sprintf("%d active %s", n, plural(n, "incident", "incidents"))
 	case len(resting) == 1:
-		return short(resting[0].Name) + " maintenance"
+		if l := short(resting[0].Name) + " maintenance"; fits(l) {
+			return l
+		}
+		return "1 service in maintenance"
 	case len(resting) > 1:
 		return fmt.Sprintf("%d services in maintenance", len(resting))
 	case p.Indicator == "none":
 		return "operational"
 	}
-	return strings.ToLower(p.Description)
+	if l := strings.ToLower(p.Description); fits(l) {
+		return l
+	}
+	return "service disruption"
 }
+
+// LabelBudget is a state label's length (dock-core §11): the panel header
+// and the dial's label never have to cut one.
+const LabelBudget = 28
+
+func fits(label string) bool { return utf8.RuneCountInString(label) <= LabelBudget }
 
 // Issues are the page's problems for toasts: every broken component, as
 // comp:<name>:<status>, and every open incident, as inc:<id>.

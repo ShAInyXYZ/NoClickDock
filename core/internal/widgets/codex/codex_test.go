@@ -103,6 +103,26 @@ func rollouts(t *testing.T) (sessions, archived string) {
 		tokens(fork, 1000, "", "", ""),
 		tokens(ts(4*time.Minute), 30, "", "", ""),
 	)
+	// A resume that replays a single turn, in a new file (dropped: it sits
+	// in the second of the session_meta), then a turn of its own.
+	resume := ts(45 * time.Minute)
+	write(t, filepath.Join(day, "rollout-f.jsonl"), now,
+		sessionMeta(resume, "sess-f", ""),
+		turnContext(resume, "gpt-5-codex"),
+		tokens(resume, 777, "", "", ""),
+		tokens(ts(6*time.Minute), 11, "", "", ""),
+	)
+	// A resume appended to its own file: a second session_meta, one
+	// replayed turn in its second (dropped), then new work.
+	again := ts(40 * time.Minute)
+	write(t, filepath.Join(day, "rollout-g.jsonl"), now,
+		sessionMeta(ts(50*time.Minute), "sess-g", ""),
+		turnContext(ts(50*time.Minute), "gpt-5-codex"),
+		tokens(ts(48*time.Minute), 3, "", "", ""),
+		sessionMeta(again, "sess-g", ""),
+		tokens(again, 555, "", "", ""),
+		tokens(ts(35*time.Minute), 2, "", "", ""),
+	)
 	// Archived, three days old: 7 d only; windows of 2 days, 45 minutes
 	// and an unknown length, in another allowance.
 	write(t, filepath.Join(archived, "rollout-d.jsonl"), now.Add(-72*time.Hour),
@@ -121,15 +141,15 @@ func rollouts(t *testing.T) (sessions, archived string) {
 func TestRollouts(t *testing.T) {
 	sc := newScanner(rollouts(t))
 	sp := sc.scan(now)
-	// 1 h: 400 (a) + 200 + 100 + 50 (b) + 30 (c) = 780; 24 h: + 1000 = 1780;
-	// 7 d: + 5000 + 5 = 6785.
-	if sp.H1 != 780 || sp.H24 != 1780 || sp.D7 != 6785 {
-		t.Errorf("1h %d 24h %d 7d %d, want 780 1780 6785", sp.H1, sp.H24, sp.D7)
+	// 1 h: 400 (a) + 200 + 100 + 50 (b) + 30 (c) + 11 (f) + 3 + 2 (g) = 796;
+	// 24 h: + 1000 = 1796; 7 d: + 5000 + 5 = 6801.
+	if sp.H1 != 796 || sp.H24 != 1796 || sp.D7 != 6801 {
+		t.Errorf("1h %d 24h %d 7d %d, want 796 1796 6801", sp.H1, sp.H24, sp.D7)
 	}
-	if sp.Sessions != 3 {
-		t.Errorf("sessions %d, want a, b, c", sp.Sessions)
+	if sp.Sessions != 5 {
+		t.Errorf("sessions %d, want a, b, c, f, g", sp.Sessions)
 	}
-	wantModels := []modelSpend{{"gpt-5-codex", 1480}, {"gpt-5-2025-08-07", 300}}
+	wantModels := []modelSpend{{"gpt-5-codex", 1496}, {"gpt-5-2025-08-07", 300}}
 	if !reflect.DeepEqual(sp.Models, wantModels) {
 		t.Errorf("models %+v", sp.Models)
 	}
@@ -249,7 +269,7 @@ func TestCollectAndPanel(t *testing.T) {
 		"= other 45m 0 reset 1h ago ",
 		"= other 2d 5 resets " + loc.Add(24*time.Hour).Format("Mon 15:04") + " ",
 		"  codex-mini · never reports usage idle",
-		"  1h 780 · 24h 2K · 7d 7K · sessions 3",
+		"  1h 796 · 24h 2K · 7d 7K · sessions 5",
 		"  gpt-5-codex 1K · gpt-5 300",
 		"# Services 8 of 9 ",
 		"  [Codex API, Codex Web, Desktop app, CLI, Responses, Completions, Login, Conversations]",

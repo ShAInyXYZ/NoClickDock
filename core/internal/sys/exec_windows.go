@@ -15,6 +15,10 @@ func prepare(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow}
 }
 
+// stop kills the direct child (a Job object would take its children too,
+// if M7 finds any left behind).
+func stop(cmd *exec.Cmd) error { return cmd.Process.Kill() }
+
 // detach leaves a launched GUI program alone: it has its own window, and it
 // is not a child of the dock's lifetime.
 func detach(cmd *exec.Cmd) {
