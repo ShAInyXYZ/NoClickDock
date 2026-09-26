@@ -3,6 +3,7 @@
 mod core;
 mod dock;
 mod hover;
+mod lifecycle;
 mod main_thread;
 mod menu;
 mod overlay;
@@ -32,15 +33,18 @@ fn page_error(window: WebviewWindow, message: String) {
 struct Options {
     mock: bool,
     instance: Option<String>,
+    /// `--settings`: open Settings (in the running dock, if there is one).
+    settings: bool,
 }
 
 impl Options {
     fn from_env() -> Self {
-        let mut options = Self { mock: false, instance: std::env::var("NCD_INSTANCE").ok() };
+        let mut options = Self { mock: false, instance: std::env::var("NCD_INSTANCE").ok(), settings: false };
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--mock" => options.mock = true,
+                "--settings" => options.settings = true,
                 "--instance" => options.instance = args.next(),
                 _ => eprintln!("ncd: ignoring unknown argument {arg}"),
             }
@@ -50,6 +54,11 @@ impl Options {
             .instance
             .filter(|name| !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
         options
+    }
+
+    /// The real app: not a mock, not a named development instance.
+    fn production(&self) -> bool {
+        !self.mock && self.instance.is_none()
     }
 
     /// The core's arguments. Only a plain `ncd` runs it in production (the
@@ -86,7 +95,19 @@ fn user_cache_dir() -> std::path::PathBuf {
 pub fn run() {
     main_thread::init_xlib();
     let options = Options::from_env();
-    tauri::Builder::default()
+    let open_settings = options.settings;
+    let mut builder = tauri::Builder::default();
+    if options.production() {
+        // First, so a second `ncd` hands over its argv and exits before
+        // anything else starts.
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| lifecycle::another(app, argv)));
+        // Launch at login: registered only in a release build of the real
+        // app; applied from the config (lifecycle::login).
+        if !cfg!(debug_assertions) {
+            builder = builder.plugin(tauri_plugin_autostart::Builder::new().app_name("NoClickDock").build());
+        }
+    }
+    builder
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -117,7 +138,7 @@ pub fn run() {
             menu::rail_menu,
             page_error,
         ])
-        .setup(|app| {
+        .setup(move |app| {
             main_thread::init();
             overlay::init_scale(app);
             // Built once and reused, all four in one WebKit web process.
@@ -136,6 +157,9 @@ pub fn run() {
             dock::observe_monitors(app.handle());
             watchdog::start(app.handle());
             core::supervise(app.handle().clone());
+            if open_settings {
+                menu::settings(app.handle());
+            }
             Ok(())
         })
         .on_menu_event(|app, event| menu::chosen(app, event.id().as_ref()))

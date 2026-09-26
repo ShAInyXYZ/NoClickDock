@@ -214,15 +214,20 @@ fn relay(app: &AppHandle, line: &str) {
     };
     let kind = message.get("type").and_then(Value::as_str);
     crate::watchdog::note(format!("core → {}", kind.unwrap_or("?")));
+    let mut config_change: Option<(Option<Value>, Value)> = None;
     if let Ok(mut cache) = app.state::<Core>().cache.lock() {
         match kind {
             Some("hello") => {
                 // A (re)started core: everything before it is gone.
+                let previous = cache.config.take();
                 *cache = Cache {
                     hello: Some(line.to_owned()),
                     config: message.get("config").cloned(),
                     ..Cache::default()
                 };
+                if let Some(c) = cache.config.clone() {
+                    config_change = Some((previous, c));
+                }
             }
             Some("snapshot") => {
                 if let Some(id) = message.pointer("/widget/id").and_then(Value::as_str) {
@@ -236,11 +241,18 @@ fn relay(app: &AppHandle, line: &str) {
                 }
             }
             Some("config") => {
+                let previous = cache.config.take();
                 cache.config = message.get("config").cloned();
                 cache.config_line = Some(line.to_owned());
+                if let Some(c) = cache.config.clone() {
+                    config_change = Some((previous, c));
+                }
             }
             _ => {}
         }
+    }
+    if let Some((previous, config)) = config_change {
+        crate::lifecycle::config(app, previous.as_ref(), &config);
     }
     let _ = app.emit("core", line);
     match kind {

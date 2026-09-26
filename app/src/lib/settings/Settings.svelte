@@ -199,6 +199,7 @@
   // ---------------------------------------------------------------- saving
   function changed(clearNotice = true) {
     if (clearNotice) notice = "";
+    errors = {}; // a refusal was for the values saved then
     closing = false;
   }
 
@@ -449,7 +450,7 @@
             </Field>
           </div>
           {#if probe}
-            <p class="Probe" class:is-bad={!probe.ok} role={probe.ok ? "status" : "alert"}>{probe.text}</p>
+            <p class="Probe" class:is-bad={!probe.ok} role={probe.ok ? "status" : "alert"} {@attach (el) => el.scrollIntoView({ block: "nearest" })}>{probe.text}</p>
           {/if}
         </section>
       {/if}

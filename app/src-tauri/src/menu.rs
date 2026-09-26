@@ -341,20 +341,34 @@ fn send(app: &AppHandle, message: Value) {
 }
 
 /// Opens Settings — made on demand and destroyed on close, so its webview
-/// costs nothing the rest of the time. The window itself arrives in M6.
+/// costs nothing the rest of the time (DESIGN.md "Settings": 560 × 680, our
+/// own title bar). An open one is brought to the front. Main thread.
 pub fn settings(app: &AppHandle) {
+    crate::main_thread::assert();
     if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.unminimize();
+        let _ = window.show();
         let _ = window.set_focus();
         return;
     }
-    let built = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings".into()))
+    #[allow(unused_mut)]
+    let mut builder = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings".into()))
         .title("NoClickDock Settings")
         .inner_size(560.0, 680.0)
-        .resizable(true)
+        .resizable(false)
+        .decorations(false)
         .center()
-        .build();
-    if let Err(error) = built {
-        eprintln!("ncd: could not open Settings: {error}");
+        .focused(true);
+    // In the rail's web process, like the overlays: no second one to pay for.
+    #[cfg(target_os = "linux")]
+    if let Some(view) = app.get_webview_window("rail").as_ref().and_then(crate::overlay::webkit_view) {
+        builder = builder.with_related_view(view);
+    }
+    match builder.build() {
+        Ok(window) => {
+            let _ = window.set_focus();
+        }
+        Err(error) => eprintln!("ncd: could not open Settings: {error}"),
     }
 }
 

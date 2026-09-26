@@ -150,6 +150,24 @@ pub fn rail_layout(app: AppHandle, layout: RailLayout) -> Result<(), String> {
     Ok(())
 }
 
+/// Settings chose an edge: the rail goes there, as far along it as it
+/// was (the middle for a position that had none). Main thread.
+pub fn follow_edge(app: &AppHandle) {
+    main_thread::assert();
+    let Some(rail) = app.get_webview_window("rail") else { return };
+    let (size, shown, hidden, vertical) = {
+        let dock = app.state::<Dock>();
+        let Ok(state) = dock.0.lock() else { return };
+        (state.size, state.shown, state.hidden, state.layout.as_ref().is_some_and(|l| l.height >= l.width))
+    };
+    let Some(size) = size.filter(|_| shown && !hidden) else { return };
+    let (x, y) = restore(app, size, vertical);
+    placing(app);
+    if rail.set_position(PhysicalPosition::new(x, y)).is_ok() {
+        hover::replace(app);
+    }
+}
+
 /// Where the rail belongs, from the saved position:
 /// - its monitor if still connected, else the primary one;
 /// - against its edge, as far along it as before, when it was snapped;

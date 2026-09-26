@@ -61,7 +61,7 @@ pub fn build(app: &tauri::App, label: &str, route: &str, related: Option<&Webvie
 
 /// The WebKit view inside an overlay's GTK window.
 #[cfg(target_os = "linux")]
-fn webkit_view(window: &WebviewWindow) -> Option<webkit2gtk::WebView> {
+pub fn webkit_view(window: &WebviewWindow) -> Option<webkit2gtk::WebView> {
     use gtk::prelude::*;
     fn find(widget: &gtk::Widget) -> Option<webkit2gtk::WebView> {
         if let Ok(view) = widget.clone().downcast::<webkit2gtk::WebView>() {
