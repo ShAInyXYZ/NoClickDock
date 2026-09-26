@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "overlays",
+  "description": "The rail and the panel hear the core's messages through events. Neither may run programs: ncd-core is spawned by Rust, and the pages reach it only through the validated core_send command.",
+  "windows": ["rail", "panel"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

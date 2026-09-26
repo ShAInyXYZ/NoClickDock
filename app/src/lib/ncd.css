@@ -1,0 +1,27 @@
+/* NoClickDock's global rules, loaded after tokens.css. Everything else lives
+   in the components, lifted from docs/rewrite/design/reference.css. */
+
+/* A tone is a word on the wire (ok, warn, crit, idle, info, busy); this is
+   the one place it becomes a colour. An element opts in with data-tone and
+   paints with var(--tone). */
+[data-tone]            { --tone: var(--faint); }
+[data-tone="ok"]       { --tone: var(--ok); }
+[data-tone="warn"]     { --tone: var(--warn); }
+[data-tone="crit"]     { --tone: var(--err); }
+[data-tone="info"],
+[data-tone="busy"]     { --tone: var(--info); }
+[data-tone="idle"]     { --tone: var(--faint); }
+
+/* DESIGN.md's focus ring, over tokens.css's 1px / offset 1. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Density sets the dial's geometry for everything inside the rail. */
+[data-density="compact"] { --dial: 32px; --rim: 3px; --mark: 14px; --slot-gap: 6px; --led: 5px; }
+[data-density="large"]   { --dial: 48px; --rim: 5px; --mark: 22px; --slot-gap: 8px; }
+
+/* Overlay windows are transparent: only the rail, panel or toast is drawn. */
+html.overlay, html.overlay body { background: transparent; overflow: hidden; }
+
+/* INVARIANT — tabular figures. Last on purpose: the `font:` shorthand every
+   component uses resets font-variant-numeric, so it is re-asserted here. */
+:is(body, body *) { font-variant-numeric: tabular-nums !important; }

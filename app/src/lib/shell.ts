@@ -1,0 +1,55 @@
+// The Tauri shell's side of the hover and geometry protocol. Rust owns every
+// window: the pages only report what they measured (in CSS px) and where the
+// pointer is, and are told which panel is open.
+import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { Side } from "./dock/side";
+
+export interface Rect { x: number; y: number; width: number; height: number }
+
+export interface RailLayout {
+  width: number;
+  height: number;
+  /** window.innerWidth, so the shell can check its CSS-to-physical scale. */
+  viewport: number;
+  dials: (Rect & { widget: string })[];
+}
+
+export interface PanelOpen {
+  widget: string;
+  /** Echoed back with the panel's size, so a stale measurement is ignored. */
+  seq: number;
+  side: Side;
+  /** The tallest the panel may be on this monitor, in CSS px. */
+  maxHeight: number;
+  /** True when the panel was closed: the reveal animates, a switch does not. */
+  reveal: boolean;
+}
+
+export interface PanelState { widget: string | null; side: Side }
+
+/** Sends an error to the shell's stderr; a production webview has no console. */
+export function report(error: unknown) {
+  const message = error instanceof Error ? `${error.message}\n${error.stack ?? ""}` : String(error);
+  invoke("page_error", { message }).catch(() => {});
+}
+
+/** Everything a page throws and nobody catches goes to the shell too. */
+export function reportUncaught() {
+  window.addEventListener("error", (event) => report(event.error ?? event.message));
+  window.addEventListener("unhandledrejection", (event) => report(event.reason));
+}
+
+export const railLayout = (layout: RailLayout) => invoke<void>("rail_layout", { layout });
+export const hoverDial = (widget: string | null) => invoke<void>("hover_dial", { widget });
+export const hoverPanel = (inside: boolean) => invoke<void>("hover_panel", { inside });
+export const panelLayout = (seq: number, width: number, height: number) =>
+  invoke<void>("panel_layout", { seq, width, height });
+export const startDrag = () => getCurrentWindow().startDragging();
+
+export const onPanelOpen = (fn: (open: PanelOpen) => void): Promise<UnlistenFn> =>
+  listen<PanelOpen>("panel-open", (event) => fn(event.payload));
+export const onPanelClose = (fn: () => void): Promise<UnlistenFn> => listen("panel-close", () => fn());
+export const onPanelState = (fn: (state: PanelState) => void): Promise<UnlistenFn> =>
+  listen<PanelState>("panel-state", (event) => fn(event.payload));
