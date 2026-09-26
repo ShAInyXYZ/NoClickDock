@@ -1,0 +1,662 @@
+/* ============================================================================
+   NCD 2 — reference prototype stylesheet
+   ----------------------------------------------------------------------------
+   Load order: tokens.css (Cerveau, verbatim) → this file.
+   Every block below is one Svelte component; the executor lifts a block into
+   the component's <style> and replaces the data-* attributes with props.
+   Never retype a hex value here: everything resolves to a Cerveau token or to
+   one of the NCD tokens declared in the first block.
+   ============================================================================ */
+
+/* ---- fonts: self-hosted, OFL. The app copies these into app/static/fonts. */
+@font-face {
+  font-family: 'Manrope Variable';
+  src: url('../../../../Cerveau-Hub/HubVoice/static/fonts/manrope-latin-wght-normal.woff2') format('woff2');
+  font-weight: 200 800; font-style: normal; font-display: block;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: block;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+  font-weight: 500; font-style: normal; font-display: block;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('fonts/ibm-plex-mono-latin-600-normal.woff2') format('woff2');
+  font-weight: 600; font-style: normal; font-display: block;
+}
+
+/* ============================================================================
+   NCD TOKENS — the only additions to Cerveau's set (DESIGN.md "Tokens").
+   ============================================================================ */
+:root {
+  /* dial geometry — normal density. Compact and large override below. */
+  --dial: 40px;            /* outer diameter */
+  --rim: 4px;              /* machined rim width; recess = dial - 2 * rim */
+  --led: 6px;              /* square channel lamp */
+  --mark: 18px;            /* mark box, 45 % of the dial */
+  --slot-gap: 8px;         /* between one dial slot and the next */
+  --readout-h: 12px;       /* readout line under a dial */
+
+  /* the quiet healthy lamp: --ok at 70 % */
+  --ok-led: color-mix(in srgb, var(--ok) 70%, transparent);
+
+  /* recess depth: an inset shade from above and a catch-light on the lower lip */
+  --recess-shade: inset 0 2px 4px rgba(0,0,0,.5), inset 0 -1px 0 rgba(255,255,255,.04);
+  /* the open dial's recess, one step below --bg (proposed token, amendment A4) */
+  --recess-open: #111111;
+
+  /* panel rhythm */
+  --inset: 16px;           /* body inset: rows, sections, header all align to it */
+  --row-h: 32px;           /* single-line row; a row with a sub line is 40px */
+  --r-toast: 10px;
+}
+.Rail[data-density="compact"], [data-density="compact"] .Dial {
+  --dial: 32px; --rim: 3px; --mark: 14px; --slot-gap: 6px; --led: 5px;
+}
+.Rail[data-density="large"], [data-density="large"] .Dial {
+  --dial: 48px; --rim: 5px; --mark: 22px; --slot-gap: 8px;
+}
+
+/* tone → token. Tones arrive from the core as words, never colours. */
+[data-tone]            { --tone: var(--faint); }
+[data-tone="ok"]       { --tone: var(--ok); }
+[data-tone="warn"]     { --tone: var(--warn); }
+[data-tone="crit"]     { --tone: var(--err); }
+[data-tone="info"],
+[data-tone="busy"]     { --tone: var(--info); }
+[data-tone="idle"]     { --tone: var(--faint); }
+
+/* numbers never jump: tabular figures everywhere (Manrope has tnum; Plex Mono
+   is fixed-width anyway). NOTE: the `font:` shorthand resets
+   font-variant-numeric to normal, so inheritance from body is not enough —
+   the invariant is re-asserted after every component rule, at the end of
+   this file. */
+body { font-variant-numeric: tabular-nums; }
+.mono, .Readout, .Row-value, .Stats, .Meter-value, .Limit-pct, .Limit-resets,
+.Table td, .Donut-center, .Bars-axis, .PanelFooter, .Section-meta, .Alert-meta {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+   Led.svelte — square TP-7 lamp (Cerveau kit Dot, 6px, radius 1px)
+   ============================================================================ */
+.Led {
+  display: inline-block; flex: none;
+  width: var(--led); height: var(--led);
+  border-radius: 1px;
+  background: var(--tone, var(--faint));
+}
+.Led[data-tone="ok"] { background: var(--ok-led); }
+
+/* ============================================================================
+   Rail.svelte — the dock capsule
+   ============================================================================ */
+.Rail {
+  display: inline-flex; flex-direction: column; align-items: center;
+  gap: var(--slot-gap);
+  padding: 6px 6px 10px;
+  background: var(--s1);
+  border-radius: var(--r-control);
+  box-shadow: var(--elev-2);
+  user-select: none;
+}
+.Rail[data-orient="h"] { flex-direction: row; padding: 6px 12px 6px 6px; }
+.Rail[data-density="compact"] { padding: 6px; }
+.Rail[data-orient="h"][data-density="compact"] { padding: 6px 8px 6px 6px; }
+
+/* Grip: the leading 14px, three engraved 2px dots. */
+.Rail-grip {
+  display: flex; align-items: center; justify-content: center; gap: 3px;
+  width: var(--dial); height: 14px; margin-bottom: -2px;
+  cursor: grab;
+}
+.Rail[data-orient="h"] .Rail-grip {
+  flex-direction: column; width: 14px; height: var(--dial);
+  margin: 0 -2px 0 0; align-self: flex-start;
+}
+.Rail-grip i {
+  width: 2px; height: 2px; border-radius: 1px;
+  background: var(--faint);
+  box-shadow: 0 1px 0 rgba(255,255,255,.05);  /* engraved: light catches the lower lip */
+}
+
+/* A slot is one widget: the dial and its readout. */
+.Slot {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+
+/* ============================================================================
+   Dial.svelte — machined rim, inset recess, monochrome mark, lamp, rings
+   ============================================================================ */
+.Dial {
+  position: relative; display: block; flex: none;
+  width: var(--dial); height: var(--dial);
+  padding: 0; border: 0; border-radius: 50%;
+  background: var(--s2);
+  box-shadow: var(--elev-1);
+  color: var(--muted);
+  cursor: default;
+  font: inherit;
+}
+/* DESIGN.md's focus ring overrides tokens.css's global 1px / offset 1 */
+:focus-visible, .is-focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* …except on a dial, where a cherry ring is indistinguishable from the crit
+   ring at 40px: the dial's focus ring is --text (amendment A17) */
+.Dial:focus-visible, .Dial.is-focus { outline-color: var(--text); }
+
+/* the recess, cut into the rim */
+.Dial-recess {
+  position: absolute; inset: var(--rim);
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: var(--recess-shade);
+}
+
+/* the mark — monochrome, sized by --mark, optically corrected per mark */
+.Dial-mark {
+  position: absolute; left: 50%; top: 50%;
+  width: calc(var(--mark) * var(--mark-scale, 1));
+  height: calc(var(--mark) * var(--mark-scale, 1));
+  transform: translate(-50%, -50%);
+  fill: currentColor;
+  transition: color var(--t-fast) var(--ease-mech);
+}
+.Dial:hover, .Dial.is-hover { color: var(--text); }
+.Dial[data-state="idle"] { color: var(--dim); }            /* not running: the mark steps back */
+.Dial[data-state="idle"]:hover { color: var(--muted); }
+
+/* the lamp, set into the rim at 45° (top-right). The 1px gasket is dark, not
+   a glow: it cuts the lamp out of the rim so it reads as mounted. */
+.Dial > .Led {
+  position: absolute;
+  /* centre on the 45° radius, pulled in until the lamp's outer corner sits
+     1px inside the dial outline: r = dial/2 - 1 - led*.7071 */
+  top: calc(var(--dial) / 2 - (var(--dial) / 2 - 1px - var(--led) * .7071) * .7071 - var(--led) / 2);
+  right: calc(var(--dial) / 2 - (var(--dial) / 2 - 1px - var(--led) * .7071) * .7071 - var(--led) / 2);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.55);
+}
+
+/* rings: crit (breathing) and busy (progress arc). One SVG, 2px on the outer
+   edge of the rim; nothing is drawn for ok / warn / idle. */
+.Dial-ring {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  overflow: visible; pointer-events: none;
+  transform: rotate(-90deg);            /* arcs start at 12 o'clock */
+}
+.Dial-ring circle { fill: none; stroke-width: 2; }
+.Dial[data-state="crit"] .Dial-ring circle {
+  stroke: var(--err);
+  animation: ncd-breathe 2.4s var(--ease-mech) infinite;
+}
+.Dial[data-state="busy"] .Dial-ring circle {
+  stroke: var(--info);
+  stroke-linecap: butt;
+  stroke-dasharray: var(--progress, 25) 100;   /* pathLength="100" */
+  transition: stroke-dasharray var(--t-slow) var(--ease-out);
+}
+.Dial[data-state="busy"][data-progress="none"] .Dial-ring {
+  animation: ncd-spin 1.2s linear infinite;
+}
+@keyframes ncd-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@keyframes ncd-spin { from { transform: rotate(-90deg); } to { transform: rotate(270deg); } }
+
+/* open: recess one step darker, mark lit, cherry index tick on the panel side */
+.Dial.is-open { color: var(--text); }
+.Dial.is-open .Dial-recess { background: var(--recess-open); }
+.Dial-index {
+  position: absolute; display: none;
+  background: var(--accent); border-radius: 1px;
+}
+.Dial.is-open .Dial-index { display: block; }
+.Dial[data-side="right"]  .Dial-index { width: 2px; height: 10px; top: calc(50% - 5px); right: -6px; }
+.Dial[data-side="left"]   .Dial-index { width: 2px; height: 10px; top: calc(50% - 5px); left: -6px; }
+.Dial[data-side="top"]    .Dial-index { width: 10px; height: 2px; left: calc(50% - 5px); top: -6px; }
+.Dial[data-side="bottom"] .Dial-index { width: 10px; height: 2px; left: calc(50% - 5px); bottom: -6px; }
+
+/* per-mark optical correction (marks.ts carries this number) */
+.Dial-mark[data-mark="claude"]    { --mark-scale: .96; }
+.Dial-mark[data-mark="codex"]     { --mark-scale: .96; }
+.Dial-mark[data-mark="comfyui"]   { --mark-scale: .96; }
+.Dial-mark[data-mark="disk"]      { --mark-scale: .9; }
+.Dial-mark[data-mark="docker"]    { --mark-scale: 1.06; }
+.Dial-mark[data-mark="power"]     { --mark-scale: .92; }
+.Dial-mark[data-mark="tailscale"] { --mark-scale: .84; }
+
+/* ============================================================================
+   Readout.svelte — glance.text under the dial
+   ============================================================================ */
+.Readout {
+  display: block; min-width: var(--dial);
+  font: 500 var(--fs-micro)/var(--readout-h) var(--font-mono);
+  letter-spacing: .02em; text-align: center; white-space: nowrap;
+  color: var(--muted);
+}
+.Readout[data-tone="warn"] { color: var(--warn); }
+.Readout[data-tone="crit"] { color: var(--err); }
+.Readout[data-tone="idle"] { color: var(--dim); }
+.Rail[data-density="compact"] .Readout { display: none; }
+
+/* ============================================================================
+   Panel.svelte — one surface, no nested cards
+   ============================================================================ */
+.Panel {
+  display: flex; flex-direction: column;
+  width: var(--panel-w, 360px); max-height: var(--panel-max-h, none);
+  background: var(--s1);
+  border-radius: var(--r-panel);
+  box-shadow: var(--elev-2);      /* the ring IS the edge — same material as the rail (amendment A8) */
+  color: var(--text);
+  overflow: hidden;
+}
+.Panel-head { flex: none; border-bottom: 1px solid var(--line); }
+.Panel-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 4px var(--inset) 12px;
+}
+/* Split.svelte — the `split` block: two columns inside the body */
+.Split { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; margin-top: 4px; }
+.Panel-col { min-width: 0; }
+.Panel-col + .Panel-col { position: relative; }
+.Panel-col + .Panel-col::before {          /* the one structural divider in a split */
+  content: ''; position: absolute; left: -12px; top: 8px; bottom: 0;
+  width: 1px; background: var(--line);
+}
+
+/* ============================================================================
+   PanelHeader.svelte — one row, 48px
+   ============================================================================ */
+.PanelHeader {
+  display: flex; align-items: center; gap: 10px;
+  height: 48px; padding: 0 var(--inset);
+}
+.PanelHeader-mark { width: 18px; height: 18px; flex: none; fill: var(--text); }
+.PanelHeader-title {
+  font: 600 var(--fs-title)/1 var(--font-sans);
+  letter-spacing: -.005em; color: var(--text);
+}
+.PanelHeader-state {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 8px;
+  font: 600 var(--fs-body)/1 var(--font-sans);
+  color: var(--tone);
+}
+.PanelHeader-state[data-tone="ok"],
+.PanelHeader-state[data-tone="idle"] { color: var(--muted); }
+.Panel-tabs { padding: 0 var(--inset) 12px; }
+
+/* ============================================================================
+   Segmented.svelte — Cerveau kit toggle bank, hover-to-switch (180 ms)
+   ============================================================================ */
+.Segmented {
+  display: inline-flex; gap: 2px; padding: 2px;
+  border: 1px solid var(--line2); border-radius: var(--r);
+  background: var(--s2);
+}
+.Segmented-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 10px;
+  border: 0; border-radius: var(--r-sm);
+  background: transparent; color: var(--dim);
+  font: 500 var(--fs-micro)/1 var(--font-mono);
+  letter-spacing: .1em; text-transform: uppercase;
+  cursor: default; white-space: nowrap;
+  transition: color .1s, background .1s;
+}
+.Segmented-btn:hover { color: var(--text); }
+/* selected: a raised key, not a cherry block — see amendment A2 */
+.Segmented-btn[aria-selected="true"] {
+  color: var(--text); background: var(--s3);
+  box-shadow: 0 1px 0 0 var(--lift) inset, 0 -1px 0 0 var(--shade) inset, 0 0 0 1px var(--ring);
+}
+.Segmented-btn .Led { --led: 5px; }
+.Segmented-badge { letter-spacing: 0; color: var(--tone, var(--muted)); }
+
+/* ============================================================================
+   Section.svelte — a printed strip, one row: title left, meta right
+   ============================================================================ */
+.Section {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  height: 32px; margin-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.Section:first-child { margin-top: 0; border-top: 0; }
+.Section-title {
+  font: 500 var(--fs-micro)/1 var(--font-mono);
+  letter-spacing: .22em; text-transform: uppercase;
+  color: var(--dim);
+}
+.Section[data-tone] .Section-title { color: var(--tone); }
+.Section-meta {
+  font: 400 var(--fs-micro)/1 var(--font-mono);
+  letter-spacing: .04em; color: var(--dim);
+}
+
+/* ============================================================================
+   Row.svelte
+   ============================================================================ */
+.Row {
+  position: relative;
+  display: flex; align-items: center; gap: 10px;
+  min-height: var(--row-h); padding: 4px 0;
+}
+.Row > .Led { align-self: flex-start; margin-top: 10px; }   /* on the name line, not between lines */
+.Row-text { flex: 1; }
+.Row::before {                                /* hover wash, bleeds 8px so text stays on the inset */
+  content: ''; position: absolute; inset: 0 -8px; border-radius: var(--r);
+  background: transparent; transition: background var(--t-fast) var(--ease-mech);
+  pointer-events: none;
+}
+.Row:hover::before, .Row.is-hover::before { background: color-mix(in srgb, #fff 2.5%, transparent); }
+.Row > * { position: relative; }
+.Row-text { min-width: 0; }
+.Row-name {
+  display: block;
+  font: 500 var(--fs-body)/18px var(--font-sans); color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.Row-sub {
+  display: block;
+  font: 400 var(--fs-small)/14px var(--font-sans); color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.Row-value {
+  font: 400 var(--fs-small)/18px var(--font-mono);
+  color: var(--muted); text-align: right; white-space: nowrap;
+}
+.Row-value[data-tone="warn"] { color: var(--warn); }
+.Row-value[data-tone="crit"] { color: var(--err); }
+.Row-value .dim { color: var(--dim); }
+.Row-actions { display: flex; gap: 4px; }
+.Row-actions:empty { display: none; }
+
+/* ============================================================================
+   PillButton.svelte — Cerveau pill, 24px, mono lowercase. Two-step when it
+   carries `confirm`: first click arms (label → confirm text), second sends.
+   ============================================================================ */
+.PillButton {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 24px; padding: 0 10px;
+  border: 1px solid var(--line2); border-radius: var(--r-control);
+  background: var(--s2); color: var(--muted);
+  font: 500 var(--fs-small)/1 var(--font-mono); letter-spacing: 0;
+  white-space: nowrap; cursor: pointer; user-select: none;
+  transition: background .1s, border-color .1s, color .1s, opacity var(--t-fast), transform .04s;
+}
+.PillButton:hover { color: var(--text); border-color: var(--faint); background: var(--s3); }
+.PillButton:active { transform: translateY(1px); }
+.PillButton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* at rest inside a row a pill is a ghost: its outline in --line, ink --dim,
+   no body. Row hover or keyboard focus gives it its body. Layout never shifts. */
+.Row .PillButton:not(.is-armed),
+.Alert .PillButton:not(.is-armed) {
+  background: transparent; border-color: var(--line); color: var(--dim);
+}
+.Row:hover .PillButton:not(.is-armed), .Row.is-hover .PillButton:not(.is-armed),
+.Row:focus-within .PillButton:not(.is-armed),
+.Alert:hover .PillButton:not(.is-armed), .Alert.is-hover .PillButton:not(.is-armed),
+.Alert:focus-within .PillButton:not(.is-armed) {
+  background: var(--s2); border-color: var(--line2); color: var(--muted);
+}
+.Row .PillButton:not(.is-armed):hover, .Alert .PillButton:not(.is-armed):hover {
+  color: var(--text); border-color: var(--faint); background: var(--s3);
+}
+.PillButton.is-armed {
+  position: relative; overflow: hidden;
+  background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent);
+}
+.PillButton.is-armed.is-danger {
+  background: color-mix(in srgb, var(--err) 12%, transparent);
+  border-color: color-mix(in srgb, var(--err) 42%, transparent);
+  color: var(--err);
+}
+/* Both labels occupy the same grid cell; the one not showing is hidden, so the
+   pill is always as wide as the longer of `label` and `confirm`. Arming never
+   moves the row's value. (Never name a part `.label`: Cerveau's tokens.css
+   has a global `.label` utility — uppercase, .22em — that would win.) */
+.PillButton { display: inline-grid; place-items: center; }
+.PillButton > span { grid-area: 1 / 1; }
+.PillButton-confirm { visibility: hidden; }
+.PillButton.is-armed > .PillButton-label { visibility: hidden; }
+.PillButton.is-armed > .PillButton-confirm { visibility: visible; }
+
+/* ============================================================================
+   Alert.svelte — the problem block. No left bar, a 6 % tone wash.
+   ============================================================================ */
+.Alert {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 10px; row-gap: 0; align-items: center;   /* 8 + 24 + 16·n + 8: always on the 4px grid */
+  margin: 0 -8px 4px; padding: 8px;
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--tone) 6%, var(--s1));
+}
+.Alert > .Led { grid-row: 1; }
+.Alert-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; height: 24px; line-height: 24px; overflow: hidden; }
+.Alert-title {
+  font: 600 var(--fs-body)/24px var(--font-sans); color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 60%;
+}
+.Alert-meta {
+  font: 400 var(--fs-small)/24px var(--font-mono); color: var(--tone);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.Alert-body {
+  grid-column: 2 / 4;
+  font: 400 var(--fs-small)/16px var(--font-sans); color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; overflow-wrap: anywhere;
+}
+.Alert-body.is-mono { font-family: var(--font-mono); }
+.Alert-actions { grid-column: 3; grid-row: 1; display: flex; gap: 4px; }
+
+/* ============================================================================
+   Meter.svelte / Limit.svelte — Cerveau segmented level meter
+   3px segments, 2px gap, fills its column; lit in the tone, unlit --line2.
+   ============================================================================ */
+.Meter, .Limit {
+  display: grid; align-items: center; column-gap: 12px;
+  min-height: 28px;
+}
+.Meter { grid-template-columns: 64px minmax(0, 1fr) 76px; }
+.Limit { grid-template-columns: 76px minmax(0, 1fr) 36px 112px; }
+.Meter-label, .Limit-label {
+  font: 500 var(--fs-body)/1 var(--font-sans); color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.Seg { height: 10px; overflow: hidden; }
+.Seg svg { display: block; }
+.Seg rect { fill: var(--line2); }
+/* lit segments are neutral (--muted) for a healthy or untoned quantity; the
+   meter takes a colour only when the core says warn or crit (amendment A6) */
+.Seg rect.on { fill: var(--muted); }
+.Seg[data-tone="warn"] rect.on { fill: var(--warn); }
+.Seg[data-tone="crit"] rect.on { fill: var(--err); }
+.Meter-value, .Limit-pct {
+  font: 400 var(--fs-small)/1 var(--font-mono); color: var(--text); text-align: right; white-space: nowrap;
+}
+.Meter-value .dim { color: var(--dim); }
+.Limit-pct[data-tone="warn"], .Meter-value[data-tone="warn"] { color: var(--warn); }
+.Limit-pct[data-tone="crit"], .Meter-value[data-tone="crit"] { color: var(--err); }
+.Limit-resets {
+  font: 400 var(--fs-small)/1 var(--font-mono); color: var(--dim); white-space: nowrap;
+}
+
+/* A run of consecutive meter (or limit) blocks renders as ONE grid, so the
+   label column is as wide as the widest label in the run and every bar starts
+   on the same x. The renderer groups adjacent blocks of the same kind. */
+.MeterGroup {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content;
+  grid-auto-rows: 28px; align-items: center; column-gap: 12px;
+}
+.LimitGroup {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content max-content;
+  grid-auto-rows: 28px; align-items: center; column-gap: 12px;
+}
+.MeterGroup > .Meter, .LimitGroup > .Limit { display: contents; }
+.Meter-label.is-mono { font: 400 var(--fs-small)/1 var(--font-mono); color: var(--muted); }
+.Meter-note { font: 400 var(--fs-small)/1 var(--font-mono); color: var(--dim); }
+
+/* ============================================================================
+   Stats.svelte — one mono line. Replaces the Python tiles; no KPI tiles.
+   ============================================================================ */
+.Stats {
+  display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0; row-gap: 2px;
+  min-height: 28px; padding: 5px 0;
+  font: 400 var(--fs-small)/18px var(--font-mono);
+}
+.Stats-item { white-space: nowrap; }
+.Stats-item + .Stats-item::before { content: '·'; color: var(--faint); margin: 0 8px; }
+.Stats-key { color: var(--dim); margin-right: 6px; }
+.Stats-value { color: var(--text); }
+.Stats-value[data-tone="warn"] { color: var(--warn); }
+.Stats-value[data-tone="crit"] { color: var(--err); }
+
+/* ============================================================================
+   Chips.svelte — LED + label, no box. Healthy is quiet (--muted).
+   A non-healthy item leaves the grid and is rendered as a Row above it.
+   ============================================================================ */
+.Chips {
+  display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  column-gap: 12px; row-gap: 2px; padding: 4px 0 6px;
+}
+.Chip {
+  display: flex; align-items: center; gap: 8px; min-width: 0; height: 24px;
+  font: 500 var(--fs-small)/1 var(--font-sans); color: var(--muted);
+}
+.Chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ============================================================================
+   Table.svelte — Power's draw table
+   ============================================================================ */
+.Table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.Table th {
+  height: 32px; padding: 0 0 0 12px; text-align: right; vertical-align: middle;
+  font: 500 var(--fs-micro)/1 var(--font-mono); letter-spacing: .22em; text-transform: uppercase;
+  color: var(--dim);
+}
+.Table th:first-child, .Table td:first-child { padding-left: 0; }
+.Table td {
+  height: 28px; padding: 0 0 0 12px; vertical-align: middle;
+  font: 400 var(--fs-small)/1 var(--font-mono); color: var(--muted); text-align: right;
+  white-space: nowrap;
+}
+.Table td.id {
+  text-align: left; font: 500 var(--fs-micro)/1 var(--font-mono);
+  letter-spacing: .08em; text-transform: uppercase; color: var(--dim);
+}
+.Table td.name {
+  text-align: left; overflow: hidden; text-overflow: ellipsis;
+  font: 500 var(--fs-body)/1 var(--font-sans); color: var(--text);
+}
+.Table td.name .sub { color: var(--dim); font-weight: 400; }
+.Table td .v { color: var(--text); }
+.Table td .cap { color: var(--dim); }
+.Table td[data-tone="warn"] { color: var(--warn); }
+.Table td[data-tone="crit"] { color: var(--err); }
+.Table tbody + tbody tr:first-child td { border-top: 1px solid var(--line); }   /* hairline between groups only */
+.Table .group td { height: 28px; }
+.Table .group td.grouplabel {
+  text-align: left; font: 500 var(--fs-micro)/1 var(--font-mono);
+  letter-spacing: .22em; text-transform: uppercase; color: var(--dim);
+}
+
+/* ============================================================================
+   Donut.svelte — cost split, monochrome ramp, largest first
+   ============================================================================ */
+.Donut { display: grid; grid-template-columns: 112px minmax(0, 1fr); column-gap: 20px; align-items: center; padding: 8px 0 4px; }
+.Donut-chart { position: relative; width: 112px; height: 112px; }
+.Donut-chart svg { width: 112px; height: 112px; transform: rotate(-90deg); }
+.Donut-chart circle { fill: none; stroke-width: 10; }
+.Donut-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px;
+}
+.Donut-value { font: 500 var(--fs-display)/1 var(--font-mono); color: var(--text); letter-spacing: -.01em; }
+.Donut-unit { font: 500 var(--fs-micro)/1 var(--font-mono); color: var(--dim); letter-spacing: .12em; text-transform: uppercase; }
+.Donut-legend { display: flex; flex-direction: column; }
+.Donut-row {
+  display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; column-gap: 10px;
+  height: 22px;
+}
+.Donut-swatch { width: 6px; height: 6px; border-radius: 1px; }
+.Donut-label { font: 500 var(--fs-small)/1 var(--font-sans); color: var(--muted); }
+.Donut-amt { font: 400 var(--fs-small)/1 var(--font-mono); color: var(--text); }
+.Donut-row.is-minor .Donut-amt { color: var(--muted); }
+
+/* ============================================================================
+   Bars.svelte — 24 h, one SVG bar per hour; now in --text, future hours stubs
+   ============================================================================ */
+.Bars { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 8px; }
+.Bars svg { display: block; }
+.Bars rect.h   { fill: var(--faint); }
+.Bars rect.now { fill: var(--text); }
+.Bars rect.fut { fill: var(--line2); }
+.Bars-axis { position: relative; height: 10px; font: 400 var(--fs-micro)/10px var(--font-mono); color: var(--dim); }
+.Bars-axis span { position: absolute; top: 0; transform: translateX(-1px); }
+
+/* ============================================================================
+   PanelFooter.svelte — 28px, hairline above
+   ============================================================================ */
+.PanelFooter {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  height: 28px; padding: 0 var(--inset);
+  border-top: 1px solid var(--line);
+  font: 400 var(--fs-micro)/1 var(--font-mono); letter-spacing: .04em; color: var(--dim);
+}
+.PanelFooter .fresh { color: var(--faint); }
+.PanelFooter[data-tone="crit"], .PanelFooter[data-tone="crit"] .fresh { color: var(--err); }
+.PanelFooter[data-tone="warn"], .PanelFooter[data-tone="warn"] .fresh { color: var(--warn); }
+
+/* Empty.svelte — the empty state says what is true, in a sentence */
+.Empty { padding: 20px 0 16px; font: 500 var(--fs-body)/20px var(--font-sans); color: var(--muted); }
+.Empty code { font: 400 var(--fs-small)/20px var(--font-mono); color: var(--text);
+              padding: 1px 6px; background: var(--s2); border-radius: var(--r); box-shadow: inset 0 0 0 1px var(--line2); }
+
+/* stale: no snapshot for 3 × pollSecs. The UI, not the core, decides this:
+   no ring, lamp idle, mark and readout step back (amendment A11). */
+.Dial.is-stale { color: var(--dim); }
+.Slot.is-stale .Readout, .Slot.is-stale .Readout[data-tone] { color: var(--faint); }
+
+/* ============================================================================
+   Note.svelte — one line of prose or mono
+   ============================================================================ */
+.Note { padding: 6px 0; font: 400 var(--fs-small)/16px var(--font-sans); color: var(--dim); }
+.Note.is-mono { font-family: var(--font-mono); }
+.Note code { font-family: var(--font-mono); color: var(--muted); }
+
+/* ============================================================================
+   Toast.svelte — beside the dial, newest nearest, max 3, pointer passes through
+   ============================================================================ */
+.ToastStack { display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.Toast {
+  display: flex; align-items: flex-start; gap: 10px;
+  width: max-content; max-width: 280px;
+  padding: 9px 14px 9px 12px;
+  background: var(--s2);
+  border-radius: var(--r-toast);
+  box-shadow: var(--elev-2);
+  font: 500 var(--fs-body)/18px var(--font-sans); color: var(--text);
+}
+.Toast > .Led { margin-top: 6px; }
+.Toast-text { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.Toast.is-leaving { opacity: .35; }
+
+/* ============================================================================
+   REDUCED MOTION — the ring stays, static; the arc stops; arm line is static
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .Dial[data-state="crit"] .Dial-ring circle { animation: none; opacity: 1; }
+  .Dial[data-state="busy"][data-progress="none"] .Dial-ring { animation: none; }
+}
+
+/* ============================================================================
+   INVARIANT — tabular figures. Last in the file on purpose: every component
+   rule above uses the `font:` shorthand, which resets font-variant-numeric.
+   In Svelte, put this in the global stylesheet loaded after tokens.css.
+   ============================================================================ */
+:is(body, body *) { font-variant-numeric: tabular-nums !important; }

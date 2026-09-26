@@ -1,0 +1,272 @@
+/* ============================================================================
+   CERVEAU — design tokens
+   Aesthetic: TP-7 / Japanese old-school-modern · minimalist industrial ·
+   Scandinavian. Monochrome surfaces, ONE signal accent, hairlines, mono labels
+   with numeric tags, generous negative space, mechanical precision.
+   ============================================================================ */
+
+/* Tailwind was imported here but zero utility classes were ever used — it
+   only provided preflight and two font variables. The token system below IS
+   the styling system; this minimal reset replaces preflight. */
+:root {
+  /* 'Inter Variable' is the bundled family name @fontsource ships;
+     'Inter' catches a system install; then the platform stack. */
+  --font-sans: 'Manrope Variable', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+}
+*, *::before, *::after { box-sizing: border-box; }
+h1, h2, h3, h4, p, figure, blockquote, dl, dd, ul, ol { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+img, svg, canvas { display: block; max-width: 100%; }
+/* SvelteFlow draws every edge in its own absolutely-positioned <svg> inside a
+   layer that has no width, and relies on overflow: visible. There the
+   max-width above resolves to 0, and a zero-width svg paints nothing: every
+   graph in the panel had its lines silently erased (found 2026-09-20, when
+   the Rig diagram showed edge labels floating with no edges). */
+.svelte-flow svg { max-width: none; }
+
+:root, [data-theme="dark"] {
+  /* ---- surfaces: flat 4-step ladder, near-black, never pure black.
+     The upper steps are deliberately neutral gray rather than hue-240:
+     a blue-tinted surface reads visibly cool over large areas like the
+     tree rail, so panels stay truly neutral. ---- */
+  /* Surface ladder. Rebased on #161616 (2026-08-22): the old base was
+     #09090B, nearly black with a blue cast. Each step must stay LIGHTER than
+     the one below or depth inverts — panels would read as darker than the
+     canvas they sit on. Luminance steps match the previous ladder's. */
+  --bg:    #161616;   /* app base */
+  --s1:    #1C1C1C;   /* panel / tree */
+  --s2:    #242424;   /* raised / input */
+  --s3:    #2B2B2B;   /* control / hover */
+
+  /* ---- hairlines ---- */
+  /* ONE rule, so edges stop competing:
+       --line   STRUCTURE — separates regions of the app shell (header from
+                body, rail from chat). Used sparingly; two structural lines
+                should never meet.
+       --line2  CONTROLS — the edge of a thing you can interact with: an
+                input, a menu, a focusable card. Slightly brighter so a
+                control reads as raised rather than as another divider.
+     Anything else that needs an edge is a SURFACE change, not a line. */
+  --line:  #2E2E2E;   /* structure — quieter than a control edge */
+  --line2: #3D3D3D;   /* control edge */
+
+  /* ---- ink ---- */
+  --text:  #FAFAFA;   /* primary */
+  --muted: #A1A1AA;   /* secondary */
+  --dim:   #71717A;   /* tertiary / labels active */
+  --faint: #52525B;   /* label rest / disabled ink */
+
+  /* ---- one signal accent — interactive/semantic ONLY.
+     Cherry, lifted one step off its base tone (hsl(348 70% 51%) = #D92B4E)
+     so it keeps text-contrast against the near-black background. ---- */
+  --accent:      #E54866;
+  --accent-ink:  #FFFFFF;
+  /* Text ON a filled accent surface. Dark, not white: measured against
+     #E54866 it is 5.10:1 versus white's 3.85:1. Several buttons had this
+     value hardcoded as #0B0B0D. */
+  --on-accent:   #0B0B0D;
+  --accent-soft: rgba(229,72,102,.12);
+  --accent-line: rgba(229,72,102,.42);
+
+  /* ---- semantic status — used as dots/labels, not fills ---- */
+  --ok:   #4bb894;
+  --err:  #e6533f;
+  --warn: #cf9f2e;
+  --info: #5aa0d6;
+  /* memory kinds — moved off pink so they never read as the accent */
+  --semantic: #b48ad6;  /* memory: semantic (violet) */
+  --episodic: #5bb7c9;  /* memory: episodic (cyan) */
+
+  /* ---- depth: hairline ring + top-light bump ----
+     A control is lit from above: a bright top edge, a dark bottom edge, and
+     a ring to separate it from the surface behind. That is the whole depth
+     language. Floating menus add a tinted blurred backdrop; the chat/dock
+     transition deliberately stays a plain opacity gradient. ---- */
+  --ring:        rgba(255,255,255,.08);
+  --ring-strong: rgba(255,255,255,.12);
+  --lift:        rgba(255,255,255,.09);   /* top-edge highlight */
+  --lift-strong: rgba(255,255,255,.14);   /* raised / focused */
+  --shade:       rgba(0,0,0,.38);         /* bottom-edge shade */
+
+  /* ---- code / syntax tokens (markdown + highlight.js) ----
+     Cool-leaning so they never compete with the rose accent. ---- */
+  --code-inline:  #E8A9B6;
+  --code-keyword: #C99BD6;
+  --code-string:  #8FBF9E;
+  --code-number:  #D9A88C;
+  --code-title:   #7FB3D9;
+  --code-type:    #6BB7C9;
+
+  /* ---- geometry: tight data cells, rounded frames, pill controls ---- */
+  --r-sm: 2px;
+  --r:    3px;
+  --r-lg: 4px;
+  --r-panel: 14px;
+  --r-control: 999px;
+  --floating-surface: var(--s2);
+  --floating-blur: none;
+
+  /* ---- rhythm ---- */
+  /* SPACING SCALE — snap to these.
+     Audited 2026-08-21: every integer from 1px to 14px was in use, including
+     11 and 13, which is not a scale but an accumulation. Four-based, with 2px
+     kept for hairline gaps inside controls. */
+  --sp-1:  2px;
+  --sp-2:  4px;
+  --sp-3:  6px;
+  --sp-4:  8px;
+  --sp-5:  12px;
+  --sp-6:  16px;
+  --sp-7:  20px;
+  --sp-8:  24px;
+  --sp-9:  32px;
+
+  /* TYPE SCALE — 17 distinct sizes were in use (8 → 34px). Five roles instead.
+     MICRO is for text nobody reads unless something went wrong. */
+  --fs-micro:   9.5px;
+  --fs-small:   11.5px;
+  --fs-body:    13px;
+  --fs-title:   15px;
+  --fs-display: 21px;
+
+  --gap:   8px;
+  --pad:   14px;
+  --rail-w: 280px;
+  --bar-h:  46px;   /* header height — popovers pin below it */
+
+  /* ---- shared control geometry — components must reference these, never
+     retype the numbers (the plan strip once hardcoded a 66px inset to mirror
+     a 54px knob it couldn't see) ---- */
+  --knob:        54px;                      /* round mode/attach controls */
+  --dock-gap:    12px;
+  --dock-inset:  calc(var(--knob) + var(--dock-gap));  /* knob + gap */
+  --composer-w:  760px;                     /* chat column max width */
+
+  /* ---- z scale — the only allowed z-index values ---- */
+  --z-raised:   10;   /* pinned strips, hud chips */
+  --z-dropdown: 40;   /* menus, knob popovers */
+  --z-overlay:  60;   /* rail drawer, docks */
+  --z-popover:  70;   /* status/hardware panels — must clear the rail toggle */
+  --z-modal:    80;   /* dialogs */
+  --z-toast:    90;
+
+  /* ---- motion — every animation derives from these ---- */
+  --t-fast:  120ms;
+  --t-med:   180ms;
+  --t-slow:  320ms;
+  --ease-out:  cubic-bezier(.16, 1, .3, 1);
+  --ease-mech: cubic-bezier(.4, 0, .2, 1);
+
+  /* ---- breakpoints (for reference in @media, which cannot read vars):
+     narrow < 640px · compact < 900px · full ≥ 900px ---- */
+}
+
+@supports (backdrop-filter: blur(24px)) {
+  :root, [data-theme="dark"] {
+    --floating-surface: color-mix(in srgb, var(--s2) 94%, transparent);
+    --floating-blur: blur(24px);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root, [data-theme="dark"] { --floating-surface: var(--s2); --floating-blur: none; }
+}
+
+
+/* ============================================================================
+   BASE
+   ============================================================================ */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+::selection { background: var(--accent-soft); }
+
+/* thin, industrial scrollbars */
+* { scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--line2); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ============================================================================
+   TYPOGRAPHIC UTILITIES — the mono "engraved label" system
+   ============================================================================ */
+.mono { font-family: var(--font-mono); }
+
+/* screen-printed label: UPPERCASE, wide-tracked, tiny */
+.label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* numeric tag — like a device's printed channel numbers */
+.tag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  color: var(--dim);
+}
+
+/* ============================================================================
+   ELEVATION — Linear-grade layered surfaces (shadow + hairline ring, not borders)
+   Reusable so every component shares one depth language.
+   ============================================================================ */
+/* No cast shadows — depth is a hairline ring plus a top-light inset highlight
+   and a bottom shade: the "bumpy" pressed-metal read. Surfaces sit in the
+   plane; nothing hovers above it. */
+:root {
+  /* resting card */
+  --elev-1:
+    0 0 0 1px var(--ring),
+    0 1px 0 0 var(--lift) inset,
+    0 -1px 0 0 var(--shade) inset;
+  /* floating element (dock, popover, menu) — same language, firmer edge */
+  --elev-2:
+    0 0 0 1px var(--ring-strong),
+    0 1px 0 0 var(--lift-strong) inset,
+    0 -1px 0 0 var(--shade) inset;
+  /* subtle top-light gradient for a card surface */
+  --surface: linear-gradient(180deg, color-mix(in srgb, var(--lift) 55%, var(--s1)) 0%, var(--s1) 46%);
+  --surface-raised: linear-gradient(180deg, color-mix(in srgb, var(--lift) 60%, var(--s2)) 0%, var(--s2) 50%);
+}
+.elev-1 { box-shadow: var(--elev-1); }
+.elev-2 { box-shadow: var(--elev-2); }
+
+/* ============================================================================
+   FOCUS — one consistent industrial focus ring
+   ============================================================================ */
+:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+
+/* ============================================================================
+   ANIMATION — restrained, mechanical
+   ============================================================================ */
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rise { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.anim-fade { animation: fade-in .14s ease; }
+.anim-rise { animation: rise .16s cubic-bezier(.16,1,.3,1); }
+@keyframes blink { 50% { opacity: .3; } }
+.blink { animation: blink 1.1s steps(2, jump-none) infinite; }
+
+/* ============================================================================
+   REDUCED MOTION — one global policy instead of per-component vigilance
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

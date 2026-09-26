@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NCD 2 reference</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<meta name="description" content="High-fidelity static reference for the NoClickDock 2 interface: rail, dials, panels, toasts. Invented data only.">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="reference.css">
+<style>
+  /* ---- sheet chrome: NOT part of the product. Plates and desktop stand-ins. ---- */
+  html, body { height: auto; }
+  body { background: var(--bg); min-width: 1440px; }
+  .sheet { width: 1376px; margin: 0 auto; padding: 24px 0 64px; }
+  .sheet-head {
+    display: flex; align-items: center; gap: 12px; height: 48px;
+    border-bottom: 1px solid var(--line); margin-bottom: 24px;
+  }
+  .sheet-head h1 { font: 600 var(--fs-title)/1 var(--font-sans); }
+  .sheet-head .tag { margin-left: auto; }
+  .plate { margin-bottom: 40px; }
+  .plate-head { display: flex; align-items: center; gap: 12px; height: 32px; margin-bottom: 8px; }
+  .plate-head .n { font: 500 var(--fs-micro)/1 var(--font-mono); letter-spacing: .08em; color: var(--dim);
+                   padding: 3px 6px; border: 1px solid var(--line2); border-radius: var(--r-sm); }
+  .plate-head h2 { font: 600 var(--fs-body)/1 var(--font-sans); color: var(--text); }
+  .plate-head .meta { margin-left: auto; font: 400 var(--fs-micro)/1 var(--font-mono); letter-spacing: .04em; color: var(--dim); }
+  /* desktop stand-in: a flat wallpaper tone below --bg so the floating surfaces are judged honestly */
+  .desk { position: relative; background: #0f0f0f; border-radius: var(--r-lg); overflow: hidden;
+          box-shadow: 0 0 0 1px var(--line); }
+  .desk > * { position: absolute; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .spec { display: flex; gap: 48px; align-items: flex-start; padding: 32px; }
+  .spec-col { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; position: static; }
+  .spec-cap { font: 500 var(--fs-micro)/1 var(--font-mono); letter-spacing: .22em; text-transform: uppercase; color: var(--dim); }
+  .states { display: flex; gap: 0; position: static; }
+  .states .cell { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 76px; }
+  .states .cell .spec-cap { letter-spacing: .12em; }
+  .anat { display: flex; gap: 48px; align-items: center; position: static; }
+  .anat-zoom { width: 160px; height: 160px; position: relative; }
+  .anat-zoom .Dial { position: absolute; left: 0; top: 0; transform: scale(4); transform-origin: 0 0; }
+  .anat dl { display: grid; grid-template-columns: auto auto; column-gap: 16px; row-gap: 6px; margin: 0;
+             font: 400 var(--fs-small)/1.4 var(--font-mono); }
+  .anat dt { color: var(--dim); } .anat dd { margin: 0; color: var(--muted); }
+  .variants { display: flex; gap: 40px; align-items: flex-start; position: static; }
+  .row5 { display: grid; grid-template-columns: minmax(0, 1fr) 768px; gap: 16px; align-items: start; }
+  .timing { padding: 0 24px 0 0; }
+  #timeline { display: block; width: 100%; }
+  #timeline .lab { font: 400 11.5px var(--font-mono); fill: var(--muted); }
+  #timeline .ax  { font: 400 9.5px var(--font-mono); fill: var(--dim); }
+  #timeline .ann { font: 400 9.5px var(--font-mono); fill: var(--dim); }
+  #timeline .wait { fill: var(--line2); }
+  #timeline .anim { fill: var(--muted); }
+  #timeline .tick { fill: var(--text); }
+  #timeline .grid { stroke: var(--line); stroke-width: 1; }
+</style>
+</head>
+<body>
+
+<!-- ======================================================================
+     MARKS — monochrome paths lifted from assets/logos/*.svg (the same paths
+     as the Python widgets' `glyph` / *_LOGO_PATH). marks.ts carries these.
+     ====================================================================== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="m-claude" viewBox="0 0 24 24"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></symbol>
+    <symbol id="m-codex" viewBox="0 0 24 24"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></symbol>
+    <symbol id="m-comfyui" viewBox="11 11 26 26"><path d="M31.0126 30.4797C31.0576 30.3275 31.0822 30.1671 31.0822 29.9985C31.0822 29.0649 30.3294 28.3081 29.4006 28.3081H21.8643C21.4593 28.3122 21.1279 27.9832 21.1279 27.576C21.1279 27.5019 21.1401 27.432 21.1565 27.3662L23.1858 20.259C23.2717 19.9465 23.5581 19.7161 23.8936 19.7161L31.4586 19.7079C33.0542 19.7079 34.4003 18.6262 34.8053 17.1497L35.9427 13.1889C35.9795 13.0491 36 12.8969 36 12.7447C36 11.8152 35.2513 11.0625 34.3266 11.0625H25.1742C23.5868 11.0625 22.2448 12.136 21.8316 13.5961L21.0624 16.2983C20.9724 16.6068 20.6901 16.833 20.3546 16.833H18.1575C16.5823 16.833 15.2526 17.8859 14.8271 19.3295L12.0614 29.0402C12.0205 29.1841 12 29.3404 12 29.4967C12 30.4304 12.7528 31.1871 13.6816 31.1871H15.8418C16.2468 31.1871 16.5782 31.5162 16.5782 31.9275C16.5782 31.9974 16.5701 32.0673 16.5496 32.1331L15.7845 34.8107C15.7477 34.9546 15.7232 35.1027 15.7232 35.2549C15.7232 36.1844 16.4719 36.937 17.3965 36.937L26.553 36.9288C28.1446 36.9288 29.4865 35.8512 29.8957 34.3829L31.0085 30.4838L31.0126 30.4797Z"/></symbol>
+    <symbol id="m-disk" viewBox="0 0 24 24"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></symbol>
+    <symbol id="m-docker" viewBox="0 0 24 24"><path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338.001-.676.03-1.01.087-.248-1.7-1.653-2.53-1.716-2.566l-.344-.199-.226.327c-.284.438-.49.922-.612 1.43-.23.97-.09 1.882.403 2.661-.595.332-1.55.413-1.744.42H.751a.751.751 0 00-.75.748 11.376 11.376 0 00.692 4.062c.545 1.428 1.355 2.48 2.41 3.124 1.18.723 3.1 1.137 5.275 1.137.983.003 1.963-.086 2.93-.266a12.248 12.248 0 003.823-1.389c.98-.567 1.86-1.288 2.61-2.136 1.252-1.418 1.998-2.997 2.553-4.4h.221c1.372 0 2.215-.549 2.68-1.009.309-.293.55-.65.707-1.046l.098-.288Z"/></symbol>
+    <symbol id="m-power" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+    <symbol id="m-tailscale" viewBox="0 0 24 24"><path d="M24 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm-9 9a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm0-9a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm6-6a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM3 24a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm18 .5a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM6 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm9-9a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm-3 2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM6 3a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM3 5.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/></symbol>
+  </defs>
+</svg>
+
+<main class="sheet">
+  <header class="sheet-head">
+    <h1>NoClickDock 2 — reference</h1>
+    <span class="tag">Cerveau tokens · Manrope + IBM Plex Mono · invented data</span>
+  </header>
+
+  <!-- =================================================================
+       01 · Docker open on a vertical rail at the left edge
+       ================================================================= -->
+  <section class="plate" id="plate-docker">
+    <div class="plate-head"><span class="n">01</span><h2>Docker — Now page, one action armed</h2>
+      <span class="meta">vertical rail · left edge · panel 440 · centred on the dial, clamped to the work area</span></div>
+    <div class="desk" id="desk-docker" style="height: 704px" data-surface="scene/docker-open">
+      <div data-rail="docker-scene"></div>
+
+      <div class="Panel" id="panel-docker" data-surface="panel/docker/now" style="--panel-w: 440px" role="dialog" aria-label="Docker">
+        <div class="Panel-head">
+          <div class="PanelHeader">
+            <svg class="PanelHeader-mark" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-docker"/></svg>
+            <span class="PanelHeader-title">Docker</span>
+            <span class="PanelHeader-state" data-tone="crit"><span class="Led" data-tone="crit"></span>2 need attention</span>
+          </div>
+          <div class="Panel-tabs">
+            <div class="Segmented" role="tablist">
+              <button class="Segmented-btn" role="tab" aria-selected="true">Now <span class="Led" data-tone="crit"></span><span class="Segmented-badge" data-tone="crit">2</span></button>
+              <button class="Segmented-btn" role="tab" aria-selected="false">Stopped <span class="Segmented-badge">5</span></button>
+              <button class="Segmented-btn" role="tab" aria-selected="false">System</button>
+            </div>
+          </div>
+        </div>
+        <div class="Panel-body">
+          <div class="Section" data-tone="crit"><span class="Section-title">Needs attention</span><span class="Section-meta">2</span></div>
+          <div class="Alert" data-tone="crit">
+            <span class="Led" data-tone="crit"></span>
+            <div class="Alert-line"><span class="Alert-title">ledger-api</span><span class="Alert-meta">unhealthy · up 3d</span></div>
+            <div class="Alert-actions"><button class="PillButton"><span class="PillButton-label">restart</span><span class="PillButton-confirm">restart?</span></button><button class="PillButton"><span class="PillButton-label">stop</span><span class="PillButton-confirm">stop?</span></button></div>
+            <div class="Alert-body is-mono">3 checks failed · GET /healthz 503 upstream db timeout after 5000 ms</div>
+          </div>
+          <div class="Alert" data-tone="warn">
+            <span class="Led" data-tone="warn"></span>
+            <div class="Alert-line"><span class="Alert-title">thumbnailer</span><span class="Alert-meta">exit 137 · OOM-killed</span></div>
+            <div class="Alert-actions"><button class="PillButton"><span class="PillButton-label">start</span><span class="PillButton-confirm">start?</span></button><button class="PillButton is-danger"><span class="PillButton-label">remove</span><span class="PillButton-confirm">remove?</span></button></div>
+            <div class="Alert-body is-mono">2h ago · Killed: memory cgroup limit 512M reached (rss 511.8M)</div>
+          </div>
+
+          <div class="Section"><span class="Section-title">Running</span><span class="Section-meta">4 stacks · 11 containers</span></div>
+          <div class="Row is-hover">
+            <span class="Led" data-tone="ok"></span>
+            <span class="Row-text"><span class="Row-name">shopfront</span><span class="Row-sub">web · api · worker · cache</span></span>
+            <span class="Row-value">4/4 · 1.2G · 6%</span>
+            <span class="Row-actions"><button class="PillButton"><span class="PillButton-label">restart</span><span class="PillButton-confirm">restart?</span></button><button class="PillButton is-armed"><span class="PillButton-label">stop</span><span class="PillButton-confirm">stop?</span></button></span>
+          </div>
+          <div class="Row">
+            <span class="Led" data-tone="ok"></span>
+            <span class="Row-text"><span class="Row-name">postgres</span><span class="Row-sub">postgres:16 · :5432 · healthy</span></span>
+            <span class="Row-value">12d · 384M</span>
+            <span class="Row-actions"><button class="PillButton"><span class="PillButton-label">restart</span><span class="PillButton-confirm">restart?</span></button><button class="PillButton"><span class="PillButton-label">stop</span><span class="PillButton-confirm">stop?</span></button></span>
+          </div>
+          <div class="Row">
+            <span class="Led" data-tone="ok"></span>
+            <span class="Row-text"><span class="Row-name">metrics</span><span class="Row-sub">prometheus · grafana</span></span>
+            <span class="Row-value">2/2 · 612M · 2%</span>
+            <span class="Row-actions"><button class="PillButton"><span class="PillButton-label">restart</span><span class="PillButton-confirm">restart?</span></button><button class="PillButton"><span class="PillButton-label">stop</span><span class="PillButton-confirm">stop?</span></button></span>
+          </div>
+          <div class="Row">
+            <span class="Led" data-tone="ok"></span>
+            <span class="Row-text"><span class="Row-name">redis</span><span class="Row-sub">redis:7 · :6379</span></span>
+            <span class="Row-value">12d · 41M</span>
+            <span class="Row-actions"><button class="PillButton"><span class="PillButton-label">restart</span><span class="PillButton-confirm">restart?</span></button><button class="PillButton"><span class="PillButton-label">stop</span><span class="PillButton-confirm">stop?</span></button></span>
+          </div>
+        </div>
+        <div class="PanelFooter"><span>engine 27.3 · compose 2.29</span><span class="fresh">12:41:07 · 20s</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       02 · Dial states, anatomy, rail variants
+       ================================================================= -->
+  <section class="plate" id="plate-rail">
+    <div class="plate-head"><span class="n">02</span><h2>Dial states and rail variants</h2>
+      <span class="meta">1× · the only looping motion is crit (breathe 2.4 s) and busy with no progress (spin 1.2 s)</span></div>
+    <div class="desk" style="height: auto">
+      <div class="spec" style="position: static">
+        <div class="spec-col">
+          <span class="spec-cap">States</span>
+          <div class="Rail" data-orient="h" data-density="normal" id="states-rail" style="position: static" data-surface="dial/states"></div>
+          <div class="states" id="states-caps"></div>
+        </div>
+        <div class="spec-col">
+          <span class="spec-cap">Anatomy · 4×</span>
+          <div class="anat">
+            <div class="anat-zoom" id="anat"></div>
+            <dl>
+              <dt>dial</dt><dd>40 · compact 32 · large 48</dd>
+              <dt>rim</dt><dd>4 · --s2 · --elev-1</dd>
+              <dt>recess</dt><dd>32 · --bg · inset 0 2 4 / .5</dd>
+              <dt>mark</dt><dd>18 box · --muted → --text on hover</dd>
+              <dt>lamp</dt><dd>6 · r 1 · at 45°, 1px inside the outline · dark gasket</dd>
+              <dt>ring</dt><dd>2 · outer edge of the rim</dd>
+              <dt>index</dt><dd>2 × 10 · --accent · on the rail wall, 4px off the rim</dd>
+              <dt>readout</dt><dd>Plex Mono 9.5 / 12 · --muted</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+      <div class="spec" style="position: static; padding-top: 0">
+        <div class="spec-col">
+          <span class="spec-cap">Vertical · normal</span>
+          <div data-rail="v-normal" style="position: static; display: inline-block" data-surface="dock/v-normal"></div>
+        </div>
+        <div class="spec-col">
+          <span class="spec-cap">Vertical · compact</span>
+          <div data-rail="v-compact" style="position: static; display: inline-block" data-surface="dock/v-compact"></div>
+        </div>
+        <div class="spec-col" style="gap: 12px">
+          <span class="spec-cap">Horizontal · normal</span>
+          <div data-rail="h-normal" style="position: static; display: inline-block" data-surface="dock/h-normal"></div>
+          <span class="spec-cap" style="margin-top: 20px">Horizontal · compact</span>
+          <div data-rail="h-compact" style="position: static; display: inline-block" data-surface="dock/h-compact"></div>
+          <span class="spec-cap" style="margin-top: 20px">Healthy dock · nothing moves, nothing is coloured but the lamps</span>
+          <div data-rail="h-healthy" style="position: static; display: inline-block" data-surface="dock/h-healthy"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       03 · Power open above a horizontal rail at the bottom edge
+       ================================================================= -->
+  <section class="plate" id="plate-power">
+    <div class="plate-head"><span class="n">03</span><h2>Power — wide, two columns</h2>
+      <span class="meta">horizontal rail · bottom edge · panel 720 opens upward</span></div>
+    <div class="desk" id="desk-power" style="height: 760px" data-surface="scene/power-open">
+      <div data-rail="power-scene"></div>
+
+      <div class="Panel" id="panel-power" data-surface="panel/power" style="--panel-w: 720px" role="dialog" aria-label="Power">
+        <div class="Panel-head">
+          <div class="PanelHeader">
+            <svg class="PanelHeader-mark" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-power"/></svg>
+            <span class="PanelHeader-title">Power</span>
+            <span class="PanelHeader-state" data-tone="warn"><span class="Led" data-tone="warn"></span>VRAM 94°</span>
+          </div>
+        </div>
+        <div class="Panel-body">
+          <div class="Alert" data-tone="warn" style="margin-top: 12px">
+            <span class="Led" data-tone="warn"></span>
+            <div class="Alert-line"><span class="Alert-title">GPU0 memory junction 94°</span><span class="Alert-meta">limit 95° · core 66°</span></div>
+            <div class="Alert-actions"></div>
+            <div class="Alert-body">Memory runs 28° hotter than the core under this load. Aged thermal pads are the usual cause.</div>
+          </div>
+          <div class="Split">
+          <div class="Panel-col">
+            <table class="Table" aria-label="Power draw">
+              <colgroup><col style="width: 44px"><col><col style="width: 72px"><col style="width: 40px"><col style="width: 44px"></colgroup>
+              <thead><tr><th style="text-align:left">Draw</th><th></th><th>W / cap</th><th>Core</th><th>VRAM</th></tr></thead>
+              <tbody>
+                <tr><td class="id">CPU</td><td class="name">Ryzen 9 7900</td><td><span class="v">88</span></td><td>52°</td><td></td></tr>
+                <tr><td class="id">GPU0</td><td class="name">RTX 4080 SUPER</td><td><span class="v">214</span><span class="cap">/320</span></td><td>66°</td><td data-tone="warn">94°</td></tr>
+                <tr><td class="id">GPU1</td><td class="name">RTX 3060</td><td><span class="v">21</span><span class="cap">/170</span></td><td>41°</td><td>46°</td></tr>
+                <tr><td class="id">Board</td><td class="name">B650 board</td><td><span class="cap">~</span><span class="v">30</span></td><td></td><td></td></tr>
+              </tbody>
+              <tbody>
+                <tr><td class="id">NVMe</td><td class="name">990 PRO 2 TB</td><td><span class="v">6</span></td><td>43°</td><td></td></tr>
+                <tr><td class="id">NVMe</td><td class="name">SN850X 1 TB</td><td><span class="v">4</span></td><td>38°</td><td></td></tr>
+                <tr><td class="id">HDD</td><td class="name">IronWolf 8 TB</td><td><span class="cap">~</span><span class="v">7</span></td><td>36°</td><td></td></tr>
+              </tbody>
+              <tbody>
+                <tr><td class="id">DP-0</td><td class="name">27″ 2560×1440</td><td><span class="cap">~32</span></td><td></td><td></td></tr>
+                <tr><td class="id">HDMI</td><td class="name">24″ 1920×1080</td><td><span class="cap">~18</span></td><td></td><td></td></tr>
+                <tr><td class="id">USB</td><td class="name">3 devices</td><td><span class="v">5</span></td><td></td><td></td></tr>
+              </tbody>
+            </table>
+            <div class="Note is-mono">~ estimated · displays draw from their own PSU</div>
+
+            <div class="Section"><span class="Section-title">Tariff</span><span class="Section-meta">time of use</span></div>
+            <div class="Row">
+              <span class="Row-text"><span class="Row-name">Peak until 22:00</span><span class="Row-sub">then 0.21 €/kWh off-peak until 07:00</span></span>
+              <span class="Row-value">0.34 €/kWh</span>
+            </div>
+
+          </div>
+          <div class="Panel-col">
+            <div class="Section" style="border-top:0; margin-top:0"><span class="Section-title">Cost</span><span class="Section-meta">this month · 187 kWh</span></div>
+            <div class="Donut" id="donut">
+              <div class="Donut-chart">
+                <svg viewBox="0 0 112 112" aria-hidden="true"></svg>
+                <div class="Donut-center"><span class="Donut-value">47</span><span class="Donut-unit">€ / mo</span></div>
+              </div>
+              <div class="Donut-legend"></div>
+            </div>
+
+            <div class="Section"><span class="Section-title">Today</span><span class="Section-meta">3.4 kWh · 3.82 € · avg 254 W</span></div>
+            <div class="Bars" id="bars" aria-label="Hourly kWh today"></div>
+
+            <div class="Section"><span class="Section-title">Utilisation</span><span class="Section-meta">2 GPUs</span></div>
+            <div class="MeterGroup">
+            <div class="Meter"><span class="Meter-label">CPU</span><div class="Seg" data-frac=".22"></div><span class="Meter-value">22%</span></div>
+            <div class="Meter"><span class="Meter-label">RAM</span><div class="Seg" data-frac=".41"></div><span class="Meter-value">26<span class="dim">/64G</span></span></div>
+            <div class="Meter"><span class="Meter-label">VRAM0</span><div class="Seg" data-frac=".70"></div><span class="Meter-value">11.2<span class="dim">/16G</span></span></div>
+            <div class="Meter"><span class="Meter-label">VRAM1</span><div class="Seg" data-frac=".08"></div><span class="Meter-value">0.9<span class="dim">/12G</span></span></div>
+            </div>
+          </div>
+          </div>
+        </div>
+        <div class="PanelFooter"><span>logging hourly · report rebuilt 12:00</span><span class="fresh">12:41:07 · 2s</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       04 · Toasts beside a dial · Claude open from a right-edge rail
+       ================================================================= -->
+  <section class="plate" id="plate-claude">
+    <div class="plate-head"><span class="n">04</span><h2>Toasts beside the dial · Claude open from a right-edge rail</h2>
+      <span class="meta">toasts: newest nearest the dial, max 3, 5 s, pointer passes through · panel 400</span></div>
+    <div class="row2">
+      <div class="desk" id="desk-toasts" style="height: 640px" data-surface="scene/toasts">
+        <div data-rail="toast-scene"></div>
+        <div class="ToastStack" id="toasts" data-surface="toast/stack">
+          <div class="Toast"><span class="Led" data-tone="crit"></span><span class="Toast-text">ledger-api is unhealthy</span></div>
+          <div class="Toast"><span class="Led" data-tone="warn"></span><span class="Toast-text">thumbnailer was OOM-killed, exit 137</span></div>
+          <div class="Toast is-leaving"><span class="Led" data-tone="ok"></span><span class="Toast-text">shopfront is running again</span></div>
+        </div>
+      </div>
+
+      <div class="desk" id="desk-claude" style="height: 640px" data-surface="scene/claude-open">
+        <div data-rail="claude-scene"></div>
+        <div class="Panel" id="panel-claude" data-surface="panel/claude" style="--panel-w: 400px" role="dialog" aria-label="Claude">
+          <div class="Panel-head">
+            <div class="PanelHeader">
+              <svg class="PanelHeader-mark" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-claude"/></svg>
+              <span class="PanelHeader-title">Claude</span>
+              <span class="PanelHeader-state" data-tone="warn"><span class="Led" data-tone="warn"></span>Console degraded</span>
+            </div>
+          </div>
+          <div class="Panel-body">
+            <div class="Section"><span class="Section-title">Limits</span><span class="Section-meta">Max plan</span></div>
+            <div class="LimitGroup">
+            <div class="Limit"><span class="Limit-label">Session</span><div class="Seg" data-frac=".46" data-tone="ok"></div><span class="Limit-pct">46%</span><span class="Limit-resets">resets 18:30</span></div>
+            <div class="Limit"><span class="Limit-label">Week</span><div class="Seg" data-frac=".72" data-tone="warn"></div><span class="Limit-pct" data-tone="warn">72%</span><span class="Limit-resets">resets Mon 09:00</span></div>
+            <div class="Limit"><span class="Limit-label">Opus week</span><div class="Seg" data-frac=".23" data-tone="ok"></div><span class="Limit-pct">23%</span><span class="Limit-resets">resets Mon 09:00</span></div>
+            </div>
+
+            <div class="Section"><span class="Section-title">Tokens</span><span class="Section-meta">this machine</span></div>
+            <div class="Stats">
+              <span class="Stats-item"><span class="Stats-key">1h</span><span class="Stats-value">22.8M</span></span>
+              <span class="Stats-item"><span class="Stats-key">24h</span><span class="Stats-value">196M</span></span>
+              <span class="Stats-item"><span class="Stats-key">7d</span><span class="Stats-value">1.4B</span></span>
+              <span class="Stats-item"><span class="Stats-key">sessions</span><span class="Stats-value">7</span></span>
+            </div>
+            <div class="Stats" style="padding-top:0">
+              <span class="Stats-item"><span class="Stats-key">opus</span><span class="Stats-value">640M</span></span>
+              <span class="Stats-item"><span class="Stats-key">sonnet</span><span class="Stats-value">410M</span></span>
+              <span class="Stats-item"><span class="Stats-key">haiku</span><span class="Stats-value">38M</span></span>
+            </div>
+
+            <div class="Section" data-tone="warn"><span class="Section-title">Services</span><span class="Section-meta">1 of 6 degraded</span></div>
+            <div class="Row">
+              <span class="Led" data-tone="warn"></span>
+              <span class="Row-text"><span class="Row-name">Console</span><span class="Row-sub">degraded performance</span></span>
+              <span class="Row-value" data-tone="warn">since 13:48</span>
+            </div>
+            <div class="Chips" style="--cols: 3">
+              <span class="Chip"><span class="Led" data-tone="ok"></span><span>claude.ai</span></span>
+              <span class="Chip"><span class="Led" data-tone="ok"></span><span>API</span></span>
+              <span class="Chip"><span class="Led" data-tone="ok"></span><span>Claude Code</span></span>
+              <span class="Chip"><span class="Led" data-tone="ok"></span><span>Cowork</span></span>
+              <span class="Chip"><span class="Led" data-tone="ok"></span><span>Gov Cloud</span></span>
+            </div>
+
+            <div class="Section" data-tone="warn"><span class="Section-title">Incident</span><span class="Section-meta">since 13:48</span></div>
+            <div class="Alert" data-tone="warn">
+              <span class="Led" data-tone="warn"></span>
+              <div class="Alert-line"><span class="Alert-title">Elevated errors on Console</span><span class="Alert-meta">monitoring</span></div>
+              <div class="Alert-actions"></div>
+              <div class="Alert-body">A fix has been applied and we are monitoring the results. Updated 14:02.</div>
+            </div>
+          </div>
+          <div class="PanelFooter"><span>status page · usage from local logs</span><span class="fresh">12:41:07 · 30s</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       05 · Timing, and the states a panel must show honestly
+       ================================================================= -->
+  <section class="plate" id="plate-states">
+    <div class="plate-head"><span class="n">05</span><h2>Hover choreography · empty, error and stale</h2>
+      <span class="meta">every duration is a token or a contract number · reduced motion: no slide, no fade, instant</span></div>
+    <div class="row5">
+      <div class="timing" data-surface="spec/choreography">
+        <div class="Section" style="border-top:0; margin-top:0"><span class="Section-title">Choreography</span><span class="Section-meta">ms from the pointer event</span></div>
+        <svg id="timeline" role="img" aria-label="Hover choreography timings"></svg>
+        <div class="Note is-mono">switch between dials while a panel is open: immediate, no close/open animation<br>toast: 5000 visible, 160 fade · arm window: 4000, survives snapshot refreshes</div>
+      </div>
+      <div class="desk" id="desk-honest" style="height: 364px">
+        <div class="Panel" style="--panel-w: 360px; left: 16px; top: 16px" role="dialog" aria-label="Tailscale" data-surface="panel/tailscale/empty">
+          <div class="Panel-head">
+            <div class="PanelHeader">
+              <svg class="PanelHeader-mark" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-tailscale"/></svg>
+              <span class="PanelHeader-title">Tailscale</span>
+              <span class="PanelHeader-state" data-tone="idle"><span class="Led" data-tone="idle"></span>not running</span>
+            </div>
+          </div>
+          <div class="Panel-body">
+            <p class="Empty">tailscaled is not running on this machine. Start it with <code>sudo systemctl start tailscaled</code></p>
+          </div>
+          <div class="PanelFooter"><span>no peers are watched until it runs</span><span class="fresh">12:41:07 · 30s</span></div>
+        </div>
+
+        <div class="Panel" style="--panel-w: 360px; left: 392px; top: 16px" role="dialog" aria-label="Disk" data-surface="panel/disk/collector-error">
+          <div class="Panel-head">
+            <div class="PanelHeader">
+              <svg class="PanelHeader-mark" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-disk"/></svg>
+              <span class="PanelHeader-title">Disk</span>
+              <span class="PanelHeader-state" data-tone="warn"><span class="Led" data-tone="warn"></span>/mnt/archive 88%</span>
+            </div>
+          </div>
+          <div class="Panel-body">
+            <div class="Section"><span class="Section-title">Filesystems</span><span class="Section-meta">3 · warn 85 · crit 92</span></div>
+            <div class="MeterGroup">
+              <div class="Meter"><span class="Meter-label is-mono">/</span><div class="Seg" data-frac=".71"></div><span class="Meter-value">268G <span class="dim">free</span></span></div>
+              <div class="Meter"><span class="Meter-label is-mono">/home</span><div class="Seg" data-frac=".64"></div><span class="Meter-value">655G <span class="dim">free</span></span></div>
+              <div class="Meter"><span class="Meter-label is-mono">/mnt/archive</span><div class="Seg" data-frac=".88" data-tone="warn"></div><span class="Meter-value" data-tone="warn">0.9T <span class="dim">free</span></span></div>
+            </div>
+            <div class="Section"><span class="Section-title">Docker</span><span class="Section-meta">reclaimable</span></div>
+            <div class="Row">
+              <span class="Row-text"><span class="Row-name">31G could be freed</span><span class="Row-sub">images 24G · build cache 7G · volumes never</span></span>
+              <span class="Row-value">of 92G</span>
+            </div>
+          </div>
+          <div class="PanelFooter" data-tone="crit"><span>df timed out after 10 s</span><span class="fresh">showing 12:38:02</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ==========================================================================
+   Rails are generated so the canonical Dial markup lives in one place.
+   The Svelte Dial renders exactly this:
+
+   <div class="Slot">
+     <button class="Dial" data-state="crit" data-side="right" aria-label="Docker: 2 need attention">
+       <span class="Dial-recess"></span>
+       <svg class="Dial-mark" data-mark="docker"><use href="#m-docker"/></svg>
+       <svg class="Dial-ring" viewBox="0 0 40 40"><circle cx="20" cy="20" r="19" pathLength="100"/></svg>
+       <span class="Led" data-tone="crit"></span>
+       <span class="Dial-index"></span>
+     </button>
+     <span class="Readout" data-tone="crit">12/14</span>
+   </div>
+   ========================================================================== */
+const TITLES = { claude: 'Claude', codex: 'Codex', comfyui: 'ComfyUI', disk: 'Disk', docker: 'Docker', power: 'Power', tailscale: 'Tailscale' };
+const ORDER = ['claude', 'codex', 'comfyui', 'disk', 'docker', 'power', 'tailscale'];
+/* one invented dock state, used by every scene */
+const DOCK = {
+  claude:    { state: 'warn', label: 'Console degraded', glance: '72%',   gtone: 'warn' },
+  codex:     { state: 'ok',   label: 'operational',      glance: '31%' },
+  comfyui:   { state: 'busy', label: 'generating',       glance: 'q 3', progress: 42 },
+  disk:      { state: 'ok',   label: '3 filesystems',    glance: '81%' },
+  docker:    { state: 'crit', label: '2 need attention', glance: '12/14', gtone: 'crit' },
+  power:     { state: 'warn', label: 'GPU0 VRAM 94°',    glance: '412W' },
+  tailscale: { state: 'idle', label: 'tailscaled is not running', glance: 'off', gtone: 'idle' },
+};
+const HEALTHY = {
+  claude: { state: 'ok', glance: '38%' }, codex: { state: 'ok', glance: '12%' }, comfyui: { state: 'ok', glance: 'idle' },
+  disk: { state: 'ok', glance: '64%' }, docker: { state: 'ok', glance: '14/14' }, power: { state: 'ok', glance: '186W' },
+  tailscale: { state: 'ok', glance: '4 up' },
+};
+const LED_TONE = { ok: 'ok', warn: 'warn', crit: 'crit', idle: 'idle', busy: 'busy' };
+
+function dialHTML(id, s, opts = {}) {
+  if (opts.stale) s = { ...s, lastState: s.state };                 /* stale: UI-owned, see A11 */
+  const ring = (!opts.stale && (s.state === 'crit' || s.state === 'busy'))
+    ? `<svg class="Dial-ring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="19" pathLength="100"/></svg>` : '';
+  const prog = s.state === 'busy' ? (s.progress == null ? ' data-progress="none"' : ` style="--progress:${s.progress}"`) : '';
+  const cls = ['Dial', opts.open ? 'is-open' : '', opts.hover ? 'is-hover' : '', opts.focus ? 'is-focus' : '', opts.stale ? 'is-stale' : ''].join(' ').replace(/ +/g, ' ').trim();
+  return `<div class="Slot${opts.stale ? ' is-stale' : ''}">
+    <button class="${cls}" data-state="${s.state}" data-side="${opts.side || 'right'}"${prog}
+      aria-label="${TITLES[id]}: ${s.label || s.state}">
+      <span class="Dial-recess"></span>
+      <svg class="Dial-mark" data-mark="${id}" aria-hidden="true"><use href="#m-${id}"/></svg>
+      ${ring}
+      <span class="Led" data-tone="${opts.stale ? 'idle' : LED_TONE[s.state]}"></span>
+      <span class="Dial-index"></span>
+    </button>
+    <span class="Readout"${s.gtone ? ` data-tone="${s.gtone}"` : ''}>${s.glance}</span>
+  </div>`;
+}
+function railHTML({ orient = 'v', density = 'normal', data = DOCK, open = null, side = 'right', ids = ORDER }) {
+  return `<nav class="Rail" data-orient="${orient}" data-density="${density}" aria-label="NoClickDock">
+    <div class="Rail-grip" aria-hidden="true"><i></i><i></i><i></i></div>
+    ${ids.map(id => dialHTML(id, data[id], { open: id === open, side })).join('')}
+  </nav>`;
+}
+const mount = (key, html) => { const el = document.querySelector(`[data-rail="${key}"]`); el.innerHTML = html; return el; };
+
+mount('docker-scene', railHTML({ open: 'docker', side: 'right' }));
+mount('power-scene',  railHTML({ orient: 'h', open: 'power', side: 'top' }));
+mount('toast-scene',  railHTML({}));
+mount('claude-scene', railHTML({ open: 'claude', side: 'left' }));
+mount('v-normal',  railHTML({ open: 'power' }));
+mount('v-compact', railHTML({ density: 'compact', open: 'power' }));
+mount('h-normal',  railHTML({ orient: 'h', open: 'power', side: 'top' }));
+mount('h-compact', railHTML({ orient: 'h', density: 'compact', open: 'power', side: 'top' }));
+mount('h-healthy', railHTML({ orient: 'h', data: HEALTHY }));
+
+/* state specimens: one per state, captioned */
+const SPEC = [
+  ['ok',            'disk',      { state: 'ok',   glance: '81%' }, {}],
+  ['warn',          'claude',    { state: 'warn', glance: '72%', gtone: 'warn' }, {}],
+  ['crit',          'docker',    { state: 'crit', glance: '12/14', gtone: 'crit' }, {}],
+  ['busy',          'comfyui',   { state: 'busy', glance: 'q 3', progress: 42 }, {}],
+  ['spin',          'comfyui',   { state: 'busy', glance: 'load' }, {}],
+  ['idle',          'tailscale', { state: 'idle', glance: 'off', gtone: 'idle' }, {}],
+  ['hover',         'codex',     { state: 'ok',   glance: '31%' }, { hover: true }],
+  ['open',          'power',     { state: 'ok',   glance: '412W' }, { open: true, side: 'top' }],
+  ['focus',         'claude',    { state: 'ok',   glance: '38%' }, { focus: true }],
+  ['stale',         'docker',    { state: 'crit', glance: '12/14', gtone: 'crit' }, { stale: true }],
+];
+document.getElementById('states-rail').innerHTML =
+  `<div class="Rail-grip" aria-hidden="true"><i></i><i></i><i></i></div>` +
+  SPEC.map(([, id, s, o]) => dialHTML(id, { label: s.state, ...s }, o)).join('');
+/* caption each specimen under its own slot, measured from the rendered rail */
+function captionStates() {
+  const rail = document.getElementById('states-rail');
+  const caps = document.getElementById('states-caps');
+  const r0 = rail.getBoundingClientRect();
+  caps.style.position = 'relative'; caps.style.height = '12px'; caps.style.width = r0.width + 'px';
+  caps.innerHTML = '';
+  rail.querySelectorAll('.Slot').forEach((slot, i) => {
+    const r = slot.getBoundingClientRect();
+    const c = document.createElement('span');
+    c.className = 'spec-cap'; c.textContent = SPEC[i][0];
+    c.style.cssText = `position:absolute; left:${r.left - r0.left + r.width / 2}px; transform:translateX(-50%); white-space:nowrap; letter-spacing:.12em`;
+    caps.appendChild(c);
+  });
+}
+
+/* anatomy: one dial, crit + open, magnified 4× */
+document.getElementById('anat').innerHTML =
+  dialHTML('docker', { state: 'ok', glance: '', label: 'ok' }, { open: true, side: 'right' }).replace('<span class="Readout"', '<span hidden class="Readout"');
+
+/* ---- segmented level meters: 3px segments, 2px gap, fill the column ---- */
+function drawSegs() {
+  /* SVG with integer rects and crispEdges: a row of spans at a fractional x
+     snaps each 3px segment to 3 or 4 device px and the meter looks uneven. */
+  document.querySelectorAll('.Seg[data-frac]').forEach(el => {
+    const w = Math.floor(el.clientWidth), n = Math.floor((w + 2) / 5), lit = Math.round(+el.dataset.frac * n);
+    const rects = Array.from({ length: n }, (_, i) => `<rect x="${i * 5}" y="0" width="3" height="10"${i < lit ? ' class="on"' : ''}/>`).join('');
+    el.innerHTML = `<svg width="${n * 5 - 2}" height="10" viewBox="0 0 ${n * 5 - 2} 10" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
+  });
+}
+
+/* ---- donut: monochrome ramp, largest first, 1px --s1 gaps ---- */
+function drawDonut() {
+  const segs = [ ['GPUs', 23], ['CPU', 16], ['Board', 5], ['Drives', 2], ['USB', 1] ];
+  const ramp = ['var(--text)', 'var(--muted)', 'var(--dim)', 'var(--faint)', 'var(--line2)'];
+  const total = segs.reduce((a, [, v]) => a + v, 0);
+  const r = 51, C = 2 * Math.PI * r, gap = 1.5;
+  let off = 0, arcs = '';
+  segs.forEach(([, v], i) => {
+    const len = v / total * C;
+    arcs += `<circle cx="56" cy="56" r="${r}" stroke="${ramp[i]}" stroke-dasharray="${Math.max(len - gap, .5)} ${C}" stroke-dashoffset="${-off}"/>`;
+    off += len;
+  });
+  document.querySelector('#donut svg').innerHTML = arcs;
+  document.querySelector('#donut .Donut-legend').innerHTML = segs.map(([k, v], i) =>
+    `<div class="Donut-row${i > 1 ? ' is-minor' : ''}"><span class="Donut-swatch" style="background:${ramp[i]}"></span><span class="Donut-label">${k}</span><span class="Donut-amt">${v} €</span></div>`).join('');
+}
+
+/* ---- 24 h bars: 3px bars, 2px gap; now = --text; future hours are floor stubs ---- */
+function drawBars() {
+  const kwh = [.09,.08,.08,.07,.08,.08,.09,.12,.16,.18,.21,.24,.26,.0,.0,.0,.0,.0,.0,.0,.0,.0,.0,.0];
+  const host = document.getElementById('bars');
+  const g = 2, bw = Math.floor((host.clientWidth - 23 * g) / 24), W = 24 * bw + 23 * g, now = 12, H = 40, max = .3;
+  let rects = '';
+  kwh.forEach((v, i) => {
+    const x = i * (bw + g);
+    if (i > now) { rects += `<rect class="fut" x="${x.toFixed(2)}" y="${H - 1}" width="${bw.toFixed(2)}" height="1"/>`; return; }
+    const h = Math.max(2, Math.round(v / max * H));
+    rects += `<rect class="${i === now ? 'now' : 'h'}" x="${x.toFixed(2)}" y="${H - h}" width="${bw.toFixed(2)}" height="${h}"/>`;
+  });
+  const ticks = [0, 6, 12, 18].map(hh => `<span style="left:${(hh * (bw + g)).toFixed(1)}px">${String(hh).padStart(2, '0')}</span>`).join('') + `<span style="left:auto; right:0">24</span>`;
+  document.getElementById('bars').innerHTML =
+    `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" shape-rendering="crispEdges" role="img" aria-label="kWh per hour, 00 to now"><title>kWh per hour today</title>${rects}</svg>
+     <div class="Bars-axis" style="width:${W}px">${ticks}</div>`;
+}
+
+/* ---- placement: perpendicular to the rail, 8px off it, centred on the open
+        dial, clamped to the work area (here: the desk, 8px margin) ---- */
+function place(desk, rail, panelOrStack, dialId, side, anchorMode = 'center') {
+  const d = desk.getBoundingClientRect();
+  const dial = rail.querySelector(`.Dial-mark[data-mark="${dialId}"]`).closest('.Dial').getBoundingClientRect();
+  const rr = rail.querySelector('.Rail').getBoundingClientRect();
+  const p = panelOrStack.getBoundingClientRect();
+  const M = 8;
+  let x, y;
+  if (side === 'right' || side === 'left') {
+    x = side === 'right' ? rr.right + 8 - d.left : rr.left - 8 - p.width - d.left;
+    y = (anchorMode === 'center' ? dial.top + dial.height / 2 - p.height / 2 : dial.top + dial.height / 2 - (panelOrStack.firstElementChild.getBoundingClientRect().height / 2)) - d.top;
+    y = Math.max(M, Math.min(y, d.height - p.height - M));
+  } else {
+    y = side === 'top' ? rr.top - 8 - p.height - d.top : rr.bottom + 8 - d.top;
+    x = dial.left + dial.width / 2 - p.width / 2 - d.left;
+    x = Math.max(M, Math.min(x, d.width - p.width - M));
+  }
+  panelOrStack.style.left = x + 'px'; panelOrStack.style.top = y + 'px';
+}
+function layout() {
+  const q = s => document.querySelector(s);
+  const vr = (el, left, top) => { el.style.left = left + 'px'; el.style.top = top + 'px'; };
+  // docker scene: rail 16px off the left edge
+  const dr = q('[data-rail="docker-scene"]'); vr(dr, 16, 108);
+  place(q('#desk-docker'), dr, q('#panel-docker'), 'docker', 'right');
+  // power scene: rail centred on the bottom edge
+  const pr = q('[data-rail="power-scene"]'); const pw = pr.firstElementChild.getBoundingClientRect().width;
+  vr(pr, (q('#desk-power').clientWidth - pw) / 2 + 180, q('#desk-power').clientHeight - 16 - pr.firstElementChild.getBoundingClientRect().height);
+  place(q('#desk-power'), pr, q('#panel-power'), 'power', 'top');
+  // toasts: left-edge rail, stack beside the docker dial, newest on the dial's centre line
+  const tr = q('[data-rail="toast-scene"]'); vr(tr, 16, 64);
+  place(q('#desk-toasts'), tr, q('#toasts'), 'docker', 'right', 'first');
+  // claude: right-edge rail
+  const cr = q('[data-rail="claude-scene"]'); vr(cr, q('#desk-claude').clientWidth - 16 - cr.firstElementChild.getBoundingClientRect().width, 64);
+  place(q('#desk-claude'), cr, q('#panel-claude'), 'claude', 'left');
+}
+
+/* ---- choreography timeline: drawn, to scale ---- */
+function drawTimeline() {
+  const svg = document.getElementById('timeline');
+  const W = svg.parentElement.clientWidth - 24, L = 96, R = 8, T = 18, LANE = 32, MAX = 600;
+  const x = ms => L + ms / MAX * (W - L - R);
+  const lanes = [
+    ['open',     [['wait', 0, 120, 'dwell 120'], ['anim', 120, 260, 'fade + 3px slide 140']]],
+    ['close',    [['wait', 0, 280, 'grace 280'], ['anim', 280, 380, 'fade 100']]],
+    ['re-enter', [['wait', 0, 170, 'grace'], ['tick', 170, 170, 're-entry cancels the close']]],
+    ['tab',      [['wait', 0, 180, 'hover 180'], ['tick', 180, 180, 'page switches, instant']]],
+  ];
+  let g = '';
+  for (let ms = 0; ms <= MAX; ms += 100) g += `<line class="grid" x1="${x(ms)}" x2="${x(ms)}" y1="${T - 4}" y2="${T}"/><text class="ax" x="${x(ms)}" y="10" text-anchor="middle">${ms}</text>`;
+  g += `<line class="grid" x1="${x(0)}" x2="${x(MAX)}" y1="${T}" y2="${T}"/>`;
+  lanes.forEach(([name, segs], i) => {
+    const y = T + i * LANE + 11;
+    g += `<text class="lab" x="0" y="${y + 9}">${name}</text><line class="grid" x1="${x(0)}" x2="${x(MAX)}" y1="${y + 5}" y2="${y + 5}"/>`;
+    segs.forEach(([k, a, b, note]) => {
+      if (k === 'tick') { g += `<rect class="tick" x="${x(a) - 1}" y="${y - 3}" width="2" height="16"/><text class="ann" x="${x(a) + 6}" y="${y + 24}">${note}</text>`; return; }
+      g += `<rect class="${k}" x="${x(a)}" y="${y}" width="${x(b) - x(a) - 1}" height="10"/>`;
+      g += `<text class="ann" x="${x(a) + 2}" y="${y + 24}">${note}</text>`;
+    });
+  });
+  svg.setAttribute('viewBox', `0 0 ${W} ${T + lanes.length * LANE + 18}`);
+  svg.setAttribute('height', T + lanes.length * LANE + 18);
+  svg.innerHTML = g;
+}
+
+document.fonts.ready.then(() => { drawTimeline(); drawSegs(); drawDonut(); drawBars(); captionStates(); layout(); document.body.dataset.ready = '1'; document.body.setAttribute('data-gallery-ready', ''); });
+</script>
+</body>
+</html>
