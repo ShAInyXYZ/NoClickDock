@@ -29,10 +29,18 @@ func Run(ctx context.Context, timeout time.Duration, name string, args ...string
 // Output is Run keeping stderr apart: `docker logs` replays a container's
 // stderr on its own, and a failed command's last word is often there.
 func Output(ctx context.Context, timeout time.Duration, name string, args ...string) (stdout, stderr string, err error) {
+	return OutputIn(ctx, "", timeout, name, args...)
+}
+
+// OutputIn is Output run in a directory of our choosing ("" inherits the
+// core's): a CLI that reads its working directory's project settings is
+// given the user's home, never wherever the core was started.
+func OutputIn(ctx context.Context, dir string, timeout time.Duration, name string, args ...string) (stdout, stderr string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = dir
 	prepare(cmd)
 	// A grandchild holding the pipes open must not outlive the timeout.
 	cmd.WaitDelay = time.Second

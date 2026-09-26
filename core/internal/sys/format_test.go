@@ -82,3 +82,20 @@ func TestClock(t *testing.T) {
 		}
 	}
 }
+
+func TestFmtTokensAndAge(t *testing.T) {
+	for n, want := range map[int64]string{912: "912", 348_000: "348K", 1_234_567: "1.2M", 2_300_000_000: "2.3B", 0: "0"} {
+		if got := FmtTokens(n); got != want {
+			t.Errorf("FmtTokens(%d) = %q, want %q", n, got, want)
+		}
+	}
+	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	for d, want := range map[time.Duration]string{20 * time.Second: "now", 12 * time.Minute: "12m", 3 * time.Hour: "3h", 50 * time.Hour: "2d"} {
+		if got := Age(now.Add(-d), now); got != want {
+			t.Errorf("Age(-%s) = %q, want %q", d, got, want)
+		}
+	}
+	if Age(time.Time{}, now) != "" {
+		t.Error("unknown is empty")
+	}
+}

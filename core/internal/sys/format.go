@@ -42,6 +42,37 @@ func FmtCount(n int64) string {
 	return fmt.Sprint(n)
 }
 
+// FmtTokens is a compact token count: 1.2B, 1.2M, 348K, 912.
+func FmtTokens(n int64) string {
+	switch f := float64(n); {
+	case n >= 1_000_000_000:
+		return fmt.Sprintf("%.1fB", f/1e9)
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", f/1e6)
+	case n >= 1_000:
+		return fmt.Sprintf("%.0fK", f/1e3)
+	}
+	return fmt.Sprint(n)
+}
+
+// Age is how long ago, with no "ago", for a meta beside a status word:
+// "now", "12m", "3h", "2d". The zero time is unknown: "".
+func Age(t, now time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	switch d := now.Sub(t); {
+	case d < time.Minute:
+		return "now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
+}
+
 // TimeAgo is a short humanised age: "just now", "3m ago", "2h ago", "5d ago".
 func TimeAgo(t, now time.Time) string {
 	if t.IsZero() {
