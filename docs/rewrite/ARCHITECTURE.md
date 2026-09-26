@@ -99,7 +99,7 @@ tones to tokens.
 | `note` | `text`, `tone?`, `mono?` | `Note` |
 | `table` | `columns:[{label,align,mono}]`, `rows:[{cells[],tone?,led?,sub?,group?,meta?}]` — a cell is `"text"` or `{"text","tone"}`; a row with `group` opens a row group (its title in the printed-strip style, `meta` on the right) so one table can hold several aligned groups | Power's draw table |
 | `donut` | `segments:[{label,value,display}]`, `center`, `unit` | Power's cost split |
-| `bars` | `values[]`, `labels?`, `highlight?`, `unit?` | Power's 24 h sparkline |
+| `bars` | `values[]` (a value may be `null` = not measured), `labels?`, `highlight?`, `unit?` | Power's 24 h sparkline |
 | `split` | `columns:[[Block…],[Block…]]` | Power's two-column layout |
 | `empty` | `text`, `commands?:[string]` — one sentence, commands as mono chips | empty states (DESIGN.md) |
 
@@ -137,6 +137,9 @@ Snapshots are emitted **every poll**, changed or not (as a lightweight
 | M2-b | Toasts show one widget's stack at a time, beside its dial; another widget's toasts queue. |
 | M2-c | The widget id `ncd` is reserved for the shell's own core-down dial. |
 | M2-d | Snapshot writers never repeat an item in two places on one page (e.g. a component already under *Degraded* is not also a chip). |
+| M5-a | `busy` survives a `warn` signal (a generation filling VRAM keeps its progress arc); only `crit` overrides `busy`. |
+| M5-b | Power temperature tones start at the alert thresholds — GPU core warn ≥ 80 °C, CPU ≥ 85 °C, VRAM ≥ 90 °C — so under A20 cell, lamp, label and toast agree. |
+| M5-c | Config gains `widgets.comfyui` (endpoint) and `widgets.power` (tariff, estimates, poll/log intervals); the power CSV goes to `~/Documents/PM-Log` only from a plain production `ncd-core`, never from `--dev`, `--once`, `--config` or a named `--instance`. |
 
 ## Repository layout
 
