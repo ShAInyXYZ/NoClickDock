@@ -20,7 +20,7 @@
   const pages = $state<Record<string, string>>({});
   const snapshot = $derived(
     widget === CORE_DIAL
-      ? coreDown(core.linkError ?? "ncd-core is not answering", core.now)
+      ? coreDown(core.linkError ?? "ncd-core is not answering")
       : widget
         ? core.snapshots[widget]
         : undefined,

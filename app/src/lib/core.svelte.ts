@@ -140,7 +140,7 @@ export const CORE_DIAL = "ncd";
  * own on the rail, so the failure is on screen rather than an empty,
  * invisible app. It says only what is true.
  */
-export function coreDown(error: string, now: number): WidgetSnapshot {
+export function coreDown(error: string): WidgetSnapshot {
   return {
     id: CORE_DIAL,
     title: "NoClickDock",
@@ -148,7 +148,7 @@ export function coreDown(error: string, now: number): WidgetSnapshot {
     state: "idle",
     stateLabel: "core not running",
     glance: { text: "off", tone: "idle" },
-    updatedAt: new Date(now).toISOString(),
+    updatedAt: "", // nothing measured: the footer shows the error alone
     pollSecs: 0,
     error,
     pages: [
@@ -158,7 +158,7 @@ export function coreDown(error: string, now: number): WidgetSnapshot {
         blocks: [
           {
             kind: "empty",
-            text: `ncd-core is not answering, so nothing here can be measured: ${error}. NoClickDock keeps trying to start it.`,
+            text: `Nothing here can be measured: ${error}. NoClickDock keeps trying to start it.`,
           },
         ],
       },

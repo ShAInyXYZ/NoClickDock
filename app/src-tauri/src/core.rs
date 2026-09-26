@@ -26,6 +26,8 @@ pub struct Core {
     quitting: AtomicBool,
     cache: Mutex<Cache>,
     link: Mutex<Link>,
+    /// The core's last line on stderr: usually the reason it stopped.
+    last_err: Mutex<Option<String>>,
     /// Counts starts, so a watchdog knows which start it is watching.
     starts: AtomicU64,
     actions: AtomicU64,
@@ -56,6 +58,7 @@ impl Core {
             quitting: AtomicBool::new(false),
             cache: Mutex::new(Cache::default()),
             link: Mutex::new(Link::default()),
+            last_err: Mutex::new(None),
             starts: AtomicU64::new(0),
             actions: AtomicU64::new(0),
         }
@@ -105,21 +108,34 @@ pub fn supervise(app: AppHandle) {
             if let Ok(mut slot) = app.state::<Core>().child.lock() {
                 *slot = Some(child);
             }
+            if let Ok(mut last) = app.state::<Core>().last_err.lock() {
+                last.take();
+            }
             watch_hello(&app);
             let started = Instant::now();
             while let Some(event) = events.recv().await {
                 match event {
                     // One event per line, the newline included.
                     CommandEvent::Stdout(bytes) => relay(&app, String::from_utf8_lossy(&bytes).trim_end()),
-                    CommandEvent::Stderr(bytes) => eprintln!("{}", String::from_utf8_lossy(&bytes).trim_end()),
+                    CommandEvent::Stderr(bytes) => {
+                        let line = String::from_utf8_lossy(&bytes).trim_end().to_owned();
+                        eprintln!("{line}");
+                        if let Ok(mut last) = app.state::<Core>().last_err.lock() {
+                            let reason = line.strip_prefix("ncd-core: ").unwrap_or(&line);
+                            *last = Some(reason.chars().take(160).collect());
+                        }
+                    }
                     CommandEvent::Terminated(status) => {
                         eprintln!("ncd: ncd-core exited (code {:?}, signal {:?})", status.code, status.signal);
                         if !app.state::<Core>().quitting.load(Ordering::Acquire) {
-                            let why = match (status.code, status.signal) {
+                            let mut why = match (status.code, status.signal) {
                                 (Some(code), _) => format!("ncd-core stopped with exit code {code}"),
                                 (_, Some(signal)) => format!("ncd-core was stopped by signal {signal}"),
                                 _ => "ncd-core stopped".to_owned(),
                             };
+                            if let Some(reason) = app.state::<Core>().last_err.lock().ok().and_then(|mut l| l.take()) {
+                                why = format!("{why} ({reason})");
+                            }
                             set_link(&app, false, Some(why));
                         }
                         break;

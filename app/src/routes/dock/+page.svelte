@@ -15,7 +15,7 @@
 
   // While the core is not answering, the rail still stands, with a dial of
   // its own that says so — never an invisible app.
-  const down = $derived(core.linkError ? coreDown(core.linkError, core.now) : null);
+  const down = $derived(core.linkError ? coreDown(core.linkError) : null);
   const dials = $derived(down ? [down, ...core.widgets] : core.widgets);
   const dock = $derived(core.config?.dock);
 
