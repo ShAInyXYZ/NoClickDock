@@ -113,7 +113,9 @@ A floating capsule, vertical by default, horizontal on request.
 - Pointer enters a dial → panel opens after **120 ms** dwell (sweeping across
   the rail does not flash panels).
 - While any panel is open, entering another dial switches the panel
-  **immediately**, no close/open animation — the menu-bar model.
+  **immediately**, no close/open animation — the menu-bar model. Acceptance:
+  no frame ever shows an empty panel or one widget's content in another's
+  geometry; pointer-to-drawn median ≤ 50 ms, worst ≤ 70 ms on Mutter.
 - Leaving the dial and the panel → panel closes after **280 ms** grace;
   re-entering either cancels it.
 - The panel opens perpendicular to the rail, on the side with more room,
