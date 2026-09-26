@@ -36,7 +36,7 @@ menu item becomes "disable in Settings".
 | aspect | P | N |
 |---|---|---|
 | orientation | `vertical` / `horizontal`, radio items in the rail's right-click menu; saved in `bar.conf` | same two values; set in Settings → Dock (and in the rail's right-click menu for parity) |
-| density | `s`/`m`/`l` = "Compact"/"Cozy"/"Roomy": gap 0/4/10 px, end pad 10/12/14, cross pad 4/5/7; dots are always 44 px | DESIGN.md: dial 32 / 40 / 48 CSS px; compact also hides readouts. Map legacy `s→compact`, `m→default`, `l→large`. |
+| density | `s`/`m`/`l` = "Compact"/"Cozy"/"Roomy": gap 0/4/10 px, end pad 10/12/14, cross pad 4/5/7; dots are always 44 px | DESIGN.md: dial 32 / 40 / 48 CSS px; compact also hides readouts. Map legacy `s→compact`, `m→normal`, `l→large`. |
 | grip | leading 14 px, three dim dots | DESIGN.md grip (14 px, three `--faint` dots) |
 | layout | length = `2·pad_end + GRIP + n·44 + (n−1)·gap`; cross = `44 + 2·pad_cross` | computed by the page in CSS px; Rust sizes the window with `fit()` to `css × ui_scale` |
 | order | alphabetical by widget name (the dots sort their registration files): claude, codex, comfyui, disk, docker, power, tailscale | `order` in the snapshot; defaults 10,20,…,70 in that alphabetical order; reorderable in Settings |
@@ -59,7 +59,7 @@ N `config.json → dock`:
 ```jsonc
 "dock": {
   "orientation": "vertical",            // vertical | horizontal
-  "density": "default",                 // compact | default | large
+  "density": "normal",                  // compact | normal | large
   "readouts": true,                     // glance text under dials (forced off in compact)
   "position": {"monitor": "DP-2", "edge": "left", "along": 0.5, "x": 60, "y": 60}
 }

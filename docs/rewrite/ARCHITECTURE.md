@@ -91,7 +91,7 @@ tones to tokens.
 |---|---|---|
 | `section` | `title`, `meta?`, `tone?` | `Section` |
 | `row` | `name`, `sub?`, `value?`, `tone?`, `led?`, `mono?`, `actions?` | `Row` |
-| `meter` | `label`, `frac`, `value?`, `note?`, `tone?` | `Meter` |
+| `meter` | `label`, `frac`, `value?`, `note?`, `tone?`, `mono?` (label in Plex Mono, e.g. mount paths) | `Meter` |
 | `limit` | `label`, `pct`, `resets?`, `tone?` | `Limit` |
 | `stats` | `items:[{key,value,tone?}]` — one inline mono line, not tiles | `Tiles` |
 | `chips` | `items:[{label,tone,value?}]`, `columns` | `Chips`, `Grid` |
