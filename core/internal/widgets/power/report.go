@@ -1,7 +1,8 @@
 package power
 
 import (
-	_ "embed"
+	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -24,7 +25,27 @@ import (
 //go:embed report_template.html
 var reportTemplate string
 
-var reportPage = template.Must(template.New("report").Parse(reportTemplate))
+// The page's fonts travel inside it, as data URLs: a report opened from
+// Documents never falls back to whatever the system has (design M5 r1).
+//
+//go:embed fonts/*.woff2
+var reportFonts embed.FS
+
+var reportPage = template.Must(template.New("report").Parse(withFonts(reportTemplate)))
+
+// withFonts turns each url("fonts/<file>") into a data: URL of that file.
+func withFonts(page string) string {
+	files, _ := reportFonts.ReadDir("fonts")
+	for _, f := range files {
+		data, err := reportFonts.ReadFile("fonts/" + f.Name())
+		if err != nil {
+			continue
+		}
+		page = strings.ReplaceAll(page, `url("fonts/`+f.Name()+`")`,
+			`url("data:font/woff2;base64,`+base64.StdEncoding.EncodeToString(data)+`")`)
+	}
+	return page
+}
 
 const (
 	gapHours   = 3 // a hole in the log longer than this is a gap

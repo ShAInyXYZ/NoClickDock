@@ -5,74 +5,151 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NoClickDock — Power report</title>
 <style>
-  /* Emberdeck: warm charcoal, one accent for signal, hairlines for depth. */
-  :root{
-    --bg:#0e0d0b; --s2:#161411; --s3:#1e1b17; --line:#2b2722;
-    --fg:#efece6; --dim:#918b80; --mute:#6f6a62;
-    --amber:#e8873a; --ok:#6da46a; --warn:#d9a53d; --crit:#cf5347;
-    --cpu:#7b9bd1; --gpu:#6da46a; --other:#6f6a62;
-    --mono:"JetBrains Mono","DejaVu Sans Mono",monospace;
-    --sans:"Inter","DejaVu Sans",sans-serif;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html{color-scheme:dark}
-  body{font-family:var(--sans);background:var(--bg);color:var(--fg);line-height:1.5;padding:40px 20px}
-  .page{max-width:1040px;margin:0 auto}
-  header{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:28px;
-         display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap}
-  header h1{font-size:22px;font-weight:600;letter-spacing:.2px}
-  header .k{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.6px;text-transform:uppercase;margin-bottom:6px}
-  header .meta{font-family:var(--mono);font-size:12px;color:var(--dim);text-align:right;line-height:1.7}
-  h2{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--dim);margin:0 0 4px}
-  .sub{font-size:13.5px;color:var(--dim);margin-bottom:14px;max-width:78ch}
-  .sub b{color:var(--fg);font-weight:500}
-  section{margin-bottom:34px}
-  .tiles{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
-  .tile{background:var(--s2);border:1px solid var(--line);padding:12px 14px}
-  .tile .l{font-family:var(--mono);font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim)}
-  .tile .v{font-family:var(--mono);font-size:22px;font-weight:500;margin-top:4px}
-  .tile .n{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:2px}
-  .tile .v.amber{color:var(--amber)}
-  .card{background:var(--s2);border:1px solid var(--line);padding:18px 20px}
-  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  @media (max-width:820px){.row2{grid-template-columns:1fr}}
-  svg{display:block;width:100%;height:auto;font-family:var(--mono)}
-  .ax{fill:var(--dim);font-size:10px}
-  .gl{stroke:var(--line);stroke-width:1}
-  .legend{display:flex;gap:16px;font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:8px;flex-wrap:wrap}
-  .legend span{display:inline-flex;align-items:center;gap:6px}
-  .sw{width:10px;height:10px;display:inline-block}
-  table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12.5px}
-  th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line)}
-  th:first-child,td:first-child{text-align:left}
-  th{font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);font-weight:500}
-  tr:last-child td{border-bottom:none}
-  td.dim{color:var(--dim)}
-  .findings{border-left:2px solid var(--amber);background:var(--s2);padding:16px 20px;font-size:14.5px}
-  .findings p{margin-bottom:8px}
-  .findings p:last-child{margin-bottom:0}
-  .findings b{font-weight:500}
-  .note{font-size:12.5px;color:var(--dim);line-height:1.6}
-  .gap-list{font-family:var(--mono);font-size:11.5px;color:var(--dim);columns:2;column-gap:24px}
-  .gap-list div{break-inside:avoid;padding:2px 0}
-  #tip{position:fixed;pointer-events:none;background:var(--s3);border:1px solid var(--line);color:var(--fg);
-       font-family:var(--mono);font-size:11px;padding:5px 8px;opacity:0;transition:opacity .08s;z-index:10;white-space:nowrap}
-  footer{font-family:var(--mono);font-size:11px;color:var(--mute);margin:30px 0 10px;border-top:1px solid var(--line);padding-top:14px}
-  @media print{body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}section,.tile{break-inside:avoid}}
+/* NoClickDock power report — Cerveau identity. Drop-in for the <style> block
+   of core/internal/widgets/power/report_template.html (see pm-page-edits.md).
+   Same class names as the template; the markup changes are listed there.
+
+   Rules: the Cerveau surfaces and inks; Manrope for prose, IBM Plex Mono for
+   figures; sections on the page itself, separated by hairlines, never boxed;
+   charts on a monochrome ramp; a tone only where something needs attention. */
+
+/* Fonts: in the report both src URLs become data: URLs (base64 of the woff2
+   files embedded in the Go binary), so the page never falls back to DejaVu.
+   Files: app/static/fonts/manrope-latin-wght-normal.woff2 and
+   docs/rewrite/design/fonts/ibm-plex-mono-latin-{400,500}-normal.woff2. */
+@font-face {
+  font-family: "Manrope Variable"; font-style: normal; font-weight: 200 800; font-display: block;
+  src: url("fonts/manrope-latin-wght-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: block;
+  src: url("fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: block;
+  src: url("fonts/ibm-plex-mono-latin-500-normal.woff2") format("woff2");
+}
+
+:root {
+  /* Cerveau tokens (docs/rewrite/design/tokens.css) */
+  --bg: #161616; --s1: #1C1C1C; --s2: #242424; --s3: #2B2B2B;
+  --line: #2E2E2E; --line2: #3D3D3D;
+  --text: #FAFAFA; --muted: #A1A1AA; --dim: #71717A; --faint: #52525B;
+  --warn: #cf9f2e; --err: #e6533f;
+  --r: 3px;
+  --sans: "Manrope Variable", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Chart ramp: brightness carries rank, never hue. Read from the script
+     with getComputedStyle, so the SVG and the legends use the same values. */
+  --ch-top:   #FAFAFA;                 /* the one highlight: 7-day line, busiest weekday, hottest hours */
+  --ch-hi:    #A1A1AA;                 /* GPU; the peak-tariff share; the typical-day average */
+  --ch-mid:   #71717A;                 /* CPU */
+  --ch-base:  #52525B;                 /* kWh per day, weekday bars; board, drives, peripherals */
+  --ch-back:  #3D3D3D;                 /* max seen; the outline of a partial day or a monthly maximum */
+  --ch-band:  rgba(250,250,250,.05);   /* peak-tariff hours behind the typical day */
+  --ch-empty: #1C1C1C;                 /* an hour with no data in the heat map */
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { color-scheme: dark; }
+body {
+  background: var(--bg); color: var(--muted);
+  font: 400 13px/1.55 var(--sans);
+  font-variant-numeric: tabular-nums;
+  padding: 40px 24px;
+  -webkit-font-smoothing: antialiased;
+}
+.page { max-width: 1040px; margin: 0 auto; }
+
+/* Header: the title and, on the right, the span it covers. No eyebrow. */
+header {
+  display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 20px;
+}
+header h1 { font: 600 21px/28px var(--sans); color: var(--text); }
+header .meta { font: 400 11.5px/18px var(--mono); color: var(--dim); text-align: right; }
+
+/* Sections sit on the page, a hairline above each: never a card. */
+section { margin-bottom: 32px; }
+.card { background: none; border: 0; border-top: 1px solid var(--line); padding: 22px 0 0; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; border-top: 1px solid var(--line); margin-bottom: 32px; }
+.row2 .card { border-top: 0; margin-bottom: 0; }
+@media (max-width: 820px) { .row2 { grid-template-columns: 1fr; gap: 0; } }
+
+/* Printed strip: the section's one-row header. */
+h2 {
+  font: 500 9.5px/16px var(--mono); letter-spacing: .22em; text-transform: uppercase;
+  color: var(--dim); margin: 0 0 8px;
+}
+.sub { font-size: 13px; color: var(--muted); margin-bottom: 14px; max-width: 78ch; }
+.sub b { color: var(--text); font-weight: 600; }
+
+/* The headline figures: one mono line, key value · key value. */
+.stats {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  font: 400 13px/24px var(--mono); color: var(--dim);
+}
+.stats b { color: var(--text); font-weight: 500; margin-left: .5ch; }
+.stats i { font-style: normal; color: var(--faint); padding: 0 1ch; }
+
+/* The findings: plain sentences, no box, no coloured border. */
+.findings { font-size: 13px; line-height: 1.65; color: var(--muted); max-width: 78ch; }
+.findings p { margin-bottom: 6px; }
+.findings p:last-child { margin-bottom: 0; }
+.findings b { color: var(--text); font-weight: 600; }
+
+/* Charts */
+svg { display: block; width: 100%; height: auto; font-family: var(--mono); }
+.ax { fill: var(--dim); font-size: 9.5px; }
+.gl { stroke: var(--line); stroke-width: 1; }
+.legend {
+  display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px;
+  font: 400 11.5px/16px var(--mono); color: var(--dim);
+}
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 8px; height: 8px; display: inline-block; border-radius: 1px; }
+
+/* Tables: mono figures, right-aligned, a hairline between rows. */
+table { border-collapse: collapse; width: 100%; font: 400 11.5px var(--mono); color: var(--muted); }
+th, td { height: 32px; padding: 0 10px; text-align: right; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; padding-left: 0; }
+th:last-child, td:last-child { padding-right: 0; }
+th { font: 500 9.5px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+td:first-child { color: var(--text); }
+td.dim { color: var(--dim); }
+tr:last-child td { border-bottom: none; }
+
+.note { font-size: 13px; line-height: 1.6; color: var(--muted); max-width: 78ch; }
+.gap-list { font: 400 11.5px/20px var(--mono); color: var(--dim); columns: 2; column-gap: 24px; }
+.gap-list div { break-inside: avoid; }
+
+#tip {
+  position: fixed; pointer-events: none; z-index: 10; white-space: nowrap; opacity: 0; transition: opacity .08s;
+  background: var(--s3); border: 1px solid var(--line2); border-radius: var(--r);
+  color: var(--text); font: 400 11.5px/16px var(--mono); padding: 5px 8px;
+}
+footer {
+  font: 400 11.5px/18px var(--mono); color: var(--faint);
+  margin: 32px 0 8px; border-top: 1px solid var(--line); padding-top: 14px;
+}
+@media print {
+  body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  section { break-inside: avoid; }
+}
 </style>
 </head>
 <body>
 <div class="page">
   <header>
     <div>
-      <div class="k">NoClickDock · Power</div>
       <h1>Workstation electricity report</h1>
     </div>
     <div class="meta" id="meta"></div>
   </header>
 
   <section>
-    <div class="tiles" id="tiles"></div>
+    <div class="stats" id="tiles"></div>
   </section>
 
   <section class="findings" id="findings"></section>
@@ -80,7 +157,7 @@
   <section>
     <h2>Last 30 days</h2>
     <div class="sub" id="recentSub"></div>
-    <div class="tiles" id="recentTiles"></div>
+    <div class="stats" id="recentTiles"></div>
   </section>
 
   <section class="card">
@@ -88,9 +165,9 @@
     <div class="sub" id="dailySub"></div>
     <div id="dailyChart"></div>
     <div class="legend">
-      <span><i class="sw" style="background:#4a4640"></i>kWh per day</span>
-      <span><i class="sw" style="background:var(--amber)"></i>peak-tariff share</span>
-      <span><i class="sw" style="background:var(--fg);height:2px"></i>7-day average</span>
+      <span><i class="sw" style="background:var(--ch-base)"></i>kWh per day</span>
+      <span><i class="sw" style="background:var(--ch-hi)"></i>peak-tariff share</span>
+      <span><i class="sw" style="background:var(--ch-top);height:2px"></i>7-day average</span>
       <span><i class="sw" style="background:transparent;border:1px dashed var(--dim)"></i>partial day (&lt;20 h logged)</span>
     </div>
   </section>
@@ -100,9 +177,9 @@
     <div class="sub" id="monthlySub"></div>
     <div id="monthlyChart"></div>
     <div class="legend">
-      <span><i class="sw" style="background:var(--gpu)"></i>GPU</span>
-      <span><i class="sw" style="background:var(--cpu)"></i>CPU</span>
-      <span><i class="sw" style="background:var(--other)"></i>board, drives, peripherals</span>
+      <span><i class="sw" style="background:var(--ch-hi)"></i>GPU</span>
+      <span><i class="sw" style="background:var(--ch-mid)"></i>CPU</span>
+      <span><i class="sw" style="background:var(--ch-base)"></i>board, drives, peripherals</span>
     </div>
     <table id="monthlyTable" style="margin-top:14px"></table>
   </section>
@@ -113,9 +190,9 @@
       <div class="sub" id="hourlySub"></div>
       <div id="hourlyChart"></div>
       <div class="legend">
-        <span><i class="sw" style="background:#3a3631"></i>max seen</span>
-        <span><i class="sw" style="background:var(--fg)"></i>average</span>
-        <span id="peakLegend" hidden><i class="sw" style="background:rgba(232,135,58,.18)"></i>peak tariff hours</span>
+        <span><i class="sw" style="background:var(--ch-back)"></i>max seen</span>
+        <span><i class="sw" style="background:var(--ch-hi)"></i>average</span>
+        <span id="peakLegend" hidden><i class="sw" style="background:var(--ch-band);box-shadow:inset 0 0 0 1px var(--line2)"></i>peak tariff hours</span>
       </div>
     </section>
     <section class="card">
@@ -125,9 +202,9 @@
     </section>
   </div>
 
-  <section class="card" style="margin-top:8px">
+  <section class="card">
     <h2>When the machine works</h2>
-    <div class="sub">Average draw for every hour of every weekday. Brighter is busier; the amber cells are the hottest tenth of all hours.</div>
+    <div class="sub">Average draw for every hour of every weekday. Brighter is busier; the white cells are the hottest tenth of all hours.</div>
     <div id="heatChart"></div>
   </section>
 
@@ -172,6 +249,7 @@
 <script>
 const DATA = {{.}};
 const $ = s => document.querySelector(s);
+const V = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const CUR = DATA.cfg.currency || "";
 const money = (n, d = 2) => `${n.toLocaleString("en-GB", {minimumFractionDigits: d, maximumFractionDigits: d})}${CUR ? " " + CUR : ""}`;
 const num = (n, d = 1) => n.toLocaleString("en-GB", {minimumFractionDigits: d, maximumFractionDigits: d});
@@ -212,8 +290,7 @@ const tiles = [
   ["Average draw", `${S.avgW} W`, `min ${S.minW} · max ${S.maxW} W`],
   ["Projected year", money(R.yearCost, 0), `${num(R.yearKwh, 0)} kWh at the last-30-day rate`, "amber"],
 ];
-$("#tiles").innerHTML = tiles.map(([l, v, n, c]) =>
-  `<div class="tile"><div class="l">${l}</div><div class="v ${c || ""}">${v}</div><div class="n">${n}</div></div>`).join("");
+$("#tiles").innerHTML = tiles.map(([l, v]) => `<span>${l.toLowerCase()}<b>${v}</b></span>`).join("<i>·</i>");
 
 /* ---- findings: every sentence conditional on the data ---- */
 const f = [];
@@ -237,7 +314,7 @@ $("#recentTiles").innerHTML = [
   ["Per day", `${num(R.avgDayKwh)} kWh`, `${R.trend >= 0 ? "+" : ""}${R.trend}% vs all-time`],
   ["Per month", money(R.monthCost), "at this rate"],
   ["Per year", money(R.yearCost, 0), `${num(R.yearKwh, 0)} kWh`],
-].map(([l, v, n]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div><div class="n">${n}</div></div>`).join("");
+].map(([l, v]) => `<span>${l.toLowerCase()}<b>${v}</b></span>`).join("<i>·</i>");
 
 /* ---- daily chart ---- */
 (function () {
@@ -254,17 +331,17 @@ $("#recentTiles").innerHTML = [
     const x = L + i * cw, bw = Math.max(1, cw - 1);
     const partial = d.hours < 20;
     const g = el("g", {}, s);
-    el("rect", {x, y: y(d.kwh), width: bw, height: ih - (y(d.kwh) - T), fill: partial ? "transparent" : "#4a4640",
-                stroke: partial ? "#5a5650" : "none", "stroke-dasharray": partial ? "2 2" : ""}, g);
-    if (d.peak > 0 && !partial) el("rect", {x, y: y(d.peak), width: bw, height: ih - (y(d.peak) - T), fill: "#e8873a", opacity: .85}, g);
+    el("rect", {x, y: y(d.kwh), width: bw, height: ih - (y(d.kwh) - T), fill: partial ? "transparent" : V("--ch-base"),
+                stroke: partial ? V("--dim") : "none", "stroke-dasharray": partial ? "2 2" : ""}, g);
+    if (d.peak > 0 && !partial) el("rect", {x, y: y(d.peak), width: bw, height: ih - (y(d.peak) - T), fill: V("--ch-hi")}, g);
     g.addEventListener("mousemove", e => showTip(`${fmtDay(d.d)} · ${num(d.kwh)} kWh · ${money(d.cost)} · max ${d.maxw} W${partial ? ` · ${d.hours} h logged` : ""}`, e));
     g.addEventListener("mouseleave", hideTip);
   });
   const pts = DATA.rolling.map((v, i) => `${L + i * cw + cw / 2},${y(v)}`).join(" ");
-  el("polyline", {points: pts, fill: "none", stroke: "#efece6", "stroke-width": 1.5}, s);
+  el("polyline", {points: pts, fill: "none", stroke: V("--ch-top"), "stroke-width": 1.5}, s);
   const step = Math.ceil(D.length / 10);
   D.forEach((d, i) => { if (i % step === 0) text(s, L + i * cw, H - 8, fmtDay(d.d)); });
-  $("#dailySub").innerHTML = `Bars are kWh per day; the amber part of each bar was used in peak-tariff hours. Busiest day <b>${fmtDay(S.worstDay)}</b> (${num(S.worstKwh)} kWh, ${money(S.worstCost)}), quietest <b>${fmtDay(S.bestDay)}</b> (${num(S.bestKwh)} kWh).`;
+  $("#dailySub").innerHTML = `Bars are kWh per day; the lighter part of each bar was used in peak-tariff hours. Busiest day <b>${fmtDay(S.worstDay)}</b> (${num(S.worstKwh)} kWh, ${money(S.worstCost)}), quietest <b>${fmtDay(S.bestDay)}</b> (${num(S.bestKwh)} kWh).`;
 })();
 
 /* ---- monthly chart + table ---- */
@@ -277,7 +354,7 @@ $("#recentTiles").innerHTML = [
   M.forEach((m, i) => {
     const x = L + i * cw + cw * 0.18, bw = cw * 0.64;
     let base = 0;
-    [["gpu", "#6da46a"], ["cpu", "#7b9bd1"], ["other", "#6f6a62"]].forEach(([k, c]) => {
+    [["gpu", V("--ch-hi")], ["cpu", V("--ch-mid")], ["other", V("--ch-base")]].forEach(([k, c]) => {
       const v = m[k]; if (!v) return;
       el("rect", {x, y: y(base + v), width: bw, height: y(base) - y(base + v), fill: c}, s);
       base += v;
@@ -300,12 +377,12 @@ $("#recentTiles").innerHTML = [
   const s = svg("hourlyChart", W, H);
   const mx = Math.max(...X) * 1.08 || 1, cw = (W - L - Rm) / 24, ih = H - T - B, y = v => T + ih - ih * v / mx;
   if (C.tou) { $("#peakLegend").hidden = false;
-    DATA.hourlyPeak.forEach((p, h) => { if (p) el("rect", {x: L + h * cw, y: T, width: cw, height: ih, fill: "rgba(232,135,58,.18)"}, s); }); }
+    DATA.hourlyPeak.forEach((p, h) => { if (p) el("rect", {x: L + h * cw, y: T, width: cw, height: ih, fill: V("--ch-band")}, s); }); }
   for (let i = 0; i <= 3; i++) { const v = mx * i / 3; el("line", {x1: L, x2: W - Rm, y1: y(v), y2: y(v), class: "gl"}, s); text(s, L - 5, y(v) + 3, num(v, 0), "ax", "end"); }
   A.forEach((v, h) => {
     const x = L + h * cw + 1, bw = cw - 2;
-    el("rect", {x, y: y(X[h]), width: bw, height: ih - (y(X[h]) - T), fill: "#3a3631"}, s);
-    el("rect", {x, y: y(v), width: bw, height: ih - (y(v) - T), fill: "#efece6"}, s);
+    el("rect", {x, y: y(X[h]), width: bw, height: ih - (y(X[h]) - T), fill: V("--ch-back")}, s);
+    el("rect", {x, y: y(v), width: bw, height: ih - (y(v) - T), fill: V("--ch-hi")}, s);
     if (h % 3 === 0) text(s, x + bw / 2, H - 7, `${h}h`, "ax", "middle");
   });
   $("#hourlySub").innerHTML = `Average and maximum draw by hour of day. Busiest around <b>${S.busiestHour}:00</b> (${A[S.busiestHour]} W), quietest around <b>${S.quietestHour}:00</b> (${A[S.quietestHour]} W).`;
@@ -320,7 +397,7 @@ $("#recentTiles").innerHTML = [
   const hi = Wd.indexOf(Math.max(...Wd)), lo = Wd.indexOf(Math.min(...Wd));
   Wd.forEach((v, i) => {
     const x = L + i * cw + cw * 0.2, bw = cw * 0.6;
-    el("rect", {x, y: y(v), width: bw, height: ih - (y(v) - T), fill: i === hi ? "#efece6" : "#4a4640"}, s);
+    el("rect", {x, y: y(v), width: bw, height: ih - (y(v) - T), fill: i === hi ? V("--ch-top") : V("--ch-base")}, s);
     text(s, x + bw / 2, y(v) - 5, num(v, 1), "ax", "middle");
     text(s, x + bw / 2, H - 7, WD[i], "ax", "middle");
   });
@@ -340,7 +417,7 @@ $("#recentTiles").innerHTML = [
     row.forEach((v, h) => {
       const t = v === null ? 0 : (v - lo) / Math.max(1, hi - lo);
       // neutral ramp; the accent is reserved for the hottest tenth of hours
-      const fill = v === null ? "#161411" : t >= 0.9 ? "#e8873a" : `rgba(239,236,230,${(0.05 + 0.6 * t).toFixed(2)})`;
+      const fill = v === null ? V("--ch-empty") : t >= 0.9 ? V("--ch-top") : `rgba(250,250,250,${(0.04 + 0.5 * t).toFixed(2)})`;
       const r = el("rect", {x: L + h * cw + 1, y: T + wd * ch + 1, width: cw - 2, height: ch - 2, fill}, s);
       r.addEventListener("mousemove", e => showTip(`${WD[wd]} ${h}:00 · ${v === null ? "no data" : v + " W"}`, e));
       r.addEventListener("mouseleave", hideTip);
@@ -370,9 +447,9 @@ $("#recentTiles").innerHTML = [
   for (let i = 0; i <= 4; i++) { const v = mx * i / 4; el("line", {x1: L, x2: W - Rm, y1: y(v), y2: y(v), class: "gl"}, s); text(s, L - 6, y(v) + 3, `${Math.round(v)}°`, "ax", "end"); }
   M.forEach((m, i) => {
     const x0 = L + i * cw;
-    [["gpuT", "gpuTmax", "#6da46a", 0.14], ["cpuT", "cpuTmax", "#7b9bd1", 0.52]].forEach(([k, kx, c, off]) => {
+    [["gpuT", "gpuTmax", V("--ch-hi"), 0.14], ["cpuT", "cpuTmax", V("--ch-mid"), 0.52]].forEach(([k, kx, c, off]) => {
       const x = x0 + cw * off, bw = cw * 0.3;
-      if (m[kx]) el("rect", {x, y: y(m[kx]), width: bw, height: ih - (y(m[kx]) - T), fill: "none", stroke: "#6f6a62"}, s);
+      if (m[kx]) el("rect", {x, y: y(m[kx]), width: bw, height: ih - (y(m[kx]) - T), fill: "none", stroke: V("--dim")}, s);
       if (m[k]) el("rect", {x, y: y(m[k]), width: bw, height: ih - (y(m[k]) - T), fill: c}, s);
     });
     text(s, x0 + cw / 2, H - 8, fmtMon(m.m), "ax", "middle");
@@ -386,7 +463,7 @@ $("#contextTable").innerHTML = `<thead><tr><th>Compared with</th><th>Equivalent<
   DATA.context.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="dim" style="text-align:left">${r[2]}</td></tr>`).join("") + `</tbody>`;
 
 /* ---- data quality ---- */
-$("#qualitySub").innerHTML = `${P.nRecords.toLocaleString("en-GB")} hourly records from ${P.samples.toLocaleString("en-GB")} two-second samples cover <b>${P.coverage}%</b> of the ${P.nDays}-day span. ${P.nGaps ? `There are <b>${P.nGaps} gaps</b> longer than 3 hours (machine off, or the monitor not running); totals count only what was logged, and per-day averages use full days only.` : "No gaps longer than 3 hours."}`;
+$("#qualitySub").innerHTML = `${P.nRecords.toLocaleString("en-GB")} hourly records from ${P.samples.toLocaleString("en-GB")} two-second samples cover <b>${P.coverage}%</b> of the ${P.nDays}-day span. ${P.nGaps ? `There ${P.nGaps === 1 ? "is <b>1 gap</b>" : `are <b>${P.nGaps} gaps</b>`} longer than 3 hours (machine off, or the monitor not running); totals count only what was logged, and per-day averages use full days only.` : "No gaps longer than 3 hours."}`;
 $("#gapList").innerHTML = P.gaps.map(g => `<div>${g.from} → ${g.to} · ${g.hours} h</div>`).join("") + (P.nGaps > P.gaps.length ? `<div>… and ${P.nGaps - P.gaps.length} shorter</div>` : "");
 
 /* ---- method ---- */

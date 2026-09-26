@@ -110,6 +110,14 @@ func TestReportFilesAndNoRows(t *testing.T) {
 	if !strings.Contains(string(page), `const DATA = {"cfg":{"currency":"EUR"`) || strings.Contains(string(page), "__DATA__") {
 		t.Errorf("the data is not in the page: %.300s", page[strings.Index(string(page), "const DATA"):])
 	}
+	if strings.Contains(string(page), `url("fonts/`) || strings.Count(string(page), "data:font/woff2;base64,") != 3 {
+		t.Error("the three fonts are not inside the page")
+	}
+	for _, old := range []string{"#e8873a", "ShinyWidgets", `class="tile"`} {
+		if strings.Contains(string(page), old) {
+			t.Errorf("the old look is still in the page: %s", old)
+		}
+	}
 	if _, err := os.Stat(filepath.Join(dir, "report_data.json")); err != nil {
 		t.Error("report_data.json not written")
 	}
