@@ -140,7 +140,7 @@ Snapshots are emitted **every poll**, changed or not (as a lightweight
 | M5-a | `busy` survives a `warn` signal (a generation filling VRAM keeps its progress arc); only `crit` overrides `busy`. |
 | M5-b | Power temperature tones start at the alert thresholds — GPU core warn ≥ 80 °C, CPU ≥ 85 °C, VRAM ≥ 90 °C — so under A20 cell, lamp, label and toast agree. |
 | M5-c | Config gains `widgets.comfyui` (endpoint) and `widgets.power` (tariff, estimates, poll/log intervals); the power CSV goes to `~/Documents/PM-Log` only from a plain production `ncd-core`, never from `--dev`, `--once`, `--config` or a named `--instance`. |
-| A20-a | Configuration is not a problem. Under A20, Tailscale serve (tailnet-only), advertised routes and offered exit nodes are toned `info` and never raise the widget. A **public funnel** is `warn` (a steady amber lamp, never the breathing crit ring): exposure to the whole internet always deserves a quiet light, deliberate or not. The same principle applies to every writer: tone only what a person may need to act on. |
+| A20-a | Configuration is not a problem. Under A20, Tailscale serve (tailnet-only), advertised routes and offered exit nodes are toned `info` and never raise the widget. A **public funnel** is `warn` (a steady amber lamp, never the breathing crit ring): exposure to the whole internet always deserves a quiet light, deliberate or not. The same principle applies to every writer: tone only what a person may need to act on. Also `info`: a relayed (DERP) path, an available update, an expired key on a dormant peer. Still `warn`: an expired or expiring key on this node or on a watched peer. |
 
 ## Repository layout
 
