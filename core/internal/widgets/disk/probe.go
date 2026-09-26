@@ -5,8 +5,13 @@ import (
 	"time"
 )
 
-// networkTimeout is how long a share may take to say how full it is.
-const networkTimeout = 2 * time.Second
+// How long a filesystem may take to say how full it is. A share gets less:
+// a dead server is common; a stuck local mount (a FUSE filesystem over a
+// dead share, a failing disk) is rare but must not freeze the widget either.
+const (
+	networkTimeout = 2 * time.Second
+	localTimeout   = 5 * time.Second
+)
 
 // prober measures filesystems that may never answer. A network share whose
 // server is gone blocks statfs in the kernel, and no context can interrupt

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -222,6 +224,90 @@ func TestACrashingCollectorIsReportedNotFatal(t *testing.T) {
 	}
 }
 
+// stubborn ignores its deadline, like a statfs stuck on a dead mount, and
+// counts how many of it run at once.
+type stubborn struct {
+	release chan struct{}
+	running atomic.Int32
+	peak    atomic.Int32
+	calls   atomic.Int32
+}
+
+func (*stubborn) Meta() Meta { return Meta{ID: "stuck", PollSecs: 1} }
+func (s *stubborn) Collect(context.Context) (model.Snapshot, error) {
+	s.calls.Add(1)
+	n := s.running.Add(1)
+	defer s.running.Add(-1)
+	for {
+		p := s.peak.Load()
+		if n <= p || s.peak.CompareAndSwap(p, n) {
+			break
+		}
+	}
+	<-s.release
+	return snap(model.StateOK, "answered at last"), nil
+}
+
+func TestAStuckCollectIsNeverJoinedByAnother(t *testing.T) {
+	s := &stubborn{release: make(chan struct{})}
+	h := newHub(t, s)
+	h.stillAfter = 5 * time.Millisecond
+	_, sub := h.Subscribe()
+	e := h.entries[0]
+
+	for range 5 { // five polls fall due while the first collect is stuck
+		h.poll(context.Background(), e)
+	}
+	if calls, peak := s.calls.Load(), s.peak.Load(); calls != 1 || peak != 1 {
+		t.Fatalf("%d collects started, %d at once; want 1 and 1", calls, peak)
+	}
+	got := types(drain(sub))
+	if !slices.Equal(got, []string{"snapshot", "tick", "tick", "tick", "tick"}) {
+		t.Fatalf("a stuck widget must be heard every poll: %v", got)
+	}
+	if e.last.Error != "still collecting…" {
+		t.Fatalf("error = %q", e.last.Error)
+	}
+
+	close(s.release) // the stuck call returns; the next poll applies it
+	deadline := time.Now().Add(2 * time.Second)
+	for e.last.StateLabel != "answered at last" {
+		if time.Now().After(deadline) {
+			t.Fatal("the late answer was never applied")
+		}
+		time.Sleep(5 * time.Millisecond)
+		h.poll(context.Background(), e)
+	}
+	if e.last.Error != "" {
+		t.Fatalf("the late answer kept the error %q", e.last.Error)
+	}
+}
+
+func TestTheLoopAppliesALateAnswerAtOnce(t *testing.T) {
+	s := &stubborn{release: make(chan struct{})}
+	h := newHub(t, s)
+	h.stillAfter = 5 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go h.Run(ctx)
+	time.Sleep(50 * time.Millisecond)
+	close(s.release)
+	deadline := time.Now().Add(500 * time.Millisecond) // well before the next 1 s poll
+	for {
+		state := h.State()
+		if len(state) > 1 && strings.Contains(string(state[1]), "answered at last") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the loop waited for its next poll to apply a finished collect")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if s.peak.Load() != 1 {
+		t.Fatalf("peak %d", s.peak.Load())
+	}
+}
+
 type blocking struct{ release chan struct{} }
 
 func (blocking) Meta() Meta { return Meta{ID: "slow", PollSecs: 30} }
@@ -235,20 +321,23 @@ func TestASlowCollectSaysSoAndThenReports(t *testing.T) {
 	h := newHub(t, b)
 	h.stillAfter = 20 * time.Millisecond
 	_, sub := h.Subscribe()
-	go func() {
-		time.Sleep(80 * time.Millisecond)
-		close(b.release)
-	}()
 	h.poll(context.Background(), h.entries[0])
 	msgs := drain(sub)
-	if len(msgs) != 2 {
-		t.Fatalf("want 'still collecting' then the result, got %v", types(msgs))
+	if len(msgs) != 1 {
+		t.Fatalf("want 'still collecting', got %v", types(msgs))
 	}
 	first := msgs[0]["widget"].(map[string]any)
 	if first["error"] != "still collecting…" || first["stateLabel"] != "collecting" {
 		t.Fatalf("first = %v", first)
 	}
-	if last := msgs[1]["widget"].(map[string]any); last["stateLabel"] != "done" || last["error"] != nil {
+	close(b.release)
+	time.Sleep(20 * time.Millisecond)
+	h.poll(context.Background(), h.entries[0])
+	msgs = drain(sub)
+	if len(msgs) != 1 {
+		t.Fatalf("want the result, got %v", types(msgs))
+	}
+	if last := msgs[0]["widget"].(map[string]any); last["stateLabel"] != "done" || last["error"] != nil {
 		t.Fatalf("last = %v", last)
 	}
 }
@@ -409,6 +498,11 @@ func TestConfigPatchIsBroadcast(t *testing.T) {
 	}
 	if err := h.Handle(context.Background(), []byte(`{"type":"config.patch","patch":{"dock":{"orientation":"sideways"}}}`)); err == nil {
 		t.Fatal("an invalid patch was accepted")
+	}
+	// A rejected patch re-announces the unchanged config, so a window can revert.
+	msgs = drain(sub)
+	if len(msgs) != 1 || msgs[0]["config"].(map[string]any)["dock"].(map[string]any)["orientation"] != "horizontal" {
+		t.Fatalf("after a rejected patch: %v", msgs)
 	}
 }
 

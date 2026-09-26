@@ -47,10 +47,22 @@ impl Options {
         if !self.mock {
             return Vec::new();
         }
-        let name = format!("ncd-{}-mock", self.instance.as_deref().unwrap_or("default"));
-        let config = std::env::temp_dir().join(name);
+        let name = format!("mock-{}", self.instance.as_deref().unwrap_or("default"));
+        let config = user_cache_dir().join("noclickdock-dev").join(name);
         vec!["--mock".into(), "--stdio".into(), "--config".into(), config.to_string_lossy().into_owned()]
     }
+}
+
+/// The user's own cache directory: a scratch config never lives in the
+/// world-writable temp dir, where another user could plant one.
+fn user_cache_dir() -> std::path::PathBuf {
+    #[cfg(windows)]
+    let base = std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from);
+    #[cfg(not(windows))]
+    let base = std::env::var_os("XDG_CACHE_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| std::path::PathBuf::from(home).join(".cache")));
+    base.unwrap_or_else(std::env::temp_dir)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

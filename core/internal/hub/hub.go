@@ -71,6 +71,12 @@ type entry struct {
 	shown    model.Snapshot
 	lastMsg  []byte
 	lastTick []byte
+
+	// inflight is the running collect's answer, nil when none runs. A
+	// collect is never started while another is in flight: a collector that
+	// ignores its deadline (a statfs stuck in the kernel) stays one stuck
+	// goroutine, and stateful collectors never race themselves.
+	inflight chan result
 }
 
 // Subscription receives every core → UI message, one JSON document each.
@@ -123,6 +129,7 @@ func (h *Hub) Run(ctx context.Context) {
 // loop polls every PollSecs measured from the start of each collect, so the
 // period does not drift by the collect's own duration. A refresh that
 // arrives mid-collect is kept (the channel holds one) and runs right after.
+// A collect that outlived its poll is applied the moment it lands.
 func (h *Hub) loop(ctx context.Context, e *entry) {
 	interval := e.interval()
 	timer := time.NewTimer(0)
@@ -131,6 +138,10 @@ func (h *Hub) loop(ctx context.Context, e *entry) {
 		select {
 		case <-ctx.Done():
 			return
+		case r := <-e.inflight: // nil while nothing is in flight: never chosen
+			e.inflight = nil
+			h.apply(e, r.snap, r.err)
+			continue
 		case <-timer.C:
 		case <-e.refresh:
 		}
@@ -149,44 +160,65 @@ type result struct {
 	err  error
 }
 
-// poll runs one collect. A collector that panics is reported, never fatal;
-// one still busy after two intervals says so rather than falling silent.
+// poll runs one collect, or — when the last one has not returned — says
+// that it is still collecting, which the interface hears every poll (a tick
+// after the first time), so the widget reads as busy rather than stale.
 func (h *Hub) poll(ctx context.Context, e *entry) {
-	cctx, cancel := context.WithTimeout(ctx, collectTimeout)
-	defer cancel()
+	if e.inflight != nil {
+		select {
+		case r := <-e.inflight:
+			e.inflight = nil
+			h.apply(e, r.snap, r.err)
+		default:
+			h.apply(e, model.Snapshot{}, errStillCollecting)
+		}
+		return
+	}
+	e.inflight = h.start(ctx, e)
+
+	slow := time.NewTimer(h.patience(e))
+	defer slow.Stop()
+	select {
+	case r := <-e.inflight:
+		e.inflight = nil
+		if ctx.Err() == nil {
+			h.apply(e, r.snap, r.err)
+		}
+	case <-slow.C:
+		h.apply(e, model.Snapshot{}, errStillCollecting)
+	case <-ctx.Done():
+	}
+}
+
+// start runs one Collect on its own goroutine. A collector that panics is
+// reported, never fatal; one that honours its deadline answers with it.
+func (h *Hub) start(ctx context.Context, e *entry) chan result {
 	done := make(chan result, 1)
 	go func() {
+		cctx, cancel := context.WithTimeout(ctx, collectTimeout)
+		defer cancel()
 		defer func() {
 			if r := recover(); r != nil {
 				done <- result{err: fmt.Errorf("collector crashed: %v", r)}
 			}
 		}()
 		snap, err := e.c.Collect(cctx)
+		if err != nil && errors.Is(cctx.Err(), context.DeadlineExceeded) {
+			err = fmt.Errorf("gave up after %s", collectTimeout)
+		}
 		done <- result{snap, err}
 	}()
+	return done
+}
 
-	patience := 2 * e.interval()
+// patience is how long a poll waits before saying "still collecting…":
+// two intervals, but at most half the collect timeout, so a 30 s widget
+// says so before its collect gives up.
+func (h *Hub) patience(e *entry) time.Duration {
 	if h.stillAfter > 0 {
-		patience = h.stillAfter
+		return h.stillAfter
 	}
-	slow := time.NewTimer(patience)
-	defer slow.Stop()
-	for {
-		select {
-		case r := <-done:
-			if ctx.Err() == nil {
-				h.apply(e, r.snap, r.err)
-			}
-			return
-		case <-slow.C:
-			h.apply(e, model.Snapshot{}, errStillCollecting)
-		case <-cctx.Done():
-			if ctx.Err() == nil {
-				h.apply(e, model.Snapshot{}, fmt.Errorf("gave up after %s", collectTimeout))
-			}
-			return
-		}
-	}
+	return min(2*e.interval(), collectTimeout/2)
 }
 
 // apply turns one collect's outcome into messages.
@@ -344,10 +376,12 @@ func (h *Hub) Handle(ctx context.Context, line []byte) error {
 		go h.act(ctx, req)
 	case "config.patch":
 		cfg, err := h.cfg.Patch(req.Patch)
+		// A rejected patch re-announces the config it left unchanged, so a
+		// window that changed a control ahead of the answer puts it back.
+		h.broadcast(model.NewConfig(cfg))
 		if err != nil {
 			return err
 		}
-		h.broadcast(model.NewConfig(cfg))
 	default:
 		return fmt.Errorf("unknown message type %q", req.Type)
 	}

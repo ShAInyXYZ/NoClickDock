@@ -6,8 +6,8 @@ use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_EXSTYLE, HWND_TOPMOST, MA_NOACTIVATE,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOWNOACTIVATE, WM_MOUSEACTIVATE,
-    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    STYLESTRUCT, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOWNOACTIVATE,
+    WM_MOUSEACTIVATE, WM_STYLECHANGING, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
 unsafe extern "system" fn refuse_activation(
@@ -18,14 +18,22 @@ unsafe extern "system" fn refuse_activation(
     _id: usize,
     _data: usize,
 ) -> LRESULT {
-    if msg == WM_MOUSEACTIVATE {
-        return LRESULT(MA_NOACTIVATE as isize);
+    match msg {
+        WM_MOUSEACTIVATE => return LRESULT(MA_NOACTIVATE as isize),
+        // tao rewrites the extended style from its own flags on every flag
+        // change — its first show() included — which would drop these two
+        // bits and put the overlay in Alt+Tab: keep them in every rewrite.
+        WM_STYLECHANGING if wparam.0 as i32 == GWL_EXSTYLE.0 => {
+            let style = &mut *(lparam.0 as *mut STYLESTRUCT);
+            style.styleNew |= WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0;
+        }
+        _ => {}
     }
     DefSubclassProc(hwnd, msg, wparam, lparam)
 }
 
-/// Main thread only. Tao rewrites the extended style on every flag change,
-/// so this runs after the last one.
+/// Main thread only (SetWindowSubclass must run on the window's thread).
+/// Once is enough: the subclass keeps the bits through tao's rewrites.
 pub fn harden(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     let hwnd = window.hwnd()?;
     unsafe {

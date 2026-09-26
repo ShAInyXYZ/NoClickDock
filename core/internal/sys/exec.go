@@ -24,7 +24,7 @@ func Run(ctx context.Context, timeout time.Duration, name string, args ...string
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, name, args...)
-	hideConsole(cmd)
+	prepare(cmd)
 	// A grandchild holding the pipes open must not outlive the timeout.
 	cmd.WaitDelay = time.Second
 	var stdout, stderr bytes.Buffer

@@ -9,7 +9,9 @@ import (
 // the core itself has none (it is linked with -H=windowsgui).
 const createNoWindow = 0x08000000
 
-func hideConsole(cmd *exec.Cmd) {
+// prepare hides the console. A timeout kills only the direct child here; a
+// Job object would take its children too, if M7 finds any left behind.
+func prepare(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow}
 }
 

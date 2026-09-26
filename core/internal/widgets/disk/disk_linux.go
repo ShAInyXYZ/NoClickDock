@@ -12,8 +12,9 @@ type usage struct {
 
 // filesystems measures every mounted filesystem worth watching, once each:
 // a bind mount or btrfs subvolume shares its device with one already listed
-// and is skipped. Network shares are measured against a deadline, and one
-// that does not answer is reported as such rather than stalling the poll.
+// and is skipped. Every mount is measured against a deadline, so one that
+// hangs is reported as not responding instead of freezing the poll; a share
+// that answers with an error (EHOSTDOWN, ESTALE) is not responding too.
 func (w *Widget) filesystems() ([]Filesystem, error) {
 	f, err := os.Open("/proc/mounts")
 	if err != nil {
@@ -28,17 +29,15 @@ func (w *Widget) filesystems() ([]Filesystem, error) {
 		if m.kind == Pool {
 			fs.Label = m.device // the dataset: tank/media
 		}
-		var u usage
+		timeout := localTimeout
 		if m.kind == Network {
-			var answered bool
-			u, err, answered = probe(&w.probe, m.point, networkTimeout, func() (usage, error) { return measure(m.point) })
-			if !answered {
-				fs.Unresponsive = true
-				out = append(out, fs)
-				continue
-			}
-		} else {
-			u, err = measure(m.point)
+			timeout = networkTimeout
+		}
+		u, err, answered := probe(&w.probe, m.point, timeout, func() (usage, error) { return measure(m.point) })
+		if !answered || (err != nil && m.kind == Network) {
+			fs.Unresponsive = true
+			out = append(out, fs)
+			continue
 		}
 		if err != nil || seen[u.dev] {
 			continue

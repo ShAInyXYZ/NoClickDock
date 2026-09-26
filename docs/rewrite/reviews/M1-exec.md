@@ -161,3 +161,25 @@ The pointer was restored. Screenshots stay in the scratchpad.
 - WebKit runs no rendering updates in a never-shown window, so the rail page
   measures after every update instead of relying on `ResizeObserver` alone —
   keep that in mind for the toast window.
+
+## Round 2 (after M1-research-r1)
+
+- **MUST 1** — `hub.go`: at most one collect in flight per widget. A due poll
+  while the last collect has not returned re-emits "still collecting…" (a
+  snapshot the first time, a tick after, so the widget never reads stale),
+  and the loop applies the stuck call's answer the moment it lands. Tests:
+  a deadline-ignoring collector polled five times → 1 call, peak 1, the
+  interface heard every poll; the late answer is applied without waiting
+  for the next poll. Patience is `min(2 × interval, collectTimeout/2)`
+  (should-fix 7).
+- **MUST 2** — `build-core.sh` builds for `$1`, else `TAURI_ENV_TARGET_TRIPLE`,
+  else the host; `aarch64-pc-windows-*` mapped too.
+- Should-fix taken: 1 (`WM_STYLECHANGING` keeps `WS_EX_TOOLWINDOW |
+  WS_EX_NOACTIVATE` through tao's rewrites; msvc `cargo check` ok), 2 (every
+  mount goes through the timed probe — local/pool 5 s, network 2 s — and a
+  share answering with an error is "not responding"), 3 (commands run in
+  their own process group and a timeout kills the group; test proves no
+  grandchild survives), 4 (`hide()` resets `in_panel`), 5 (scratch configs
+  under `os.UserCacheDir()/noclickdock-dev/…`, and the shell's `--mock`
+  config under the user cache dir too), 6 (a rejected `config.patch`
+  re-broadcasts the unchanged config).

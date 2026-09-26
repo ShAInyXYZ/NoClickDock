@@ -87,14 +87,19 @@ func main() {
 }
 
 // chooseConfigDir keeps development away from the real config: --dev and
-// --mock get a scratch directory, one per port so two reviewers' cores do
-// not share a dock, unless one is named.
+// --mock get a scratch directory under the user's own cache (not the
+// world-writable temp dir, where another user could plant one), one per
+// port so two reviewers' cores do not share a dock, unless one is named.
 func chooseConfigDir(flagDir string, scratch bool, port int) (string, error) {
 	switch {
 	case flagDir != "":
 		return flagDir, nil
 	case scratch:
-		return filepath.Join(os.TempDir(), fmt.Sprintf("ncd-core-%d", port)), nil
+		base, err := os.UserCacheDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(base, "noclickdock-dev", fmt.Sprintf("core-%d", port)), nil
 	}
 	return config.Dir()
 }

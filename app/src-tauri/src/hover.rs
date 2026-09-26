@@ -227,6 +227,8 @@ fn hide(app: &AppHandle, st: &mut State) {
     st.visible = false;
     st.widget = None;
     st.size = None;
+    // A window hidden under the pointer may never hear it leave.
+    st.in_panel = false;
     let _ = app.emit_to("panel", "panel-close", ());
     let _ = app.emit_to("rail", "panel-state", PanelState { widget: None, side: st.side });
 }
