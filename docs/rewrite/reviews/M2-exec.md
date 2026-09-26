@@ -301,3 +301,57 @@ Gallery audit (`shoot.mjs --audit`, 1× and 2×): 33 surfaces, 0 findings,
   - sweeps clean.
 - **Checks:** `scripts/check-inert-overlays.py` and
   `scripts/check-menu-under-grab.py`.
+
+## M2 r4 — `d881cb2` (research r4, design M1 r4 / M2 r2b)
+
+- **A crashed web process (research MUST).** Each view's
+  `web-process-terminated` brings the interface back:
+  - every view is reloaded, the rail first;
+  - the panels and the toast start over, still parked and click-through;
+  - a panel page asked to draw while it was reloading is asked again once
+    it listens (`panel_ready`);
+  - state comes back from the relay cache, as on any start.
+  - Bounded: five reloads a minute, backing off 0.25 → 4 s. A sixth crash
+    hides the dock rather than leave a frozen one, and it retries every
+    minute; "Show dock" in the tray retries at once.
+  - Cost: after a crash WebKit gives each view its own process again
+    (one per view until the next start).
+  - `scripts/check-web-process-crash.py` SIGKILLs the web process and
+    expects the rail back and a hover to open a panel within 3 s. Four
+    runs of the final build under Mutter on Xvfb: back in 0.3–1.2 s, each
+    passed.
+- **Switch latency (design M1 r4).**
+  - While a panel is open, the rail reports the dial the pointer is heading
+    for: the last third of a dial moving on, or the gap before the next.
+    The shell draws that widget in the window not showing.
+  - Each window keeps what it last drew, so a switch back is instant too.
+  - On arrival the switch is only the swap. Shell trace under Mutter on
+    Xvfb: hover → show **0.2 ms median** when predicted (was 42 ms).
+  - A 360-frame, 60 fps glide over every dial and back had no empty
+    frame.
+  - The real-desktop measurement is design's (vblank and the pointer path
+    are outside what Xvfb can show).
+  - One painted frame vs two: not changed.
+- **Toast pop (design M2 r2b).** The shell fades the toast window's
+  `_NET_WM_WINDOW_OPACITY` in ten steps over 160 ms, then parks it; the
+  page no longer fades.
+  - Recorded at 60 fps: ten frames, the text's brightness falling
+    monotonically (360 → 51 → 0 in the p95 of the toast's pixels).
+  - Reduced motion (GTK's enable-animations), no compositor, or Windows:
+    instant.
+  - A toast whose time is up while newer ones stay leaves the stack
+    without a fade. Only the whole window can fade.
+- **Descenders:** the header label (20 px line box), footer, section
+  titles, chips and tab labels no longer clip under `overflow: hidden`.
+- **Tray:** the icon file is named after its content, so GNOME's
+  AppIndicator host loads a new picture at once.
+- **Should-fixes:**
+  - pending actions settle quietly on a link drop or a new `hello`;
+  - `x11::set_visible` releases the server grab on every path.
+- **Re-run:** `check-inert-overlays.py` (60 samples, 0 inert) and
+  `check-menu-under-grab.py` pass.
+- **Test-environment note:** this Xvfb session's vite dev server had
+  failed to load half its component CSS modules at a cold start
+  (`failed to load virtual css module`). Pages then measured 1 px wide.
+  After a restart, 0 failures. Production embeds the CSS, so it is not
+  affected. The checks above were re-run after the restart.

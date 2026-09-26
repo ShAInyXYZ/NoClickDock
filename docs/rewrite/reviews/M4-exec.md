@@ -187,3 +187,37 @@ M3-exec.md).
 - **The real machine:** one reading through the collector's own code path
   returned all three rows, with the flag accepted by 2.1.280. The home
   project's transcript count was 1,480 before and after.
+
+## Addendum — research r1 should-fixes (`26e9dd8`) and design r1 (`cbf7c57`)
+
+- **State labels within 28 characters:** `<name> <status>`, else
+  `<name> degraded|down`, else `1 service degraded|down`; the
+  problems-first block still names it whole. Tested with the longest
+  names on today's pages (invented equivalents).
+- **Token glance ≤ 5 characters:** no decimal from 100 (`185M`), and
+  `999 500` rolls to `1.0M`.
+- **No orphan CLI:**
+  - every command the core waits for is stopped when it exits, with its
+    process group (`sys.StopAll`);
+  - on Linux, `Pdeathsig` kills it if the core is SIGKILLed.
+- **Windows zones:** `time/tzdata` is embedded in `ncd-core.exe`.
+- **Codex:** a turn in the same second as any `session_meta` is replayed
+  history, in every rollout. This catches a resume that replays a single
+  turn; on this machine it drops nothing new.
+- **A20, generically:** `model.RaiseToWorst`, applied by the hub to every
+  snapshot.
+  - A warn/crit limit, meter, row, table cell, chip or alert raises the
+    state, and the label names it (`week 90%`).
+  - A state as bad or worse keeps its words (a worse status page wins).
+  - A running job stays busy under a warn and yields to crit. **Decision
+    for main:** otherwise a ComfyUI generation that fills VRAM past 85 %
+    would lose its progress arc.
+  - Claude and Codex say `Week 90%`, and nothing when the limit falls back.
+- **Time moves forward (Claude):**
+  - A limit read before its reset shows `Session · reset 20m ago · no
+    reading since`: no percentage, not in the glance. The CLI is asked
+    again at once, but no faster than a refresh may.
+  - An unparseable reset is left out and logged once.
+  - Before the first answer: `Plan limits · reading…`.
+- **Chips:** a label that does not fit takes two columns (or the row).
+  "Claude for Government" now shows whole.
