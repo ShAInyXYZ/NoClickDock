@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, PhysicalPosition, WebviewWindow};
 
-use crate::{core, hover, overlay};
+use crate::{core, hover, main_thread, overlay};
 
 /// Distance, in CSS px, within which a dropped rail snaps to an edge.
 const SNAP: f64 = 24.0;
@@ -81,6 +81,7 @@ impl Area {
 
 /// The work area of the monitor holding a point, else of the primary monitor.
 pub fn work_area(app: &AppHandle, x: i32, y: i32) -> Option<Area> {
+    main_thread::assert();
     let monitor = app
         .monitor_from_point(f64::from(x), f64::from(y))
         .ok()
@@ -88,7 +89,7 @@ pub fn work_area(app: &AppHandle, x: i32, y: i32) -> Option<Area> {
         .or_else(|| app.primary_monitor().ok().flatten())?;
     let area = monitor.work_area();
     // A hot-plug can briefly report an empty work area.
-    (area.size.width > 0 && area.size.height > 0).then(|| Area {
+    (area.size.width > 0 && area.size.height > 0).then_some(Area {
         x: area.position.x,
         y: area.position.y,
         width: area.size.width as i32,
@@ -147,9 +148,11 @@ pub fn rail_layout(app: AppHandle, layout: RailLayout) -> Result<(), String> {
 /// - its monitor if still connected, else the primary one;
 /// - against its edge, as far along it as before, when it was snapped;
 /// - else its corner clamped into that monitor's work area.
+///
 /// Without a saved position: against the right edge of the primary monitor,
 /// centred (the bottom edge for a horizontal rail).
 fn restore(app: &AppHandle, size: (i32, i32), vertical: bool) -> (i32, i32) {
+    main_thread::assert();
     let saved = app.state::<core::Core>().dock_config().and_then(|dock| dock.get("position").cloned());
     let primary = || {
         app.primary_monitor().ok().flatten().and_then(|m| {
@@ -289,11 +292,10 @@ pub fn moved(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(SETTLE).await;
-        let main = app.clone();
-        let _ = app.run_on_main_thread(move || {
-            let current = main.state::<Dock>().0.lock().map(|s| s.moves).unwrap_or(0);
+        main_thread::run(&app, move |app| {
+            let current = app.state::<Dock>().0.lock().map(|s| s.moves).unwrap_or(0);
             if current == generation {
-                settle(&main);
+                settle(app);
             }
         });
     });
@@ -302,6 +304,7 @@ pub fn moved(app: &AppHandle) {
 /// Snaps a dropped rail to the nearest work-area edge within 24 CSS px, then
 /// saves where it rests. Moving it again lands back here through `moved`.
 fn settle(app: &AppHandle) {
+    main_thread::assert();
     let Some(rail) = app.get_webview_window("rail") else { return };
     let (Ok(at), Ok(size)) = (rail.outer_position(), rail.outer_size()) else { return };
     let size = (size.width as i32, size.height as i32);
@@ -367,6 +370,7 @@ fn settle(app: &AppHandle) {
 /// burst of notifications has settled. Main thread, once.
 #[cfg(target_os = "linux")]
 pub fn observe_monitors(app: &AppHandle) {
+    main_thread::assert();
     use gtk::prelude::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;

@@ -18,7 +18,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition};
 
 use crate::dock::{self, Area, Dock};
-use crate::{overlay, toast};
+use crate::{main_thread, overlay, toast};
 
 const DWELL: Duration = Duration::from_millis(120);
 const GRACE: Duration = Duration::from_millis(280);
@@ -237,12 +237,11 @@ fn after(app: &AppHandle, delay: Duration, generation: u64, then: fn(&AppHandle,
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(delay).await;
-        let main = app.clone();
-        let _ = app.run_on_main_thread(move || {
-            let hover = main.state::<Hover>();
+        main_thread::run(&app, move |app| {
+            let hover = app.state::<Hover>();
             let Ok(mut st) = hover.0.lock() else { return };
             if st.generation == generation {
-                then(&main, &mut st);
+                then(app, &mut st);
             }
         });
     });
@@ -358,12 +357,11 @@ fn hide(app: &AppHandle, st: &mut State) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(FADE).await;
-        let main = app.clone();
-        let _ = app.run_on_main_thread(move || {
-            let hover = main.state::<Hover>();
+        main_thread::run(&app, move |app| {
+            let hover = app.state::<Hover>();
             let Ok(st) = hover.0.lock() else { return };
             if st.closes == close && !st.visible {
-                if let Some(panel) = main.get_webview_window("panel") {
+                if let Some(panel) = app.get_webview_window("panel") {
                     let _ = overlay::conceal(&panel);
                 }
             }
@@ -383,6 +381,7 @@ pub struct Geometry {
 
 impl Geometry {
     pub fn of(app: &AppHandle, widget: &str) -> Option<Self> {
+        main_thread::assert();
         let rail = app.get_webview_window("rail")?;
         let layout = app.state::<Dock>().layout()?;
         let dial = layout.dials.iter().find(|d| d.widget == widget)?;

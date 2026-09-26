@@ -49,6 +49,7 @@ pub fn build(app: &tauri::App, label: &str, route: &str) -> tauri::Result<Webvie
 /// shrink a transparent WebKitGTK window below its webview's natural size,
 /// so the GTK window is pinned to the size instead.
 pub fn fit(window: &WebviewWindow, width: i32, height: i32) -> tauri::Result<()> {
+    crate::main_thread::assert();
     #[cfg(target_os = "linux")]
     {
         window.with_webview(move |view| {
@@ -87,6 +88,7 @@ pub struct Shown(Mutex<HashSet<String>>);
 /// it instead — invisible and click-through, still mapped — and showing it
 /// again is immediate.
 pub fn reveal(window: &WebviewWindow, position: PhysicalPosition<i32>) -> tauri::Result<()> {
+    crate::main_thread::assert();
     window.set_position(position)?;
     let shown = window.app_handle().state::<Shown>();
     let first = shown.0.lock().map(|mut set| set.insert(window.label().to_owned())).unwrap_or(true);
@@ -115,6 +117,7 @@ pub fn reveal(window: &WebviewWindow, position: PhysicalPosition<i32>) -> tauri:
 }
 
 pub fn conceal(window: &WebviewWindow) -> tauri::Result<()> {
+    crate::main_thread::assert();
     #[cfg(windows)]
     return crate::win::hide(window);
     #[cfg(target_os = "linux")]
@@ -179,6 +182,7 @@ impl Scale {
 
 /// Reads the initial scale. Main thread only (GTK).
 pub fn init_scale(app: &tauri::App) {
+    crate::main_thread::assert();
     #[cfg(target_os = "linux")]
     {
         use gtk::prelude::GtkSettingsExt;

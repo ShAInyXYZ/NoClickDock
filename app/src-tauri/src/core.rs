@@ -184,7 +184,10 @@ pub fn core_link(core: tauri::State<Core>) -> Link {
     core.link.lock().map(|l| l.clone()).unwrap_or_default()
 }
 
-/// Remembers what a line changes, then hands it to every window.
+/// Remembers what a line changes, then hands it to every window. This runs
+/// on the sidecar's reader task, off the main thread: it parses, caches and
+/// emits, and anything that places a window (a toast) is handed to the main
+/// thread by the module that owns it.
 fn relay(app: &AppHandle, line: &str) {
     if line.is_empty() {
         return;

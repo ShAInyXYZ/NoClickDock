@@ -15,7 +15,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition};
 
 use crate::hover::{Geometry, Side};
-use crate::overlay;
+use crate::{main_thread, overlay};
 
 const VISIBLE: Duration = Duration::from_millis(5000);
 const FADE: Duration = Duration::from_millis(160);
@@ -71,11 +71,17 @@ struct StackItem {
     leaving: bool,
 }
 
-/// A toast from the core or the shell itself.
+/// A toast from the core or the shell itself, from any thread: placing it
+/// reads the rail's monitor, which only the main thread may do.
 pub fn push(app: &AppHandle, widget: String, tone: String, text: String) {
     if text.is_empty() {
         return;
     }
+    main_thread::run(app, move |app| push_here(app, widget, tone, text));
+}
+
+fn push_here(app: &AppHandle, widget: String, tone: String, text: String) {
+    main_thread::assert();
     let toasts = app.state::<Toasts>();
     let Ok(mut st) = toasts.0.lock() else { return };
     if st.held.as_deref() == Some(widget.as_str()) {
@@ -89,6 +95,7 @@ pub fn push(app: &AppHandle, widget: String, tone: String, text: String) {
 
 /// A panel opened: its widget's toasts are dropped, the rest wait.
 pub fn hold(app: &AppHandle, widget: &str) {
+    main_thread::assert();
     let toasts = app.state::<Toasts>();
     let Ok(mut st) = toasts.0.lock() else { return };
     st.held = Some(widget.to_owned());
@@ -104,6 +111,7 @@ pub fn hold(app: &AppHandle, widget: &str) {
 
 /// The panel closed: waiting toasts come out.
 pub fn release(app: &AppHandle) {
+    main_thread::assert();
     let toasts = app.state::<Toasts>();
     let Ok(mut st) = toasts.0.lock() else { return };
     st.held = None;
@@ -113,6 +121,7 @@ pub fn release(app: &AppHandle) {
 /// Windows: pointing at a toast dismisses the stack.
 #[tauri::command]
 pub fn toast_dismiss(app: AppHandle) {
+    main_thread::assert();
     let toasts = app.state::<Toasts>();
     let Ok(mut st) = toasts.0.lock() else { return };
     st.shown.clear();
@@ -125,6 +134,7 @@ pub fn toast_dismiss(app: AppHandle) {
 /// distance from its top to the middle of the newest toast.
 #[tauri::command]
 pub fn toast_layout(app: AppHandle, seq: u64, width: f64, height: f64, anchor: f64) {
+    main_thread::assert();
     let toasts = app.state::<Toasts>();
     let Ok(mut st) = toasts.0.lock() else { return };
     if seq != st.seq || st.shown.is_empty() {

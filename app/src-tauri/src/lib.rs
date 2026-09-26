@@ -3,6 +3,7 @@
 mod core;
 mod dock;
 mod hover;
+mod main_thread;
 mod menu;
 mod overlay;
 mod toast;
@@ -98,6 +99,7 @@ pub fn run() {
             page_error,
         ])
         .setup(|app| {
+            main_thread::init();
             overlay::init_scale(app);
             // Built once and reused: each webview is a WebKit process.
             overlay::build(app, "rail", "dock")?;
