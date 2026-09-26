@@ -121,8 +121,10 @@ A floating capsule, vertical by default, horizontal on request.
   area. It never covers another dial.
 - Opening never takes keyboard focus from the user's application. Escape,
   when the panel does have focus, closes it.
-- Open: 140 ms fade + 3px slide from the rail (`--ease-out`). Close: 100 ms
-  fade. Reduced motion: no slide, instant.
+- Open and close are **instant** — no fade, no slide (amended 2026-09-26: on
+  Mutter, window-level fades composite unreliably and fight the two-window
+  swap). The 120 ms dwell is the only delay, the menu-bar model. The panel
+  appears fully painted in one frame and disappears in one frame.
 - Page tabs switch after 180 ms hover dwell, or on click.
 
 ## The panel
@@ -231,7 +233,9 @@ One surface, no nested cards.
 Beside the dial that raised them, on the panel side, stacked newest nearest
 the dial, at most 3, 6px apart. `--s2`, `--r-toast`, `--elev-2`, padding
 9/14/9/12; LED + **one plain sentence** (Manrope 13/500, max 2 lines, no mono
-fragments). 5 s, then 160 ms fade. Pointer passes through them on Linux
+fragments). Appears instantly; after 5 s its content fades out over 160 ms
+**inside** the toast window, and the window parks only after the fade has
+finished — never mid-fade. Pointer passes through them on Linux
 (on Windows, where click-through is unreliable, they dismiss on hover).
 While **any** panel is open, toasts wait and appear when it closes; a toast
 for the widget whose panel is open is dropped — the panel already says it
