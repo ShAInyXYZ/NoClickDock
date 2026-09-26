@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -21,7 +22,6 @@ type limit struct {
 	Label  string // "Session", "Week", "Week · Fable"
 	Pct    float64
 	Resets time.Time // zero when unknown
-	Raw    string    // the CLI's words, when they could not be read as a time
 }
 
 var limitRE = regexp.MustCompile(`(?i)^Current\s+(session|week)\s*(?:\(([^)]+)\))?\s*:\s*(\d+(?:\.\d+)?)\s*%\s*used(?:\s*[·•-]\s*resets\s+(.+?))?\s*$`)
@@ -56,7 +56,10 @@ func parseLimits(out string, now time.Time) []limit {
 			if t, ok := parseReset(raw, now); ok {
 				row.Resets = t
 			} else {
-				row.Raw = stripZone(raw)
+				// Never passed through verbatim (DESIGN: time only moves
+				// forward): the percentage alone is still true. Logged once,
+				// for the parser's tests.
+				unreadOnce.Do(func() { log.Printf("claude: a reset the parser cannot read: %q", raw) })
 			}
 		}
 		rows = append(rows, row)
@@ -143,6 +146,8 @@ const noPersist = "--no-session-persistence"
 // flagRefused: the installed CLI said it does not know noPersist. Remembered
 // for the life of the process, so the refusal is paid once.
 var flagRefused atomic.Bool
+
+var unreadOnce sync.Once
 
 // usageArgs is the fixed argv after the program (and a shim's prefix).
 func usageArgs(prefix []string, withFlag bool) []string {

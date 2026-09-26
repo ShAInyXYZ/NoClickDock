@@ -14,6 +14,7 @@ import (
 
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/model"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/statuspage"
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/sys"
 )
 
 // Every fixture is invented: no real prompt, project, path or incident.
@@ -27,13 +28,13 @@ func TestLimitsFromTheCLI(t *testing.T) {
 	rows := parseLimits(string(out), now)
 	var got []string
 	for _, r := range rows {
-		got = append(got, fmt.Sprintf("%s %.1f %s %q", r.Label, r.Pct, r.Resets.UTC().Format(time.RFC3339), r.Raw))
+		got = append(got, fmt.Sprintf("%s %.1f %s", r.Label, r.Pct, r.Resets.UTC().Format(time.RFC3339)))
 	}
 	want := []string{
-		`Session 46.0 2026-09-26T18:30:00Z ""`,
-		`Week 78.0 2026-09-28T09:00:00Z ""`,
-		`Week · Fable 23.5 2026-09-28T09:00:00Z ""`,
-		`Week · Opus 0.0 0001-01-01T00:00:00Z ""`,
+		`Session 46.0 2026-09-26T18:30:00Z`,
+		`Week 78.0 2026-09-28T09:00:00Z`,
+		`Week · Fable 23.5 2026-09-28T09:00:00Z`,
+		`Week · Opus 0.0 0001-01-01T00:00:00Z`,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("limits:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
@@ -59,8 +60,8 @@ func TestLimitsFromTheCLI(t *testing.T) {
 		t.Errorf("January read in December is next year: %v", got)
 	}
 	rows = parseLimits("Current session: 5% used · resets whenever it likes", now)
-	if len(rows) != 1 || rows[0].Raw != "whenever it likes" || !rows[0].Resets.IsZero() {
-		t.Errorf("an unreadable reset keeps its words: %+v", rows)
+	if len(rows) != 1 || rows[0].Pct != 5 || !rows[0].Resets.IsZero() {
+		t.Errorf("an unreadable reset is left out, the percentage kept: %+v", rows)
 	}
 }
 
@@ -464,5 +465,75 @@ func TestRefreshKeepsLimitsAndUsage(t *testing.T) {
 	w.Force()
 	if w.limitsAsked.IsZero() {
 		t.Error("a second refresh within 10 s does not run the CLI again")
+	}
+}
+
+// DESIGN "time only moves forward": a limit read before its reset shows no
+// percentage and no reset ahead, stays out of the glance, and makes the
+// CLI due again.
+func TestAPassedResetIsSaidInWords(t *testing.T) {
+	p := poll{
+		page: statuspage.Page{Reached: true, Indicator: "none"},
+		limits: []limit{
+			{Label: "Session", Pct: 96, Resets: now.Add(-20 * time.Minute)},
+			{Label: "Week", Pct: 40, Resets: now.Add(50 * time.Hour)},
+		},
+		limitsAt: now.Add(-40 * time.Minute),
+		now:      now,
+	}
+	s := render(p)
+	got := rows(s.Pages[0].Blocks)
+	want := []string{"# Usage  ", "  Session · reset 20m ago · no reading since", "= Week 40 resets " + sys.Clock(now.Add(50*time.Hour), now) + " "}
+	if !reflect.DeepEqual(got[:3], want) {
+		t.Errorf("rows %q\nwant %q", got[:3], want)
+	}
+	if s.Glance.Text != "40%" || s.Glance.Tone != model.ToneNone {
+		t.Errorf("glance %+v: the lapsed 96%% is not current", s.Glance)
+	}
+	w := &Widget{limits: p.limits, limitsAt: now.Add(-40 * time.Minute), limitsAsked: now.Add(-time.Minute)}
+	if !w.limitsDue(now) {
+		t.Error("a reset since the reading makes the CLI due")
+	}
+	w.limitsAsked = now.Add(-5 * time.Second)
+	if w.limitsDue(now) {
+		t.Error("but no faster than a refresh may ask")
+	}
+	w.limitsAsked, w.limitsAt = now.Add(-time.Minute), now.Add(-10*time.Minute) // read after the reset
+	if w.limitsDue(now) {
+		t.Error("a reading taken after the reset is current")
+	}
+}
+
+// DESIGN A20: a plan nearly used up raises the widget however well the
+// status page reads, the label names it, and its end says nothing.
+func TestAFullPlanRaisesTheState(t *testing.T) {
+	s := render(poll{
+		page:   statuspage.Page{Reached: true, Indicator: "none"},
+		limits: []limit{{Label: "Week", Pct: 92, Resets: now.Add(time.Hour)}, {Label: "Session", Pct: 10}},
+		now:    now,
+	})
+	w := &Widget{}
+	w.wasRaised, w.raised = w.raised, model.RaiseToWorst(&s)
+	if s.State != model.StateCrit || s.StateLabel != "week 92%" || s.Glance.Tone != model.ToneCrit {
+		t.Fatalf("state %q %q glance %+v", s.State, s.StateLabel, s.Glance)
+	}
+	if msg := w.Transition(model.StateOK, s.State, s); msg != "Week 92%" {
+		t.Errorf("raised: %q", msg)
+	}
+	calm := render(poll{page: statuspage.Page{Reached: true, Indicator: "none"}, limits: []limit{{Label: "Week", Pct: 3}}, now: now})
+	w.wasRaised, w.raised = w.raised, model.RaiseToWorst(&calm)
+	if calm.State != model.StateOK || calm.StateLabel != "operational" {
+		t.Fatalf("calm %q %q", calm.State, calm.StateLabel)
+	}
+	if msg := w.Transition(model.StateCrit, calm.State, calm); msg != "" {
+		t.Errorf("the limit falling back is not 'All systems operational': %q", msg)
+	}
+}
+
+// Before the CLI's first answer, an empty Usage is not "no plan limits".
+func TestLimitsBeingRead(t *testing.T) {
+	s := render(poll{page: statuspage.Page{Reached: true, Indicator: "none"}, reading: true, now: now})
+	if got := rows(s.Pages[0].Blocks); len(got) < 2 || got[1] != "  Plan limits · reading…" {
+		t.Errorf("rows %q", got)
 	}
 }

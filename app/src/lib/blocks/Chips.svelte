@@ -11,6 +11,23 @@
   const problem = (tone?: Tone) => tone === "warn" || tone === "crit";
   const pulled = $derived(block.items.filter((item) => problem(item.tone)));
   const quiet = $derived(block.items.filter((item) => !problem(item.tone)));
+  const cols = $derived(Math.max(1, block.columns || 3));
+
+  // A label that does not fit its column takes two (or the whole row): a
+  // name is never cut ("Claude for Government", design M4 r1). Rechecked
+  // until everything fits; `dense` packs the short ones around it.
+  let grid = $state<HTMLElement>();
+  let span = $state<Record<string, number>>({});
+  $effect(() => {
+    void quiet;
+    void span;
+    if (!grid) return;
+    for (const el of grid.querySelectorAll<HTMLElement>(".Chip-label")) {
+      const label = el.title;
+      const now = span[label] ?? 1;
+      if (el.scrollWidth > el.clientWidth + 1 && now < cols) span[label] = now + 1;
+    }
+  });
 </script>
 
 {#each pulled as item (item.label)}
@@ -20,9 +37,9 @@
   />
 {/each}
 {#if quiet.length}
-  <div class="Chips" style:--cols={Math.max(1, block.columns || 3)}>
+  <div class="Chips" style:--cols={cols} bind:this={grid}>
     {#each quiet as item (item.label)}
-      <span class="Chip">
+      <span class="Chip" style:grid-column={span[item.label] ? `span ${span[item.label]}` : undefined}>
         {#if item.tone}<Led tone={item.tone} />{/if}
         <span class="Chip-label" title={item.label}>{item.label}</span>
         {#if item.value}<span class="Chip-value">{item.value}</span>{/if}
@@ -35,6 +52,7 @@
   .Chips {
     display: grid;
     grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+    grid-auto-flow: row dense;
     column-gap: 12px;
     row-gap: 2px;
     padding: 4px 0 6px;

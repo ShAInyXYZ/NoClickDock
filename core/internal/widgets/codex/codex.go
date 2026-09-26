@@ -32,6 +32,9 @@ type Widget struct {
 	spendAt   time.Time
 	spendBusy bool
 	issues    []model.Issue // the last page that answered
+
+	// The last two snapshots' states were raised by a limit (A20).
+	raised, wasRaised bool
 }
 
 func New() *Widget {
@@ -63,7 +66,16 @@ func (w *Widget) Force() {
 	}
 }
 
+// Transition words the page's changes; a state raised by a limit (A20)
+// says the limit, and says nothing when the limit falls back — the page
+// was fine all along.
 func (w *Widget) Transition(_, to model.State, s model.Snapshot) string {
+	w.mu.Lock()
+	raised, was := w.raised, w.wasRaised
+	w.mu.Unlock()
+	if !raised && was && to == model.StateOK {
+		return ""
+	}
 	return statuspage.Transition(to, s.StateLabel)
 }
 
@@ -79,6 +91,10 @@ func (w *Widget) Collect(ctx context.Context) (model.Snapshot, error) {
 	w.mu.Unlock()
 	s := render(p)
 	s.Issues = issues
+	raised := model.RaiseToWorst(&s)
+	w.mu.Lock()
+	w.wasRaised, w.raised = w.raised, raised
+	w.mu.Unlock()
 	return s, nil
 }
 

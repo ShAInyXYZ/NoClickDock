@@ -284,6 +284,7 @@ func (e *entry) normalize(s *model.Snapshot) {
 	if s.State == "" {
 		s.State = model.StateIdle
 	}
+	model.RaiseToWorst(s) // DESIGN A20: every widget, mocks included
 	if s.Pages == nil {
 		s.Pages = []model.Page{}
 	}

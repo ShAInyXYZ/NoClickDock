@@ -89,6 +89,7 @@ type poll struct {
 	limitsAt time.Time
 	usage    *usage // nil until the first scan has finished
 	now      time.Time
+	reading  bool // the CLI is being asked for the first time
 }
 
 func render(p poll) model.Snapshot {
@@ -99,13 +100,16 @@ func render(p poll) model.Snapshot {
 		Menu:       []model.MenuItem{{ID: "open-status", Label: "Open status page", URL: statusPage}},
 	}
 
-	// The dial reads the plan: the highest limit, else the day's tokens.
+	// The dial reads the plan: the highest limit still current, else the
+	// day's tokens.
 	s.Glance = model.Glance{Text: "—"}
-	if len(p.limits) > 0 {
-		top := p.limits[0].Pct
-		for _, l := range p.limits {
-			top = max(top, l.Pct)
+	top, current := 0.0, false
+	for _, l := range p.limits {
+		if !lapsed(l, p.now) {
+			top, current = max(top, l.Pct), true
 		}
+	}
+	if current {
 		s.Glance = model.Glance{Text: fmt.Sprintf("%.0f%%", top), Tone: limitTone(top)}
 	} else if p.usage != nil && p.usage.H24 > 0 {
 		s.Glance = model.Glance{Text: sys.FmtTokens(p.usage.H24)}
@@ -123,8 +127,19 @@ func render(p poll) model.Snapshot {
 	return s
 }
 
+// lapsed is a limit whose reset has passed since it was read.
+func lapsed(l limit, now time.Time) bool { return !l.Resets.IsZero() && !l.Resets.After(now) }
+
 func usageBlocks(p poll) model.Blocks {
 	has := p.usage != nil && p.usage.Available
+	if len(p.limits) == 0 && p.reading {
+		// Not "no plan limits": the CLI has not answered yet.
+		out := model.Blocks{model.Section{Title: "Usage"}, model.Note{Text: "Plan limits · reading…", Tone: model.ToneIdle}}
+		if !has {
+			return out
+		}
+		return append(out, spendBlocks(p.usage)...)
+	}
 	if len(p.limits) == 0 && !has {
 		if p.usage == nil {
 			return nil // the first scan has not finished: nothing to say yet
@@ -136,29 +151,38 @@ func usageBlocks(p poll) model.Blocks {
 	}
 	out := model.Blocks{model.Section{Title: "Usage"}}
 	for _, l := range p.limits {
-		resets := l.Raw
-		if !l.Resets.IsZero() {
-			resets = sys.Clock(l.Resets, p.now)
+		if lapsed(l, p.now) {
+			// Read before its reset: what is used now is unknown until the
+			// next reading — neither the old percentage nor zero, and the
+			// reset is not ahead any more (DESIGN: time only moves forward).
+			out = append(out, model.Note{Text: l.Label + " · reset " + sys.TimeAgo(l.Resets, p.now) + " · no reading since", Tone: model.ToneIdle})
+			continue
 		}
-		if resets != "" {
-			resets = "resets " + resets
+		var resets string
+		if !l.Resets.IsZero() {
+			resets = "resets " + sys.Clock(l.Resets, p.now)
 		}
 		out = append(out, model.Limit{Label: l.Label, Pct: l.Pct, Resets: resets, Tone: limitTone(l.Pct)})
 	}
 	if has {
-		u := p.usage
-		out = append(out, model.Stats{Items: []model.Stat{
-			{Key: "1h", Value: sys.FmtTokens(u.H1)}, {Key: "24h", Value: sys.FmtTokens(u.H24)},
-			{Key: "7d", Value: sys.FmtTokens(u.D7)}, {Key: "sessions", Value: strconv.Itoa(u.Sessions)},
-		}})
-		if len(u.Models) > 0 {
-			// Readings, not status: a line of stats, not chips (design M2 r1).
-			line := model.Stats{}
-			for _, m := range u.Models {
-				line.Items = append(line.Items, model.Stat{Key: shortModel(m.Model), Value: sys.FmtTokens(m.Tokens)})
-			}
-			out = append(out, line)
+		out = append(out, spendBlocks(p.usage)...)
+	}
+	return out
+}
+
+// spendBlocks: the week's tokens, then the split by model.
+func spendBlocks(u *usage) model.Blocks {
+	out := model.Blocks{model.Stats{Items: []model.Stat{
+		{Key: "1h", Value: sys.FmtTokens(u.H1)}, {Key: "24h", Value: sys.FmtTokens(u.H24)},
+		{Key: "7d", Value: sys.FmtTokens(u.D7)}, {Key: "sessions", Value: strconv.Itoa(u.Sessions)},
+	}}}
+	if len(u.Models) > 0 {
+		// Readings, not status: a line of stats, not chips (design M2 r1).
+		line := model.Stats{}
+		for _, m := range u.Models {
+			line.Items = append(line.Items, model.Stat{Key: shortModel(m.Model), Value: sys.FmtTokens(m.Tokens)})
 		}
+		out = append(out, line)
 	}
 	return out
 }

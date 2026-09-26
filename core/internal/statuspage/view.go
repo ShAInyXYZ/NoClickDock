@@ -165,7 +165,7 @@ func StateLabel(p Page, short Short) string {
 
 // LabelBudget is a state label's length (dock-core §11): the panel header
 // and the dial's label never have to cut one.
-const LabelBudget = 28
+const LabelBudget = model.LabelBudget
 
 func fits(label string) bool { return utf8.RuneCountInString(label) <= LabelBudget }
 

@@ -51,6 +51,9 @@ type Widget struct {
 	// recoveries are compared against it.
 	comps  map[string]string
 	issues []model.Issue
+
+	// The last two snapshots' states were raised by a limit (A20).
+	raised, wasRaised bool
 }
 
 func New() *Widget {
@@ -84,7 +87,16 @@ func (w *Widget) Force() {
 	}
 }
 
+// Transition words the page's changes; a state raised by a limit (A20)
+// says the limit, and says nothing when the limit falls back — the page
+// was fine all along.
 func (w *Widget) Transition(_, to model.State, s model.Snapshot) string {
+	w.mu.Lock()
+	raised, was := w.raised, w.wasRaised
+	w.mu.Unlock()
+	if !raised && was && to == model.StateOK {
+		return ""
+	}
 	return statuspage.Transition(to, s.StateLabel)
 }
 
@@ -95,7 +107,7 @@ func (w *Widget) Collect(ctx context.Context) (model.Snapshot, error) {
 	w.mu.Lock()
 	w.dueLimits()
 	w.dueUsage()
-	p := poll{page: page, limits: w.limits, limitsAt: w.limitsAt, usage: w.usage, now: now}
+	p := poll{page: page, limits: w.limits, limitsAt: w.limitsAt, usage: w.usage, now: now, reading: w.limitsBusy && w.limitsAt.IsZero()}
 	var notices []model.Issue
 	if page.Reached {
 		comps := map[string]string{}
@@ -113,13 +125,17 @@ func (w *Widget) Collect(ctx context.Context) (model.Snapshot, error) {
 
 	s := render(p)
 	s.Issues, s.Notices = issues, notices
+	raised := model.RaiseToWorst(&s)
+	w.mu.Lock()
+	w.wasRaised, w.raised = w.raised, raised
+	w.mu.Unlock()
 	return s, nil
 }
 
 // dueLimits starts the CLI when its reading is five minutes old. An empty
 // answer keeps the rows it had. Called with mu held.
 func (w *Widget) dueLimits() {
-	if w.limitsBusy || (!w.limitsAsked.IsZero() && time.Since(w.limitsAsked) < limitsEvery) {
+	if !w.limitsDue(time.Now()) {
 		return
 	}
 	w.limitsBusy, w.limitsAsked = true, time.Now()
@@ -138,6 +154,25 @@ func (w *Widget) dueLimits() {
 			refresh()
 		}
 	}()
+}
+
+// limitsDue: five minutes since the CLI was asked — or a window has reset
+// since the rows were read, which is asked about again at once (no faster
+// than a refresh may): until then it can only be said in words. Called
+// with mu held.
+func (w *Widget) limitsDue(now time.Time) bool {
+	if w.limitsBusy {
+		return false
+	}
+	if w.limitsAsked.IsZero() || now.Sub(w.limitsAsked) >= limitsEvery {
+		return true
+	}
+	for _, l := range w.limits {
+		if lapsed(l, now) && w.limitsAt.Before(l.Resets) && now.Sub(w.limitsAsked) > forceAfter {
+			return true
+		}
+	}
+	return false
 }
 
 // dueUsage rescans the transcripts every two minutes, in the background:
