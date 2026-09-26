@@ -115,7 +115,10 @@ A floating capsule, vertical by default, horizontal on request.
 - While any panel is open, entering another dial switches the panel
   **immediately**, no close/open animation — the menu-bar model. Acceptance:
   no frame ever shows an empty panel or one widget's content in another's
-  geometry; pointer-to-drawn median ≤ 50 ms, worst ≤ 70 ms on Mutter.
+  geometry; pointer-to-drawn median ≤ 70 ms, worst ≤ 100 ms on the real
+  Mutter desktop at 60 Hz (measured from a 120 fps capture; the pointer's own
+  path to the app and one compositor frame are inside that budget). The shell
+  prepares the dial the pointer is approaching so the swap is ready on arrival.
 - Leaving the dial and the panel → panel closes after **280 ms** grace;
   re-entering either cancels it.
 - The panel opens perpendicular to the rail, on the side with more room,
@@ -235,9 +238,10 @@ One surface, no nested cards.
 Beside the dial that raised them, on the panel side, stacked newest nearest
 the dial, at most 3, 6px apart. `--s2`, `--r-toast`, `--elev-2`, padding
 9/14/9/12; LED + **one plain sentence** (Manrope 13/500, max 2 lines, no mono
-fragments). Appears instantly; after 5 s its content fades out over 160 ms
-**inside** the toast window, and the window parks only after the fade has
-finished — never mid-fade. Pointer passes through them on Linux
+fragments). Appears instantly; after 5 s the **shell** fades the toast
+window's compositor opacity (`_NET_WM_WINDOW_OPACITY`) to 0 over 160 ms and
+then parks it — WebKit stops painting a click-through window, so the fade
+cannot live in the page. Reduced motion: instant dismiss. Pointer passes through them on Linux
 (on Windows, where click-through is unreliable, they dismiss on hover).
 While **any** panel is open, toasts wait and appear when it closes; a toast
 for the widget whose panel is open is dropped — the panel already says it

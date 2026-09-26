@@ -287,7 +287,8 @@ body { font-variant-numeric: tabular-nums; }
   color: var(--tone);
 }
 .PanelHeader-state { min-width: 0; }
-.PanelHeader-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.PanelHeader-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                     line-height: 20px; }   /* a 1× line box clips descenders under overflow:hidden */
 .PanelHeader-state[data-tone="ok"],
 .PanelHeader-state[data-tone="idle"] { color: var(--muted); }
 .Panel-tabs { padding: 0 var(--inset) 12px; }
