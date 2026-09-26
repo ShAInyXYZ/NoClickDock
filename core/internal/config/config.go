@@ -11,11 +11,25 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 )
 
 type Config struct {
-	Dock Dock `json:"dock"`
+	Dock    Dock    `json:"dock"`
+	Widgets Widgets `json:"widgets"`
+}
+
+// Widgets holds each widget's own options.
+type Widgets struct {
+	Tailscale Tailscale `json:"tailscale"`
+}
+
+type Tailscale struct {
+	// Watch pins the peers whose absence matters, by host name. Null (the
+	// default) watches every peer seen online since the core started; an
+	// empty list watches none.
+	Watch *[]string `json:"watch"`
 }
 
 type Dock struct {
@@ -61,6 +75,13 @@ func (c Config) validate() error {
 		}
 		if p.Along != nil && (*p.Along < 0 || *p.Along > 1) {
 			return fmt.Errorf("dock.position.along must be between 0 and 1")
+		}
+	}
+	if w := c.Widgets.Tailscale.Watch; w != nil {
+		for _, host := range *w {
+			if strings.TrimSpace(host) == "" || len(host) > 253 {
+				return fmt.Errorf("widgets.tailscale.watch holds host names, not %q", host)
+			}
 		}
 	}
 	return nil

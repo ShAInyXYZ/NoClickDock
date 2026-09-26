@@ -79,6 +79,10 @@ export interface Config {
     readouts: boolean;
     position?: { x: number; y: number };
   };
+  widgets?: {
+    /** null watches every peer seen online since the core started. */
+    tailscale?: { watch: string[] | null };
+  };
 }
 
 export interface Toast {

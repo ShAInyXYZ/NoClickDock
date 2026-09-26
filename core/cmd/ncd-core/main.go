@@ -51,7 +51,28 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	collectors := widgets.Real()
+	scratch := *dev || *mock
+	dir, err := chooseConfigDir(*configDir, scratch, *port)
+	if err != nil {
+		log.Fatal(err)
+	}
+	cfg, err := config.Open(dir)
+	if err != nil {
+		log.Print(err) // defaults are in use; keep running
+	}
+	// The Python widgets' settings come over once, on the real config's
+	// first run only: development never reads them.
+	if *configDir == "" && !scratch && *once == "" && runtime.GOOS == "linux" {
+		if legacy, err := config.LegacyDir(); err == nil {
+			if moved, err := cfg.MigrateLegacy(legacy); err != nil {
+				log.Printf("legacy settings: %v", err)
+			} else if moved {
+				log.Printf("brought the Tailscale watch list over from %s", legacy)
+			}
+		}
+	}
+
+	collectors := widgets.Real(cfg)
 	if *mock {
 		collectors = widgets.Mocks(*live)
 	}
@@ -61,15 +82,6 @@ func main() {
 			log.Fatal(err)
 		}
 		return
-	}
-
-	dir, err := chooseConfigDir(*configDir, *dev || *mock, *port)
-	if err != nil {
-		log.Fatal(err)
-	}
-	cfg, err := config.Open(dir)
-	if err != nil {
-		log.Print(err) // defaults are in use; keep running
 	}
 
 	h := hub.New(runtime.GOOS, cfg, collectors)
