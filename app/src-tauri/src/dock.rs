@@ -412,3 +412,28 @@ pub fn observe_monitors(app: &AppHandle) {
 /// Windows re-places on ScaleChanged instead (on_window_event).
 #[cfg(not(target_os = "linux"))]
 pub fn observe_monitors(_app: &AppHandle) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const AREA: Area = Area { x: 0, y: 2208, width: 3840, height: 2112 };
+
+    #[test]
+    fn a_rail_goes_back_against_its_edge_as_far_along_as_before() {
+        let size = (81, 717);
+        assert_eq!(on_edge(AREA, size, "right", 0.5), (3840 - 81, 2208 + 1056 - 358));
+        assert_eq!(on_edge(AREA, size, "left", 0.0), (0, 2208)); // clamped into the area
+        let wide = (717, 81);
+        assert_eq!(on_edge(AREA, wide, "bottom", 0.25), (960 - 358, 2208 + 2112 - 81));
+        assert_eq!(on_edge(AREA, wide, "top", 1.0), (3840 - 717, 2208));
+    }
+
+    #[test]
+    fn clamping_keeps_the_whole_rail_on_the_work_area() {
+        assert_eq!(clamp((5000, 100), (81, 717), AREA), (3840 - 81, 2208));
+        assert_eq!(clamp((-40, 5000), (81, 717), AREA), (0, 2208 + 2112 - 717));
+        // Bigger than the area: pinned to its origin, never negative.
+        assert_eq!(clamp((10, 10), (4000, 81), AREA), (0, 2208));
+    }
+}

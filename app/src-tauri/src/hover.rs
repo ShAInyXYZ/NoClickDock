@@ -447,3 +447,57 @@ impl Geometry {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A rail against the right edge of a 3840×2112 work area at 1.5×.
+    fn right_rail() -> Geometry {
+        Geometry {
+            rail: (3759, 2906, 81, 717),
+            dial: (3800, 3360),
+            vertical: true,
+            area: Area { x: 0, y: 2208, width: 3840, height: 2112 },
+            scale: 1.5,
+        }
+    }
+
+    #[test]
+    fn a_panel_opens_on_the_roomier_side_centred_on_its_dial() {
+        let g = right_rail();
+        assert!(matches!(g.side(), Side::Left));
+        let (x, y) = g.place(Side::Left, (663, 849));
+        assert_eq!(x, 3759 - 9 - 663); // 6 CSS px of gap at 1.5
+        assert_eq!(y, 3360 - 849 / 2);
+    }
+
+    #[test]
+    fn a_tall_panel_is_clamped_along_the_rail_not_across_it() {
+        let g = right_rail();
+        let (x, y) = g.place(Side::Left, (663, 2080));
+        assert_eq!(x, 3759 - 9 - 663);
+        // As close to centred on the dial as the work area allows, 8 CSS px
+        // from its bottom edge.
+        assert_eq!(y, 2208 + 2112 - 12 - 2080);
+    }
+
+    #[test]
+    fn a_placed_panel_keeps_its_top_when_it_resizes() {
+        let g = right_rail();
+        let mut st = State { side: Side::Left, ..State::default() };
+        let first = position(&mut st, &g, (663, 849));
+        let shorter = position(&mut st, &g, (663, 537));
+        assert_eq!(first.1, shorter.1, "the header must not move under the pointer");
+        // Grown past the bottom of the work area: up by the overflow only.
+        let taller = position(&mut st, &g, (663, 1500));
+        assert_eq!(taller.1, 2208 + 2112 - 12 - 1500);
+    }
+
+    #[test]
+    fn a_toast_stack_puts_its_newest_toast_level_with_the_dial() {
+        let g = right_rail();
+        let (_, y) = g.beside(Side::Left, (259, 171), 28);
+        assert_eq!(y, 3360 - 28);
+    }
+}
