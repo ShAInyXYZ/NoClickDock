@@ -201,6 +201,31 @@ One surface, no nested cards.
   `--r`): "tailscaled is not running on this machine. Start it with
   `sudo systemctl start tailscaled`".
 
+## What the panel says (rules for snapshot writers)
+
+- **Problems first (A19).** When a widget is `warn` or `crit`, the block that
+  explains its header state is the first thing on its first page. The
+  healthy majority comes after, condensed.
+- **One voice per role (A18).** A row or chip name is Manrope 13/500 —
+  hostnames, container and peer names included. Filesystem **paths** are the
+  one exception: Plex Mono 11.5/400, for meter labels and rows alike;
+  `row.mono` means "the name is a path" and nothing else sets it. Labels are
+  sentence case (`Address`, `MagicDNS`, `Key expires`, `Build cache`);
+  identifiers keep their own case; values are lowercase words (`running`,
+  `degraded performance`).
+- **State labels** are short sentence case and name the specific fact
+  (`console degraded`, `fileserver offline`, `2 containers unhealthy`) —
+  never a status page's Title Case phrase.
+- **One time format.** 24-hour `HH:MM` within the day, `Ddd HH:MM` beyond it
+  (`resets 16:40`, `resets Mon 09:00`); durations as `12m`, `3h`, `2d`.
+- **Unknown is never zero.** A value that was not measured is absent or said
+  in words (`never reports usage`), never a `0`, `0 %` or empty meter. An
+  unreachable service's page is its empty sentence alone.
+- **Nothing twice.** An item appears once per page (ARCHITECTURE M2-d); a
+  footer never repeats the error the empty sentence already states — it says
+  what the app is doing about it (`retrying every 10 s · since 03:27:52`).
+- A row's lamp and its value tone agree.
+
 ## Toasts
 
 Beside the dial that raised them, on the panel side, stacked newest nearest
