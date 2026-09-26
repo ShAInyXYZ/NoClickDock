@@ -5,13 +5,25 @@
   // 28px under a hairline: what the widget adds about itself on the left,
   // and when it was last read on the right. A collector error takes the line
   // in red and says which reading is still shown; a widget gone quiet takes
-  // it in amber and says since when.
-  let { snapshot, heard, stale = false }: { snapshot: WidgetSnapshot; heard: number; stale?: boolean } = $props();
+  // it in amber and says since when. Something down whose panel already
+  // says why (the core itself) says what is being done about it, in amber,
+  // and since when — never the error twice.
+  let {
+    snapshot,
+    heard,
+    stale = false,
+    since,
+  }: { snapshot: WidgetSnapshot; heard: number; stale?: boolean; since?: number | null } = $props();
 
   const measured = $derived(Date.parse(snapshot.updatedAt));
 </script>
 
-{#if snapshot.error}
+{#if since}
+  <div class="PanelFooter" data-tone="warn">
+    <span class="PanelFooter-about">{snapshot.footer ?? ""}</span>
+    <span class="fresh">since {clock(since)}</span>
+  </div>
+{:else if snapshot.error}
   <div class="PanelFooter" data-tone="crit">
     <span class="PanelFooter-about" title={snapshot.error}>{snapshot.error}</span>
     {#if measured > 0}<span class="fresh">showing {clock(measured)}</span>{/if}

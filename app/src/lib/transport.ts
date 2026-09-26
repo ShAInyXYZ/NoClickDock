@@ -10,14 +10,14 @@ export interface Transport {
   /** Delivers the current state — hello, then every widget's latest
    *  snapshot — and then every message after it, until the returned
    *  function is called. */
-  connect(onMessage: (message: CoreMessage) => void, onLink: (up: boolean, error?: string) => void): Promise<() => void>;
+  connect(onMessage: (message: CoreMessage) => void, onLink: (up: boolean, error?: string, since?: number) => void): Promise<() => void>;
   send(message: UiMessage): Promise<void>;
 }
 
-interface Link { up: boolean; error: string | null }
+interface Link { up: boolean; error: string | null; since?: number | null }
 
 class TauriTransport implements Transport {
-  async connect(onMessage: (message: CoreMessage) => void, onLink: (up: boolean, error?: string) => void) {
+  async connect(onMessage: (message: CoreMessage) => void, onLink: (up: boolean, error?: string, since?: number) => void) {
     // Listen first and hold what arrives until the cached state is applied:
     // nothing is lost in between, and nothing older lands on top of newer.
     let held: CoreMessage[] | null = [];
@@ -28,7 +28,9 @@ class TauriTransport implements Transport {
     });
     // Whether the core is answering — and why not — comes from the shell,
     // which supervises it.
-    const unlistenLink = await listen<Link>("core-link", (event) => onLink(event.payload.up, event.payload.error ?? undefined));
+    const unlistenLink = await listen<Link>("core-link", (event) =>
+      onLink(event.payload.up, event.payload.error ?? undefined, event.payload.since ?? undefined),
+    );
     try {
       const state = await invoke<string[]>("core_state");
       for (const line of state) onMessage(JSON.parse(line));
@@ -37,7 +39,7 @@ class TauriTransport implements Transport {
       held = null;
     }
     const link = await invoke<Link>("core_link");
-    onLink(link.up, link.error ?? undefined);
+    onLink(link.up, link.error ?? undefined, link.since ?? undefined);
     return () => {
       unlisten();
       unlistenLink();
@@ -52,15 +54,19 @@ class TauriTransport implements Transport {
 class HttpTransport implements Transport {
   constructor(private readonly base: string) {}
 
-  async connect(onMessage: (message: CoreMessage) => void, onLink: (up: boolean, error?: string) => void) {
+  async connect(onMessage: (message: CoreMessage) => void, onLink: (up: boolean, error?: string, since?: number) => void) {
     // EventSource reconnects by itself, and the core starts every stream
     // with the full state, so a restarted core needs no special handling.
     const source = new EventSource(`${this.base}/v1/events`);
     for (const type of CORE_MESSAGE_TYPES) {
       source.addEventListener(type, (event) => onMessage(JSON.parse((event as MessageEvent<string>).data)));
     }
-    source.onopen = () => onLink(true);
-    source.onerror = () => onLink(false, `the development core at ${this.base} is not answering`);
+    let since: number | undefined;
+    source.onopen = () => {
+      since = undefined;
+      onLink(true);
+    };
+    source.onerror = () => onLink(false, `the development core at ${this.base} is not answering`, (since ??= Date.now()));
     return () => source.close();
   }
 

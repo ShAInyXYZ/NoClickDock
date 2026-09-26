@@ -16,7 +16,16 @@
     maxHeight,
     minHeight,
     stale,
-  }: { snapshot: WidgetSnapshot; page?: string; maxHeight?: number; minHeight?: number; stale?: boolean } = $props();
+    since,
+  }: {
+    snapshot: WidgetSnapshot;
+    page?: string;
+    maxHeight?: number;
+    minHeight?: number;
+    stale?: boolean;
+    /** Down since then (the core-down panel): the footer says so. */
+    since?: number | null;
+  } = $props();
 
   const current = $derived(snapshot.pages.find((p) => p.id === page) ?? snapshot.pages[0]);
   const tabs = $derived(snapshot.pages.map((p) => ({ value: p.id, label: p.label, tone: p.tone, badge: p.badge })));
@@ -77,7 +86,7 @@
   <div class="Panel-body" bind:this={body}>
     {#if current}<Blocks blocks={current.blocks} widget={snapshot.id} />{/if}
   </div>
-  <PanelFooter {snapshot} heard={core.lastHeard(snapshot.id)} stale={quiet} />
+  <PanelFooter {snapshot} heard={core.lastHeard(snapshot.id)} stale={quiet} {since} />
 </section>
 
 <style>

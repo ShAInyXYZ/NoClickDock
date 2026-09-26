@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { core } from "$lib/core.svelte";
+  import { core, coreDown } from "$lib/core.svelte";
   import Dial from "$lib/dock/Dial.svelte";
   import Rail from "$lib/dock/Rail.svelte";
   import type { Side } from "$lib/dock/side";
@@ -71,14 +71,21 @@
     byId.disk && { ...byId.disk, error: "statfs /mnt/offsite: gave up after 60s", state: "idle" as State, stateLabel: "unavailable" },
   );
   const quiet = $derived(pick("crit"));
+  // A stack the shell can actually show (M2-b): one widget's toasts, newest
+  // first, in its own transition words.
   const toasts = $derived(
     core.toasts.length
       ? core.toasts.slice(-3).reverse().map((t) => ({ key: t.key, tone: t.tone, text: t.text }))
-      : core.widgets
-          .filter((w) => w.state !== "ok")
-          .slice(0, 3)
-          .map((w) => ({ key: w.id, tone: (w.state === "busy" ? "info" : w.state) as Tone, text: `${w.title}: ${w.stateLabel}` })),
+      : [
+          { key: "done", tone: "ok" as Tone, text: "Generation complete" },
+          { key: "busy", tone: "info" as Tone, text: "Generating…" },
+          { key: "online", tone: "ok" as Tone, text: "ComfyUI is online" },
+        ],
   );
+  // The shell's own dial when the core will not start, down since a fixed
+  // instant so the shot does not change.
+  const down = coreDown("ncd-core stopped with exit code 1 (config.json: unexpected end of JSON input)");
+  const downSince = new Date(2026, 8, 26, 3, 27, 52).getTime();
 
   onMount(() => {
     const disconnect = core.connect();
@@ -166,6 +173,9 @@
       {/each}
       {#if failing && show("panel/disk/collector-error")}
         <div class="Sheet-panel" data-surface="panel/disk/collector-error"><Panel snapshot={failing} /></div>
+      {/if}
+      {#if show("panel/ncd/core-down")}
+        <div class="Sheet-panel" data-surface="panel/ncd/core-down"><Panel snapshot={down} stale={false} since={downSince} /></div>
       {/if}
       {#if quiet && show(`panel/${quiet.id}/stale`)}
         <div class="Sheet-panel" data-surface="panel/{quiet.id}/stale"><Panel snapshot={quiet} stale /></div>

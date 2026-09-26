@@ -39,6 +39,8 @@ pub struct Core {
 pub struct Link {
     pub up: bool,
     pub error: Option<String>,
+    /// When it stopped answering (ms since the epoch), while it is down.
+    pub since: Option<u64>,
 }
 
 #[derive(Default)]
@@ -171,8 +173,13 @@ fn watch_hello(app: &AppHandle) {
 }
 
 fn set_link(app: &AppHandle, up: bool, error: Option<String>) {
-    let link = Link { up, error };
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+    let mut link = Link { up, error, since: None };
     if let Ok(mut current) = app.state::<Core>().link.lock() {
+        // Down since the first failure, not the latest retry.
+        if !up {
+            link.since = Some(current.since.filter(|_| !current.up).unwrap_or(now));
+        }
         *current = link.clone();
     }
     let _ = app.emit("core-link", link);

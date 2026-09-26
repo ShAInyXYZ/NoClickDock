@@ -24,8 +24,9 @@ class Core {
   heard = $state<Record<string, number>>({});
   toasts = $state<(Toast & { key: number })[]>([]);
   linked = $state(false);
-  /** Why the core is not answering, when the shell knows. */
+  /** Why the core is not answering, when the shell knows, and since when. */
   linkError = $state<string | null>(null);
+  linkDownSince = $state<number | null>(null);
   /** A one-second clock: staleness is a matter of time passing. */
   now = $state(Date.now());
 
@@ -45,9 +46,10 @@ class Core {
     this.#clock ??= setInterval(() => (this.now = Date.now()), 1000);
     return this.#transport.connect(
       (message) => this.#apply(message),
-      (up, error) => {
+      (up, error, since) => {
         this.linked = up;
         this.linkError = up ? null : (error ?? null);
+        this.linkDownSince = up ? null : (since ?? this.linkDownSince ?? Date.now());
       },
     );
   }
@@ -148,9 +150,11 @@ export function coreDown(error: string): WidgetSnapshot {
     state: "idle",
     stateLabel: "core not running",
     glance: { text: "off", tone: "idle" },
-    updatedAt: "", // nothing measured: the footer shows the error alone
+    updatedAt: "",
     pollSecs: 0,
-    error,
+    // The sentence says what is wrong; the footer never repeats it — it
+    // says what the shell is doing about it, and since when (PanelFooter).
+    footer: "retrying every 10 s",
     pages: [
       {
         id: "main",

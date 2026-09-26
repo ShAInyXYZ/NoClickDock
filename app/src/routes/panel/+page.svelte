@@ -148,6 +148,7 @@
       {maxHeight}
       minHeight={steady ? tallest : undefined}
       stale={widget === CORE_DIAL ? false : undefined}
+      since={widget === CORE_DIAL ? core.linkDownSince : undefined}
     />
   </div>
   {#if steady}
