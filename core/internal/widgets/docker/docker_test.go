@@ -243,11 +243,11 @@ func TestNowPage(t *testing.T) {
 		"# Needs attention 4",
 		"! cron-runner | restarting · <1m | example/cron:1 / up <1m · restarted 14×",
 		"! ledger-api | unhealthy · 3m | example/ledger-api:2.4 / up 3m",
-		"! ledger-worker | exit 1 · 2h | example/ledger-worker:2.4 / exit 1 · error · restart=always but not back",
-		"! thumbnailer | OOM (137) · 3h | example/thumbs:0.9 / OOM-killed (137) · restart=unless-stopped but not back",
-		"# Running 7",
-		"- shopfront | 2/3 up · 22.2G · 2% | cache, web   down: worker | warn",
-		"- ledger | 2/3 up · 1.7G · 8% | api, db   down: worker | warn",
+		"! ledger-worker | exit 1 · 2h | example/ledger-worker:2.4 / restart=always but not back",
+		"! thumbnailer | OOM (137) · 3h | example/thumbs:0.9 / restart=unless-stopped but not back",
+		"# Running 5 stacks · 7 containers",
+		"- shopfront | 2/3 · 22.2G · 2% | cache, web   down: worker | warn",
+		"- ledger | 2/3 · 1.7G · 8% | api, db   down: worker | warn",
 		"- api-gateway | up 42h · 48M | traefik:v3 · :8080 · healthy | ok",
 		"- portainer | up 25d · 19M | portainer/portainer-ce:2 · :8000 · :9443 | ok",
 		"- media-proxy | paused | nginx:1.27 · :8443->443 | warn",
@@ -312,15 +312,10 @@ func TestSystemPage(t *testing.T) {
 		}
 	}
 	want := []string{
-		"Docker | 27.3.1 | ",
-		"Compose | 2.29.7 | ",
-		"Containers | 15 · 6 running | ",
-		"Images | 46 · 7 dangling | ",
-		"Volumes | 21 · 14 in use | ",
-		"images | 38G of 61G | warn | prune.images free 38G?",
-		"containers | 1.4G of 3.1G | idle | prune.containers remove 7?",
-		"build cache | 0 of 0 | idle | prune.builder prune?",
-		"volumes | 6.8G of 48G | idle",
+		"Images | 38G of 61G | warn | prune.images free 38G?",
+		"Containers | 1.4G of 3.1G | idle | prune.containers remove 7?",
+		"Build cache | 0 of 0 | idle | prune.builder prune?",
+		"Volumes | 6.8G of 48G | idle",
 		"  Buttons ask twice. Nothing in use is ever removed.",
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -363,7 +358,7 @@ func TestPendingHidesButtonsAndReadsBusy(t *testing.T) {
 	// A prune is its own scope.
 	s = render(d, pending{"prune:images": "pruning"})
 	for _, b := range page(s, "system") {
-		if r, ok := b.(model.Row); ok && r.Name == "images" && r.Value != "pruning…" {
+		if r, ok := b.(model.Row); ok && r.Name == "Images" && r.Value != "pruning…" {
 			t.Errorf("images row %+v", r)
 		}
 	}

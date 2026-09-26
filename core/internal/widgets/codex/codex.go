@@ -22,28 +22,26 @@ func (Widget) Mock(time.Time) model.Snapshot {
 	ok, warn, idle := model.ToneOK, model.ToneWarn, model.ToneIdle
 	return model.Snapshot{
 		State:      model.StateWarn,
-		StateLabel: "Partially Degraded Service",
+		StateLabel: "VS Code partial outage", // the specific fact, not the page's phrase
 		Glance:     model.Glance{Text: "47%"},
 		Width:      440,
 		Pages: []model.Page{{ID: "main", Blocks: model.Blocks{
 			model.Section{Title: "Usage", Meta: "plus plan"},
-			model.Note{Text: "codex · 12m ago"},
-			model.Limit{Label: "5h", Pct: 47, Resets: "resets 16:40"},
-			model.Limit{Label: "week", Pct: 31, Resets: "resets Sep 29, 9:12am"},
-			model.Note{Text: "codex-mini · 3d ago · never reports usage", Tone: idle},
-			model.Limit{Label: "5h", Pct: 0},
-			model.Limit{Label: "week", Pct: 0},
+			model.Limit{Label: "codex 5h", Pct: 47, Resets: "resets 16:40"},
+			model.Limit{Label: "codex week", Pct: 31, Resets: "resets Tue 09:12"},
+			// Unknown is never zero: a bucket that reports nothing is words.
+			model.Note{Text: "codex-mini · never reports usage", Tone: idle},
 			model.Stats{Items: []model.Stat{
 				{Key: "1h", Value: "96K"}, {Key: "24h", Value: "2.3M"}, {Key: "7d", Value: "11.2M"}, {Key: "sessions", Value: "4"},
 			}},
-			model.Chips{Columns: 2, Items: []model.Chip{{Label: "gpt-5-codex", Value: "2.1M"}, {Label: "gpt-5", Value: "180K"}}},
+			model.Stats{Items: []model.Stat{{Key: "gpt-5-codex", Value: "2.1M"}, {Key: "gpt-5", Value: "180K"}}},
 			model.Section{Title: "Degraded", Meta: "1", Tone: warn},
-			model.Row{Name: "vs code", Value: "partial outage", Tone: warn, LED: warn},
+			model.Row{Name: "VS Code extension", Value: "partial outage", Tone: warn, LED: warn},
 			model.Section{Title: "Services", Meta: "8 of 9"},
 			model.Chips{Columns: 3, Items: []model.Chip{
-				{Label: "codex api", Tone: ok}, {Label: "codex web", Tone: ok}, {Label: "desktop app", Tone: ok},
-				{Label: "cli", Tone: ok}, {Label: "responses", Tone: ok}, {Label: "completions", Tone: ok},
-				{Label: "login", Tone: ok}, {Label: "conversations", Tone: ok},
+				{Label: "Codex API", Tone: ok}, {Label: "Codex Web", Tone: ok}, {Label: "Desktop app", Tone: ok},
+				{Label: "CLI", Tone: ok}, {Label: "Responses", Tone: ok}, {Label: "Completions", Tone: ok},
+				{Label: "Login", Tone: ok}, {Label: "Conversations", Tone: ok},
 			}},
 			model.Section{Title: "Active incidents", Meta: "1", Tone: warn},
 			model.Alert{
@@ -54,7 +52,7 @@ func (Widget) Mock(time.Time) model.Snapshot {
 		Footer: "limits as of 12m ago",
 		Menu:   []model.MenuItem{{ID: "open-status", Label: "Open status page", URL: "https://status.openai.com"}},
 		Issues: []model.Issue{
-			{ID: "comp:VS Code extension:partial_outage", Text: "vs code: partial outage", Tone: warn},
+			{ID: "comp:VS Code extension:partial_outage", Text: "VS Code extension has a partial outage", Tone: warn},
 			{ID: "inc:mock-2", Text: "Increased latency in the VS Code extension", Tone: warn},
 		},
 	}

@@ -186,9 +186,9 @@ func render(d *data, p pending) model.Snapshot {
 	s.Pages = []model.Page{now, stopped, {ID: "system", Label: "System", Blocks: systemPage(d, p)}}
 
 	if d.sys != nil && d.sys.engine != "" {
-		s.Footer = "engine " + short(d.sys.engine)
+		s.Footer = "engine " + short(d.sys.engine) + " · no compose"
 		if d.sys.compose != "" {
-			s.Footer += " · compose " + short(d.sys.compose)
+			s.Footer = "engine " + short(d.sys.engine) + " · compose " + short(d.sys.compose)
 		}
 	}
 	if d.portainer != "" {
@@ -255,7 +255,8 @@ func nowPage(d *data, att []attention, running int, p pending) model.Blocks {
 	}
 	sort.SliceStable(live, func(i, j int) bool { return live[i].Mem > live[j].Mem })
 	if len(live) > 0 {
-		out = append(out, model.Section{Title: "Running", Meta: strconv.Itoa(running)})
+		out = append(out, model.Section{Title: "Running", Meta: fmt.Sprintf("%d %s · %d %s",
+			len(live), plural(len(live), "stack", "stacks"), running, plural(running, "container", "containers"))})
 		for _, u := range live {
 			if verb, ok := p.of("unit", u.Name); ok {
 				out = append(out, pendingRow(u.Name, verb))
@@ -298,7 +299,13 @@ func alert(a attention, p pending) model.Alert {
 		}
 	} else {
 		cause, age = shortCause(c), c.AgeH
-		detail = append(detail, why(c))
+		// The meta has the code; what it means only when it says more.
+		if meaning, ok := exitMeaning[c.Exit]; ok && !c.OOM && c.Exit != 1 {
+			detail = append(detail, meaning)
+		}
+		if c.Policy != "" {
+			detail = append(detail, "restart="+c.Policy+" but not back")
+		}
 	}
 	meta := cause
 	if age >= 0 && len([]rune(cause+" · "+dur(age))) <= 24 {
@@ -323,9 +330,9 @@ func alert(a attention, p pending) model.Alert {
 
 func runningRow(u *unit, p pending) model.Row {
 	var head, sub string
-	led := model.ToneOK
+	led, tone := model.ToneOK, model.ToneNone
 	if u.Stack && len(u.Members) > 1 {
-		head = fmt.Sprintf("%d/%d up", len(u.Running), len(u.Members))
+		head = fmt.Sprintf("%d/%d", len(u.Running), len(u.Members))
 		up := map[*container]bool{}
 		var names, down []string
 		for _, c := range u.Running {
@@ -340,7 +347,7 @@ func runningRow(u *unit, p pending) model.Row {
 		sort.Strings(names)
 		sub = strings.Join(names, ", ")
 		if len(down) > 0 {
-			led = model.ToneWarn
+			led, tone = model.ToneWarn, model.ToneWarn // lamp and value agree
 			sort.Strings(down)
 			sub += "   down: " + strings.Join(down, ", ")
 		}
@@ -367,7 +374,7 @@ func runningRow(u *unit, p pending) model.Row {
 	if u.CPU >= 1 {
 		value = append(value, fmt.Sprintf("%.0f%%", u.CPU))
 	}
-	return model.Row{Name: u.Name, Sub: sub, Value: strings.Join(nonEmpty(value), " · "), LED: led, Actions: unitActions(u, p)}
+	return model.Row{Name: u.Name, Sub: sub, Value: strings.Join(nonEmpty(value), " · "), Tone: tone, LED: led, Actions: unitActions(u, p)}
 }
 
 func serviceName(c *container) string {
@@ -479,56 +486,31 @@ func stoppedRow(u *unit, p pending) model.Row {
 // systemPage: the engine, then what could be reclaimed and the buttons
 // that reclaim it.
 func systemPage(d *data, p pending) model.Blocks {
-	running := 0
-	for _, c := range d.all {
-		if c.State == "running" {
-			running++
-		}
-	}
-	sys := d.sys
-	if sys == nil {
-		sys = &system{}
-	}
-	orQ := func(s string) string {
-		if s == "" {
-			return "?"
-		}
-		return s
-	}
-	img, vol := sys.df["images"], sys.df["local volumes"]
-	compose := sys.compose
-	if compose == "" {
-		compose = "not installed"
-	}
-	if d.sys == nil {
-		compose = "?"
-	}
-	out := model.Blocks{
-		model.Section{Title: "Engine"},
-		model.Row{Name: "Docker", Value: orQ(sys.engine)},
-		model.Row{Name: "Compose", Value: compose},
-		model.Row{Name: "Containers", Value: fmt.Sprintf("%d · %d running", len(d.all), running)},
-		model.Row{Name: "Images", Value: fmt.Sprintf("%s · %d dangling", orQ(img.total), sys.dangling)},
-		model.Row{Name: "Volumes", Value: fmt.Sprintf("%s · %s in use", orQ(vol.total), orQ(vol.active))},
-	}
-	switch {
-	case d.sys == nil:
-		return append(out, model.Note{Text: "Asking docker for its disk use…", Tone: model.ToneIdle})
-	case len(sys.df) == 0:
-		return append(out, model.Note{Text: "docker system df did not answer", Tone: model.ToneIdle})
-	}
-
-	// What `docker container prune` removes: not the paused, not the
-	// restarting.
-	stopped := 0
+	running, stopped := 0, 0
 	for _, c := range d.all {
 		switch c.State {
-		case "exited", "created", "dead":
+		case "running":
+			running++
+		case "exited", "created", "dead": // what `docker container prune` removes
 			stopped++
 		}
 	}
+	sys := d.sys
+	switch {
+	case sys == nil:
+		return model.Blocks{model.Note{Text: "Asking docker for its disk use…", Tone: model.ToneIdle}}
+	case len(sys.df) == 0:
+		return model.Blocks{
+			model.Row{Name: "Containers", Value: fmt.Sprintf("%d · %d running", len(d.all), running)},
+			model.Note{Text: "docker system df did not answer", Tone: model.ToneIdle},
+		}
+	}
+
+	// One row per kind of thing docker keeps: how many (in the sub), what
+	// could come back of what it takes, and the button that takes it back.
+	// The engine and compose versions are the footer's.
 	row := func(label, key, sub string, acts []model.Action) model.Row {
-		if verb, ok := p.of("prune", label); ok {
+		if verb, ok := p.of("prune", key); ok {
 			return pendingRow(label, verb)
 		}
 		r := sys.df[key]
@@ -538,6 +520,13 @@ func systemPage(d *data, p pending) model.Blocks {
 		}
 		return model.Row{Name: label, Sub: sub, Value: fmtDec(r.recl) + " of " + fmtDec(r.size), LED: led, Actions: acts}
 	}
+	orQ := func(s string) string {
+		if s == "" {
+			return "?"
+		}
+		return s
+	}
+	img, vol := sys.df["images"], sys.df["local volumes"]
 	var imgActs, ctrActs []model.Action
 	if img.recl > 0 {
 		imgActs = prune("prune.images", "prune unused", "free "+fmtDec(img.recl)+"?")
@@ -545,13 +534,13 @@ func systemPage(d *data, p pending) model.Blocks {
 	if stopped > 0 {
 		ctrActs = prune("prune.containers", "prune stopped", fmt.Sprintf("remove %d?", stopped))
 	}
-	return append(out,
-		model.Section{Title: "Disk · reclaimable"},
-		row("images", "images", fmt.Sprintf("%d dangling · prune drops every image no container uses", sys.dangling), imgActs),
-		row("containers", "containers", fmt.Sprintf("%d stopped · prune removes every one of them", stopped), ctrActs),
-		row("build cache", "build cache", "rebuilds cost time, not data", prune("prune.builder", "prune", "prune?")),
+	return model.Blocks{
+		model.Section{Title: "Disk", Meta: "reclaimable of used"},
+		row("Images", "images", fmt.Sprintf("%s · %d dangling · prune drops every image no container uses", orQ(img.total), sys.dangling), imgActs),
+		row("Containers", "containers", fmt.Sprintf("%d · %d running · prune removes the %d stopped", len(d.all), running, stopped), ctrActs),
+		row("Build cache", "build cache", "rebuilds cost time, not data", prune("prune.builder", "prune", "prune?")),
 		// Volumes hold data: never pruned from this panel.
-		row("volumes", "local volumes", "data lives here · never pruned from this panel", nil),
+		row("Volumes", "local volumes", fmt.Sprintf("%s · %s in use · data, never pruned from here", orQ(vol.total), orQ(vol.active)), nil),
 		model.Note{Text: "Buttons ask twice. Nothing in use is ever removed."},
-	)
+	}
 }

@@ -33,43 +33,35 @@ func (Widget) Mock(now time.Time) model.Snapshot {
 	hot := func(text string) model.Cell { return model.Cell{Text: text, Tone: warn} }
 	current := len(hourly) - 1
 
+	// One table: draw, storage, displays and USB share its columns, so every
+	// name and number lines up; the header row is the first group's strip.
+	// Numbers carry no units — the header says them — as the reference
+	// draws it; `~` marks an estimate.
 	left := model.Blocks{
-		model.Section{Title: "Power draw"},
 		model.Table{
 			Columns: []model.Column{
-				{Label: "", Align: "left", Mono: true},
+				{Label: "Draw", Align: "left", Mono: true},
 				{Label: "", Align: "left"},
 				{Label: "W / cap", Align: "right", Mono: true},
 				{Label: "core", Align: "right", Mono: true},
-				{Label: "mem", Align: "right", Mono: true},
+				{Label: "vram", Align: "right", Mono: true},
 			},
 			Rows: []model.TableRow{
-				{Cells: []model.Cell{cell("CPU"), cell("Ryzen 9 7950X"), cell("96W"), cell("61°C"), cell("")}},
-				{Cells: []model.Cell{cell("GPU0"), cell("RTX 4090"), cell("318/450W"), hot("71°C"), hot("92°C")}},
-				{Cells: []model.Cell{cell("GPU1"), cell("RTX 3060"), cell("21/170W"), cell("41°C"), cell("46°C")}},
-				{Cells: []model.Cell{cell("Board"), cell("X670E board"), cell("30W"), cell(""), cell("")}},
+				{Cells: []model.Cell{cell("CPU"), cell("Ryzen 9 7950X"), cell("96"), cell("61°"), cell("")}},
+				{Cells: []model.Cell{cell("GPU0"), cell("RTX 4090"), cell("318/450"), hot("71°"), hot("92°")}},
+				{Cells: []model.Cell{cell("GPU1"), cell("RTX 3060"), cell("21/170"), cell("41°"), cell("46°")}},
+				{Cells: []model.Cell{cell("Board"), cell("X670E board"), cell("~30"), cell(""), cell("")}},
+				model.Group("Storage", "2"),
+				{Cells: model.Cells("NVMe", "990 PRO 2 TB", "5", "43°", "")},
+				{Cells: model.Cells("NVMe", "SN850X 1 TB", "5", "38°", "")},
+				model.Group("Displays", "own PSU"),
+				{Cells: model.Cells("DP-0", "27″ 2560×1440", "~48", "", "")},
+				{Cells: model.Cells("HDMI-0", "24″ 1920×1080", "~43", "", "")},
+				model.Group("USB", ""),
+				{Cells: model.Cells("USB", "3 devices", "~5", "", "")},
 			},
 		},
-		model.Section{Title: "Storage", Meta: "2"},
-		model.Table{
-			Columns: []model.Column{{Align: "left", Mono: true}, {Align: "left"}, {Align: "right", Mono: true}, {Align: "right", Mono: true}},
-			Rows: []model.TableRow{
-				{Cells: model.Cells("NVMe", "990 PRO 2 TB", "5W", "43°C")},
-				{Cells: model.Cells("NVMe", "SN850X 1 TB", "5W", "38°C")},
-			},
-		},
-		model.Section{Title: "Displays", Meta: "2 · own PSU"},
-		model.Table{
-			Columns: []model.Column{{Align: "left", Mono: true}, {Align: "left"}, {Align: "right", Mono: true}},
-			Rows: []model.TableRow{
-				{Cells: model.Cells("DP-0", `27" 2560×1440`, "~48W")},
-				{Cells: model.Cells("HDMI-0", `24" 1920×1080`, "~43W")},
-			},
-		},
-		model.Section{Title: "USB", Meta: "3"},
-		model.Row{Name: "Mechanical keyboard"},
-		model.Row{Name: "Wireless mouse receiver"},
-		model.Row{Name: "USB audio interface"},
+		model.Note{Text: "keyboard · mouse receiver · audio interface"},
 	}
 
 	highlight := current

@@ -74,3 +74,17 @@ func RatioTone(frac, warn, crit float64) model.Tone {
 func Clamp01(f float64) float64 {
 	return math.Max(0, math.Min(1, f))
 }
+
+// Clock is the one way a panel says when (DESIGN "One time format"):
+// 24-hour "16:40" within the day, "Mon 09:00" beyond it, both in local
+// time. The zero time is unknown: "".
+func Clock(t, now time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	t, now = t.Local(), now.Local()
+	if t.Year() == now.Year() && t.YearDay() == now.YearDay() {
+		return t.Format("15:04")
+	}
+	return t.Format("Mon 15:04")
+}

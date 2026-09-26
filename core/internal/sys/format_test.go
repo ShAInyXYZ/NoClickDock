@@ -64,3 +64,21 @@ func TestRatioTone(t *testing.T) {
 		}
 	}
 }
+
+func TestClock(t *testing.T) {
+	now := time.Date(2026, 9, 26, 12, 41, 0, 0, time.Local)
+	for _, c := range []struct {
+		t    time.Time
+		want string
+	}{
+		{time.Date(2026, 9, 26, 16, 40, 0, 0, time.Local), "16:40"},
+		{time.Date(2026, 9, 26, 0, 5, 0, 0, time.Local), "00:05"},
+		{time.Date(2026, 9, 28, 9, 0, 0, 0, time.Local), "Mon 09:00"},
+		{time.Date(2026, 9, 25, 23, 59, 0, 0, time.Local), "Fri 23:59"},
+		{time.Time{}, ""},
+	} {
+		if got := Clock(c.t, now); got != c.want {
+			t.Errorf("Clock(%v) = %q, want %q", c.t, got, c.want)
+		}
+	}
+}

@@ -111,7 +111,7 @@ func TestState(t *testing.T) {
 		{"one up", "status-running.json", pin("atlas"), func(st *status) { st.Health, st.HasExpiry = nil, false }, model.StateOK, "1 peer up", "1/1"},
 		{"self offline", "status-running.json", pin(), func(st *status) { st.SelfOnline = false }, model.StateCrit, "this node offline", "off"},
 		{"stopped", "status-stopped.json", nil, nil, model.StateCrit, "stopped", "off"},
-		{"logged out", "status-needslogin.json", nil, nil, model.StateCrit, "needslogin", "off"},
+		{"logged out", "status-needslogin.json", nil, nil, model.StateCrit, "needs login", "off"},
 	} {
 		st := load(t, c.file, now)
 		if c.mutate != nil {
@@ -275,31 +275,32 @@ func TestPanel(t *testing.T) {
 	w.observe(st, now)
 	e, _ := parseServe(`{"TCP":{"443":{"HTTPS":true}},"Web":{"workstation.tail0c4fe.ts.net:443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:3000"}}}},"AllowFunnel":{"workstation.tail0c4fe.ts.net:443":true}}`)
 	s := render(&poll{available: true, st: st, now: now, pinned: true, exposure: e})
+	// Problems first: the watched peer that is offline leads (A19).
 	want := []string{
+		"# Watched · offline 1 warn",
+		"- fileserver | 11m ago | warn warn", // 11 min 59.9 s
 		"# Health  crit",
 		"  Some peers are advertising routes but --accept-routes is false warn",
 		"# This node  ",
-		"- workstation | Running | ok ",
-		"- address | 100.64.0.10 |  ",
-		"- magicdns | workstation.tail0c4fe.ts.net |  ",
-		"- version | 1.80.2 · update available | warn warn",
-		"- key expires | 3d | warn warn",
-		"- exit node | exit-fra | warn warn",
+		"- workstation | running | ok ",
+		"- Address | 100.64.0.10 |  ",
+		"- MagicDNS | workstation.tail0c4fe.ts.net |  ",
+		"- Version | 1.80.2 · update available | warn warn",
+		"- Key expires | 3d | warn warn",
+		"- Exit node | exit-fra | warn warn",
 		"# Exposure  ",
-		"- serve | :443 → 127.0.0.1:3000 | warn warn",
-		"- funnel | :443 · public internet | crit crit",
-		"- exit node | offered by this node | warn warn",
-		"- route advertised | 10.10.0.0/16 | warn warn",
-		"- exit nodes available | exit-fra |  ",
-		"- route via router | 192.168.50.0/24 |  ",
+		"- Serve | :443 → 127.0.0.1:3000 | warn warn",
+		"- Funnel | :443 · public internet | crit crit",
+		"- Exit node | offered by this node | warn warn",
+		"- Route advertised | 10.10.0.0/16 | warn warn",
+		"- Exit nodes available | exit-fra |  ",
+		"- Route via router | 192.168.50.0/24 |  ",
 		"# Online 5 ",
 		"- atlas | linux · direct | ok ",
-		"- build-agent | linux · relay fra | ok warn",
-		"- Phone | iOS · relay ams | idle warn",
-		"- exit-fra | linux · direct | idle ",
-		"- router | linux · direct | idle ",
-		"# Watched · offline 1 warn",
-		"- fileserver | 11m ago | warn warn", // 11 min 59.9 s
+		"- build-agent | linux · relay fra | warn warn",
+		"- Phone | iOS · relay ams | warn warn",
+		"- exit-fra | linux · direct | ok ",
+		"- router | linux · direct | ok ",
 		"# Dormant 3 ",
 		"  [old-desktop 12d ago idle]",
 		"  [old-vm key expired warn]",
@@ -324,18 +325,18 @@ func TestPanel(t *testing.T) {
 	if got[len(got)-1] != "  Pin peers in Settings → Tailscale " {
 		t.Errorf("last %q", got[len(got)-1])
 	}
-	if !contains(got, "- serve / funnel | nothing exposed | ok ") {
+	if !contains(got, "- Serve / funnel | nothing exposed | ok ") {
 		t.Error("nothing exposed is said out loud")
 	}
 	got = rowsOf(render(&poll{available: true, st: st, now: now}).Pages[0].Blocks)
-	if !contains(got, "- serve / funnel | unknown | idle ") {
+	if !contains(got, "- Serve / funnel | unknown | idle ") {
 		t.Error("an unanswered serve status is unknown")
 	}
 
 	st = load(t, "status-stopped.json", now)
 	got = rowsOf(render(&poll{available: true, st: st, now: now, pinned: true}).Pages[0].Blocks)
-	if got[len(got)-1] != "  No peers in this tailnet idle" {
-		t.Errorf("no peers: %q", got)
+	if got[len(got)-1] != "  No peers in this tailnet idle" || got[0] != "# This node  " {
+		t.Errorf("stopped: this node leads, no peers last: %q", got)
 	}
 }
 

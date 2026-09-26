@@ -70,7 +70,7 @@ func panel(running, pending string, busy bool) model.Snapshot {
 			model.Section{Title: "System"},
 			model.Meter{Label: "RAM", Frac: 51.2 / 125.7, Value: "51.2 GB / 125.7 GB"},
 			model.Stats{Items: []model.Stat{{Key: "comfyui", Value: "0.3.60"}, {Key: "torch", Value: "2.8.0"}, {Key: "python", Value: "3.12.3"}}},
-			model.Row{Name: "endpoint", Value: endpoint, Mono: true},
+			model.Row{Name: "Endpoint", Value: endpoint},
 		}}},
 		Menu: []model.MenuItem{{ID: "open-ui", Label: "Open ComfyUI", URL: endpoint}},
 	}
@@ -98,9 +98,8 @@ func (Widget) Variants(time.Time) map[string]model.Snapshot {
 		"offline": {
 			State: model.StateIdle, StateLabel: "offline",
 			Glance: model.Glance{Text: "off", Tone: model.ToneIdle}, Width: 400,
+			// Unknown is never zero, and nothing twice: the sentence alone.
 			Pages: []model.Page{{ID: "main", Blocks: model.Blocks{
-				model.Stats{Items: []model.Stat{{Key: "running", Value: "0"}, {Key: "pending", Value: "0"}}},
-				model.Row{Name: "endpoint", Value: endpoint, Mono: true},
 				model.Empty{Text: "ComfyUI is not answering at", Commands: []string{endpoint}},
 			}}},
 		},

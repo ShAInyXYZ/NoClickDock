@@ -47,7 +47,7 @@ func render(p *poll) model.Snapshot {
 
 	switch {
 	case st.Backend != "Running":
-		s.State, s.StateLabel = model.StateCrit, strings.ToLower(st.Backend)
+		s.State, s.StateLabel = model.StateCrit, backendWords(st.Backend)
 	case !st.SelfOnline:
 		s.State, s.StateLabel = model.StateCrit, "this node offline"
 	case len(down) == 1:
@@ -96,6 +96,19 @@ func render(p *poll) model.Snapshot {
 	return s
 }
 
+// backendWords says tailscaled's backend state in lowercase words.
+func backendWords(state string) string {
+	switch state {
+	case "NeedsLogin":
+		return "needs login"
+	case "NeedsMachineAuth":
+		return "needs approval"
+	case "NoState":
+		return "no state"
+	}
+	return strings.ToLower(state)
+}
+
 func backendSentence(state string) string {
 	switch state {
 	case "Stopped":
@@ -131,14 +144,13 @@ func unavailable(p *poll) model.Snapshot {
 func panel(p *poll, down []*peer) model.Blocks {
 	st := p.st
 	ok, warn, crit, idle := model.ToneOK, model.ToneWarn, model.ToneCrit, model.ToneIdle
-	var out model.Blocks
+	var out, health, offline, tail model.Blocks
 
-	// Health first: when the daemon has something to say, it outranks
-	// everything else here.
+	// When the daemon has something to say, it outranks the node's facts.
 	if len(st.Health) > 0 {
-		out = append(out, model.Section{Title: "Health", Tone: crit})
+		health = append(health, model.Section{Title: "Health", Tone: crit})
 		for _, h := range st.Health {
-			out = append(out, model.Note{Text: h, Tone: warn})
+			health = append(health, model.Note{Text: h, Tone: warn})
 		}
 	}
 
@@ -147,21 +159,21 @@ func panel(p *poll, down []*peer) model.Blocks {
 	if st.Backend != "Running" || !st.SelfOnline {
 		selfLED = crit
 	}
-	out = append(out, model.Section{Title: "This node"}, model.Row{Name: st.Self, Value: st.Backend, LED: selfLED})
+	out = append(out, model.Section{Title: "This node"}, model.Row{Name: st.Self, Value: backendWords(st.Backend), LED: selfLED})
 	if st.IP != "" {
-		out = append(out, model.Row{Name: "address", Value: st.IP})
+		out = append(out, model.Row{Name: "Address", Value: st.IP})
 	}
 	if st.DNS != "" {
-		out = append(out, model.Row{Name: "magicdns", Value: st.DNS})
+		out = append(out, model.Row{Name: "MagicDNS", Value: st.DNS})
 	}
 	switch {
 	case st.Update:
-		out = append(out, model.Row{Name: "version", Value: st.Version + " · update available", Tone: warn, LED: warn})
+		out = append(out, model.Row{Name: "Version", Value: st.Version + " · update available", Tone: warn, LED: warn})
 	case st.Version != "":
-		out = append(out, model.Row{Name: "version", Value: st.Version})
+		out = append(out, model.Row{Name: "Version", Value: st.Version})
 	}
 	if st.HasExpiry {
-		r := model.Row{Name: "key expires", Value: fmt.Sprintf("%.0fd", st.ExpiryDays)}
+		r := model.Row{Name: "Key expires", Value: fmt.Sprintf("%.0fd", st.ExpiryDays)}
 		if st.ExpiryDays <= keyWarnDays {
 			r.Tone, r.LED = warn, warn
 		}
@@ -169,7 +181,7 @@ func panel(p *poll, down []*peer) model.Blocks {
 	}
 	if st.ExitNode != "" {
 		// Your traffic leaves through another machine: always said.
-		out = append(out, model.Row{Name: "exit node", Value: st.ExitNode, Tone: warn, LED: warn})
+		out = append(out, model.Row{Name: "Exit node", Value: st.ExitNode, Tone: warn, LED: warn})
 	}
 
 	// What this machine publishes, and what the tailnet offers. Nothing
@@ -177,26 +189,26 @@ func panel(p *poll, down []*peer) model.Blocks {
 	out = append(out, model.Section{Title: "Exposure"})
 	switch e := p.exposure; {
 	case e == nil:
-		out = append(out, model.Row{Name: "serve / funnel", Value: "unknown", LED: idle})
+		out = append(out, model.Row{Name: "Serve / funnel", Value: "unknown", LED: idle})
 	case len(e.serve) == 0 && len(e.funnel) == 0:
-		out = append(out, model.Row{Name: "serve / funnel", Value: "nothing exposed", LED: ok})
+		out = append(out, model.Row{Name: "Serve / funnel", Value: "nothing exposed", LED: ok})
 	default:
 		if len(e.serve) > 0 {
-			out = append(out, model.Row{Name: "serve", Value: serveValue(e.serve), Tone: warn, LED: warn})
+			out = append(out, model.Row{Name: "Serve", Value: serveValue(e.serve), Tone: warn, LED: warn})
 		}
 		if len(e.funnel) > 0 {
 			var ports []string
 			for _, hp := range e.funnel {
 				ports = append(ports, ":"+hp[strings.LastIndex(hp, ":")+1:])
 			}
-			out = append(out, model.Row{Name: "funnel", Value: strings.Join(ports, ", ") + " · public internet", Tone: crit, LED: crit})
+			out = append(out, model.Row{Name: "Funnel", Value: strings.Join(ports, ", ") + " · public internet", Tone: crit, LED: crit})
 		}
 	}
 	if st.ExitOffered {
-		out = append(out, model.Row{Name: "exit node", Value: "offered by this node", Tone: warn, LED: warn})
+		out = append(out, model.Row{Name: "Exit node", Value: "offered by this node", Tone: warn, LED: warn})
 	}
 	for _, r := range st.Routes {
-		out = append(out, model.Row{Name: "route advertised", Value: r, Tone: warn, LED: warn})
+		out = append(out, model.Row{Name: "Route advertised", Value: r, Tone: warn, LED: warn})
 	}
 	var exits []string
 	var routes model.Blocks
@@ -205,12 +217,12 @@ func panel(p *poll, down []*peer) model.Blocks {
 			exits = append(exits, pr.Host)
 		}
 		for _, r := range pr.Routes {
-			routes = append(routes, model.Row{Name: "route via " + pr.Host, Value: r})
+			routes = append(routes, model.Row{Name: "Route via " + pr.Host, Value: r})
 		}
 	}
 	if len(exits) > 0 {
 		sort.Strings(exits)
-		out = append(out, model.Row{Name: "exit nodes available", Value: strings.Join(exits, ", ")})
+		out = append(out, model.Row{Name: "Exit nodes available", Value: strings.Join(exits, ", ")})
 	}
 	out = append(out, routes...)
 
@@ -246,24 +258,23 @@ func panel(p *poll, down []*peer) model.Blocks {
 			if pr.HasRate {
 				bits = append(bits, fmtRate(pr.Rate))
 			}
-			r := model.Row{Name: pr.Host, Value: strings.Join(nonEmpty(bits), " · "), LED: idle, Mono: true}
-			if pr.Active {
-				r.LED = ok
-			}
+			// Online is ok, quiet or not; a relayed path is the one thing to
+			// fix, and its lamp says so with its value.
+			r := model.Row{Name: pr.Host, Value: strings.Join(nonEmpty(bits), " · "), LED: ok}
 			if pr.Relay != "" && !pr.Direct {
-				r.Tone = warn
+				r.Tone, r.LED = warn, warn
 			}
 			out = append(out, r)
 		}
 	}
 	if len(down) > 0 {
-		out = append(out, model.Section{Title: "Watched · offline", Meta: strconv.Itoa(len(down)), Tone: warn})
+		offline = append(offline, model.Section{Title: "Watched · offline", Meta: strconv.Itoa(len(down)), Tone: warn})
 		for _, pr := range down {
 			when := sys.TimeAgo(pr.Last, p.now)
 			if when == "" {
 				when = "offline"
 			}
-			out = append(out, model.Row{Name: pr.Host, Value: when, Tone: warn, LED: warn, Mono: true})
+			offline = append(offline, model.Row{Name: pr.Host, Value: when, Tone: warn, LED: warn})
 		}
 	}
 	if len(dormant) > 0 {
@@ -288,16 +299,30 @@ func panel(p *poll, down []*peer) model.Blocks {
 			}
 			chips.Items = append(chips.Items, c)
 		}
-		out = append(out, model.Section{Title: "Dormant", Meta: strconv.Itoa(len(dormant))}, chips)
+		tail = append(tail, model.Section{Title: "Dormant", Meta: strconv.Itoa(len(dormant))}, chips)
 	}
 
 	switch {
 	case len(st.Peers) == 0:
-		out = append(out, model.Note{Text: "No peers in this tailnet", Tone: idle})
+		tail = append(tail, model.Note{Text: "No peers in this tailnet", Tone: idle})
 	case !p.pinned:
-		out = append(out, model.Note{Text: "Pin peers in Settings → Tailscale"})
+		tail = append(tail, model.Note{Text: "Pin peers in Settings → Tailscale"})
 	}
-	return out
+
+	// Problems first (A19): what the header says leads. A node that is down
+	// is explained by the daemon's health and "This node"; otherwise the
+	// watched peers that are offline come first.
+	var order []model.Blocks
+	if st.Backend != "Running" || !st.SelfOnline {
+		order = []model.Blocks{health, out, offline, tail}
+	} else {
+		order = []model.Blocks{offline, health, out, tail}
+	}
+	var all model.Blocks
+	for _, part := range order {
+		all = append(all, part...)
+	}
+	return all
 }
 
 // serveValue: one port with where it goes, or the ports.
