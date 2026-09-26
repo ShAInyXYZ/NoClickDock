@@ -1,77 +1,160 @@
-// Package claude watches Anthropic's status page, the plan's limits and the
-// local token spend. Parity: docs/rewrite/specs/claude.md. Until its
-// collector is ported (M4) it only has a mock.
+// Package claude watches Anthropic's status page, the plan's limits (from
+// the Claude Code CLI, the only authoritative percent-of-limit) and the
+// local token spend (from Claude Code's transcripts). Parity:
+// docs/rewrite/specs/claude.md.
+//
+// The status page is public; the CLI keeps its own login; the transcripts
+// are local files. The core never reads, stores or shows a credential.
 package claude
 
 import (
+	"context"
+	"net/http"
+	"sync"
 	"time"
 
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/hub"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/model"
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/statuspage"
 )
 
-type Widget struct{}
+var meta = hub.Meta{ID: "claude", Title: "Claude", Order: 10, PollSecs: 30}
 
-func (Widget) Meta() hub.Meta {
-	return hub.Meta{ID: "claude", Title: "Claude", Order: 10, PollSecs: 30}
+const (
+	limitsEvery   = 5 * time.Minute
+	limitsTimeout = 45 * time.Second
+	usageEvery    = 2 * time.Minute
+	// A "Refresh now" asks the slow sources again only if they are older
+	// than this, so hammering it cannot spawn the CLI over and over.
+	forceAfter = 10 * time.Second
+)
+
+type Widget struct {
+	src     statuspage.Source
+	scanner *scanner
+
+	mu      sync.Mutex
+	refresh func()
+
+	// Kept across polls and across a "Refresh now": a refresh never blanks
+	// the limits or the usage (the Python widget did).
+	limits      []limit
+	limitsAt    time.Time // when the rows shown were read
+	limitsAsked time.Time // when the CLI was last asked
+	limitsBusy  bool
+	usage       *usage
+	usageAt     time.Time
+	usageBusy   bool
+
+	// The last page that answered: an unreachable poll keeps its issues,
+	// so recovery does not raise every open incident again, and service
+	// recoveries are compared against it.
+	comps  map[string]string
+	issues []model.Issue
 }
 
-// Mock is an invented afternoon: the weekly limit past the warning line,
-// one component degraded and its incident being monitored. The incident text
-// is made up.
-func (Widget) Mock(time.Time) model.Snapshot {
-	ok, warn := model.ToneOK, model.ToneWarn
-	return model.Snapshot{
-		State:      model.StateWarn,
-		StateLabel: "Console degraded",                    // the specific fact, not the page's phrase
-		Glance:     model.Glance{Text: "78%", Tone: warn}, // the highest limit
-		Width:      440,
-		Pages: []model.Page{{ID: "main", Blocks: model.Blocks{
-			model.Section{Title: "Usage"},
-			model.Limit{Label: "Session", Pct: 46, Resets: "resets 18:30"},
-			model.Limit{Label: "Week", Pct: 78, Resets: "resets Mon 09:00", Tone: warn},
-			model.Limit{Label: "Week · opus", Pct: 23, Resets: "resets Mon 09:00"},
-			model.Stats{Items: []model.Stat{
-				{Key: "1h", Value: "348K"}, {Key: "24h", Value: "1.2M"}, {Key: "7d", Value: "9.8M"}, {Key: "sessions", Value: "6"},
-			}},
-			// The model split is a line of readings, not chips: chips carry status.
-			model.Stats{Items: []model.Stat{{Key: "opus 5", Value: "1.1M"}, {Key: "sonnet 5", Value: "96K"}, {Key: "haiku 4.5", Value: "12K"}}},
-			model.Section{Title: "Degraded", Meta: "1", Tone: warn},
-			model.Row{Name: "Console", Value: "degraded performance", Tone: warn, LED: warn},
-			model.Section{Title: "Services", Meta: "5 operational"},
-			model.Chips{Columns: 3, Items: []model.Chip{
-				{Label: "claude.ai", Tone: ok}, {Label: "Claude API", Tone: ok}, {Label: "Claude Code", Tone: ok},
-				{Label: "Cowork", Tone: ok}, {Label: "Claude for Government", Tone: ok},
-			}},
-			model.Section{Title: "Active incidents", Meta: "1", Tone: warn},
-			model.Alert{
-				Title: "Elevated errors on Console", Meta: "monitoring · 12m", Tone: warn,
-				Body: "A fix has been implemented and we are monitoring the results.",
-			},
-		}}},
-		Footer: "limits as of 4m ago",
-		Menu:   []model.MenuItem{{ID: "open-status", Label: "Open status page", URL: "https://status.claude.com"}},
-		Issues: []model.Issue{
-			{ID: "comp:console:degraded_performance", Text: "Console has degraded performance", Tone: warn},
-			{ID: "inc:mock-1", Text: "Elevated errors on Console", Tone: warn},
+func New() *Widget {
+	return &Widget{
+		src: statuspage.Source{
+			Base: statusPage, UserAgent: "noclickdock/2 (+status)",
+			Incidents: "/api/v2/incidents/unresolved.json",
+			Client:    &http.Client{Timeout: 30 * time.Second},
 		},
+		scanner: newScanner(projectsDir()),
 	}
 }
 
-// Variants: a machine where Claude Code has not run this week.
-func (w Widget) Variants(now time.Time) map[string]model.Snapshot {
-	quiet := w.Mock(now)
-	quiet.State, quiet.StateLabel = model.StateOK, "operational"
-	// A glance is never empty: nothing measured reads as a dash.
-	quiet.Glance, quiet.Footer, quiet.Issues = model.Glance{Text: "—"}, "", nil
-	quiet.Pages = []model.Page{{ID: "main", Blocks: model.Blocks{
-		model.Section{Title: "Usage"},
-		model.Empty{Text: "No Claude Code sessions on this machine in the last 7 days."},
-		model.Section{Title: "Services", Meta: "6 operational"},
-		model.Chips{Columns: 3, Items: []model.Chip{
-			{Label: "claude.ai", Tone: model.ToneOK}, {Label: "Claude API", Tone: model.ToneOK}, {Label: "Claude Code", Tone: model.ToneOK},
-			{Label: "Console", Tone: model.ToneOK}, {Label: "Cowork", Tone: model.ToneOK}, {Label: "Claude for Government", Tone: model.ToneOK},
-		}},
-	}}}
-	return map[string]model.Snapshot{"empty": quiet}
+func (*Widget) Meta() hub.Meta { return meta }
+
+func (w *Widget) SetRefresh(f func()) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.refresh = f
+}
+
+// Force makes the limits and the usage due again, unless just read.
+func (w *Widget) Force() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if time.Since(w.limitsAsked) > forceAfter {
+		w.limitsAsked = time.Time{}
+	}
+	if time.Since(w.usageAt) > forceAfter {
+		w.usageAt = time.Time{}
+	}
+}
+
+func (w *Widget) Transition(_, to model.State, s model.Snapshot) string {
+	return statuspage.Transition(to, s.StateLabel)
+}
+
+func (w *Widget) Collect(ctx context.Context) (model.Snapshot, error) {
+	page := w.src.Fetch(ctx)
+	now := time.Now()
+
+	w.mu.Lock()
+	w.dueLimits()
+	w.dueUsage()
+	p := poll{page: page, limits: w.limits, limitsAt: w.limitsAt, usage: w.usage, now: now}
+	var notices []model.Issue
+	if page.Reached {
+		comps := map[string]string{}
+		for _, c := range page.Components {
+			comps[c.Name] = c.Status
+			// Back to operational: said once (dock-core §5.4, claude only).
+			if was, ok := w.comps[c.Name]; ok && was != "operational" && c.Status == "operational" {
+				notices = append(notices, model.Issue{Text: short(c.Name) + " operational", Tone: model.ToneOK})
+			}
+		}
+		w.comps, w.issues = comps, statuspage.Issues(page, short)
+	}
+	issues := w.issues
+	w.mu.Unlock()
+
+	s := render(p)
+	s.Issues, s.Notices = issues, notices
+	return s, nil
+}
+
+// dueLimits starts the CLI when its reading is five minutes old. An empty
+// answer keeps the rows it had. Called with mu held.
+func (w *Widget) dueLimits() {
+	if w.limitsBusy || (!w.limitsAsked.IsZero() && time.Since(w.limitsAsked) < limitsEvery) {
+		return
+	}
+	w.limitsBusy, w.limitsAsked = true, time.Now()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), limitsTimeout+5*time.Second)
+		defer cancel()
+		rows := readLimits(ctx, time.Now())
+		w.mu.Lock()
+		w.limitsBusy = false
+		if len(rows) > 0 { // nothing read keeps the rows it had
+			w.limits, w.limitsAt = rows, time.Now()
+		}
+		refresh := w.refresh
+		w.mu.Unlock()
+		if refresh != nil && len(rows) > 0 {
+			refresh()
+		}
+	}()
+}
+
+// dueUsage rescans the transcripts every two minutes, in the background:
+// thousands of files, only the changed ones parsed. Called with mu held.
+func (w *Widget) dueUsage() {
+	if w.usageBusy || (!w.usageAt.IsZero() && time.Since(w.usageAt) < usageEvery) {
+		return
+	}
+	w.usageBusy = true
+	go func() {
+		u := w.scanner.scan(time.Now()) // only this goroutine touches the scanner
+		w.mu.Lock()
+		w.usage, w.usageAt, w.usageBusy = &u, time.Now(), false
+		refresh := w.refresh
+		w.mu.Unlock()
+		if refresh != nil {
+			refresh()
+		}
+	}()
 }

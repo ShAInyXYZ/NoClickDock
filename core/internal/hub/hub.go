@@ -300,13 +300,35 @@ func (e *entry) transitions(s model.Snapshot, now time.Time) []model.Toast {
 			fresh = append(fresh, is)
 		}
 	}
-	armed, changed := e.armed, s.State != e.prevState
+	armed := e.armed
 	e.transitionFrom = e.prevState
 	e.prevIssues, e.prevState, e.armed = ids, s.State, true
 	if !armed {
 		return nil
 	}
+	return e.news(s, now, fresh)
+}
 
+// news is a poll's toasts: new issues (at most three, most severe first),
+// which replace the generic state change; without them, the state change;
+// then the widget's own notices, within the same three.
+func (e *entry) news(s model.Snapshot, now time.Time, fresh []model.Issue) []model.Toast {
+	out := e.alerts(s, now, fresh)
+	for _, n := range s.Notices {
+		if len(out) >= maxAlertToasts || n.Text == "" {
+			break
+		}
+		tone := n.Tone
+		if tone == model.ToneNone {
+			tone = model.ToneOK
+		}
+		out = append(out, model.Toast{Widget: s.ID, Tone: tone, Text: n.Text, At: now})
+	}
+	return out
+}
+
+func (e *entry) alerts(s model.Snapshot, now time.Time, fresh []model.Issue) []model.Toast {
+	changed := s.State != e.transitionFrom
 	var out []model.Toast
 	if len(fresh) > 0 {
 		sort.SliceStable(fresh, func(i, j int) bool { return severity(fresh[i].Tone) > severity(fresh[j].Tone) })
@@ -370,6 +392,11 @@ func (h *Hub) Handle(ctx context.Context, line []byte) error {
 	case "refresh":
 		if req.Widget != "" && h.byID[req.Widget] == nil {
 			return fmt.Errorf("refresh: unknown widget %q", req.Widget)
+		}
+		for _, e := range h.entries {
+			if f, ok := e.c.(Forcer); ok && (req.Widget == "" || req.Widget == e.meta.ID) {
+				f.Force()
+			}
 		}
 		h.Refresh(req.Widget)
 	case "action":

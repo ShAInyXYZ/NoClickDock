@@ -18,7 +18,7 @@ import (
 // from the config on every poll, so a change applies without a restart.
 func Real(cfg *config.Store) []hub.Collector {
 	watch := func() *[]string { return cfg.Get().Widgets.Tailscale.Watch }
-	return []hub.Collector{disk.New(), docker.New(), tailscale.New(watch)}
+	return []hub.Collector{claude.New(), codex.New(), disk.New(), docker.New(), tailscale.New(watch)}
 }
 
 // Mocks is every widget, each inventing its data: still (one fixed instant,
@@ -27,7 +27,7 @@ func Real(cfg *config.Store) []hub.Collector {
 func Mocks(live bool) []hub.Collector {
 	var out []hub.Collector
 	for _, m := range []hub.Mocker{
-		claude.Widget{}, codex.Widget{}, comfyui.Widget{}, disk.New(),
+		claude.Mock{}, codex.Mock{}, comfyui.Widget{}, disk.New(),
 		docker.Mock{}, power.Widget{}, tailscale.Mock{},
 	} {
 		out = append(out, hub.Mocked(m, live))

@@ -591,3 +591,27 @@ func TestTheSameActionRunsOnceAtATime(t *testing.T) {
 		t.Fatal("once finished, it can run again")
 	}
 }
+
+type noticing struct {
+	scripted
+	forced int
+}
+
+func (n *noticing) Force() { n.forced++ }
+
+func TestNoticesToastAfterIssuesAndRefreshForces(t *testing.T) {
+	ok := model.Snapshot{State: model.StateOK}
+	back := model.Snapshot{State: model.StateOK, Notices: []model.Issue{{Text: "Console operational"}}}
+	c := &noticing{scripted: scripted{meta: Meta{ID: "claude"}, results: []result{{snap: ok}, {snap: back}}}}
+	h := newHub(t, c)
+	if got := h.entries[0].transitions(ok, time.Now()); len(got) != 0 {
+		t.Fatalf("nothing before armed: %v", got)
+	}
+	got := h.entries[0].transitions(back, time.Now())
+	if len(got) != 1 || got[0].Text != "Console operational" || got[0].Tone != model.ToneOK {
+		t.Fatalf("a notice toasts, ok by default: %+v", got)
+	}
+	if err := h.Handle(context.Background(), []byte(`{"type":"refresh","widget":"claude"}`)); err != nil || c.forced != 1 {
+		t.Fatalf("refresh forces slow sources: %v %d", err, c.forced)
+	}
+}

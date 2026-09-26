@@ -70,6 +70,10 @@ type Snapshot struct {
 	// toasts an id that was not there on the previous poll; issues never
 	// reach the interface themselves.
 	Issues []Issue `json:"-"`
+	// Notices are one-off news the widget worked out itself this poll — a
+	// service back to operational (dock-core §5.4, cleared alerts). They
+	// toast once, after any new issues, and never reach the interface.
+	Notices []Issue `json:"-"`
 }
 
 // Glance is the dock readout under the dial: at most five characters.

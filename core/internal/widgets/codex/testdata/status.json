@@ -1,0 +1,9 @@
+{
+ "page": {
+  "name": "Example"
+ },
+ "status": {
+  "indicator": "minor",
+  "description": "Partially Degraded Service"
+ }
+}

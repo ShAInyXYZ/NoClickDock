@@ -1,0 +1,53 @@
+{
+ "components": [
+  {
+   "name": "Codex API",
+   "status": "operational"
+  },
+  {
+   "name": "Codex Web",
+   "status": "operational"
+  },
+  {
+   "name": "Codex in ChatGPT Desktop",
+   "status": "operational"
+  },
+  {
+   "name": "CLI",
+   "status": "operational"
+  },
+  {
+   "name": "VS Code extension",
+   "status": "partial_outage"
+  },
+  {
+   "name": "Responses",
+   "status": "operational"
+  },
+  {
+   "name": "Chat Completions",
+   "status": "operational"
+  },
+  {
+   "name": "Login",
+   "status": "operational"
+  },
+  {
+   "name": "Conversations",
+   "status": "operational"
+  },
+  {
+   "name": "Image Generation",
+   "status": "degraded_performance"
+  },
+  {
+   "name": "Fine-tuning",
+   "status": "operational"
+  },
+  {
+   "name": "Group",
+   "status": "operational",
+   "group": true
+  }
+ ]
+}

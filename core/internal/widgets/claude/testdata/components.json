@@ -1,0 +1,34 @@
+{
+ "components": [
+  {
+   "name": "claude.ai",
+   "status": "operational",
+   "group": false
+  },
+  {
+   "name": "Claude Console (platform.claude.com)",
+   "status": "degraded_performance",
+   "group": false
+  },
+  {
+   "name": "Claude API (api.anthropic.com)",
+   "status": "operational",
+   "group": false
+  },
+  {
+   "name": "Claude Code",
+   "status": "operational",
+   "group": false
+  },
+  {
+   "name": "Claude Cowork",
+   "status": "under_maintenance",
+   "group": false
+  },
+  {
+   "name": "Regional group",
+   "status": "operational",
+   "group": true
+  }
+ ]
+}

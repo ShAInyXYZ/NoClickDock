@@ -32,6 +32,14 @@ type Actor interface {
 	Act(ctx context.Context, action string, args map[string]string) (string, error)
 }
 
+// Forcer is a collector with slow sources of its own (a CLI on a five-minute
+// cadence, a transcript scan): a user's "Refresh now" asks them again, if
+// they are older than a few seconds (dock-core §5.2). What was last read is
+// shown meanwhile — a refresh never blanks a panel.
+type Forcer interface {
+	Force()
+}
+
 // Transitioner words a widget's own state changes ("Generation complete")
 // instead of repeating the new state label. An empty message raises no toast.
 type Transitioner interface {
