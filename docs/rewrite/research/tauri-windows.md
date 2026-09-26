@@ -134,7 +134,7 @@ focusable, decorated-by-us window).
 `set_size()` on a transparent, undecorated WebKitGTK window is clamped to the
 webview's natural size. Measured: rail asked 64×260 → got 211×260; toast
 asked 260×60 → 260×366; panel asked 360×300 → 360×366. `set_size()`
-afterwards changes nothing. The same fix as DeadWhispr/HubVoice works
+afterwards changes nothing. The same fix as the sibling apps works
 (measured: exact sizes, grow and shrink, survives hide/show):
 
 ```rust
@@ -165,7 +165,7 @@ pub fn fit(window: &tauri::WebviewWindow, width: i32, height: i32) -> tauri::Res
 }
 ```
 
-DeadWhispr also notes that WebKitGTK can leave stale pixels on the
+A sibling app also notes that WebKitGTK can leave stale pixels on the
 transparent surface when DOM content is removed: always shrink the window to
 the content rather than leaving transparent slack.
 
@@ -179,7 +179,7 @@ these held their position (checked again 300–400 ms later):
 - `show()`, then `set_position()` immediately.
 
 Rule for every reveal: `fit()` → `set_position(PhysicalPosition)` → `show()`
-(Windows: `win::show`, below). HubVoice additionally re-applies the placement
+(Windows: `win::show`, below). The sibling app additionally re-applies the placement
 60 ms after the map (`gtk::glib::timeout_add_local_once`); cheap insurance,
 recommended for the panel.
 
@@ -231,7 +231,7 @@ and do all geometry in Rust as `css × ui_scale`:
 - Linux initial value: `gtk-xft-dpi / 1024 / 96` (1.5 here), read with
   `gtk::Settings::default().unwrap().gtk_xft_dpi()` on the main thread.
 - Confirm after the first `fit()`+`show()`: the page reports `innerWidth`,
-  Rust divides the physical inner width by it (HubVoice's
+  Rust divides the physical inner width by it (the sibling app's
   `src/lib/window.ts` does exactly this). Re-measure on scale/monitor change.
 - Windows: `ui_scale = window.scale_factor()` (WebView2 follows per-monitor
   DPI; CSS px = logical px). **docs**
@@ -497,14 +497,14 @@ Rules:
 - All placement math in **physical px**, inputs in CSS px × `ui_scale`
   (section (a)). Snapshot `width` is CSS px.
 - Run monitor queries on the main thread (`app.run_on_main_thread`): Tauri
-  converts GDK monitor properties on the caller thread (HubVoice
+  converts GDK monitor properties on the caller thread (the sibling app
   `desktop.rs:68`).
 - A hot-plug can briefly report an empty work area — keep the last valid one
-  when `work_area().size` is 0 (HubVoice `desktop.rs:120`).
+  when `work_area().size` is 0 (the sibling app's `desktop.rs:120`).
 - Work area changes (panel autohide, monitor add/remove, scale change): watch
   `GdkMonitor` `workarea`/`geometry`/`scale-factor` notifies and
   `monitors-changed`, coalesced with a 150 ms one-shot timer, then re-clamp
-  the rail and re-place any open panel (HubVoice `observe_monitors`). On
+  the rail and re-place any open panel (the sibling app's `observe_monitors`). On
   Windows, `WM_DISPLAYCHANGE`/`WM_SETTINGCHANGE(SPI_SETWORKAREA)` via a
   subclass, or simply re-clamp on `ScaleChanged` + every panel open.
 - Persist the rail position as `{monitor name, edge, offset along edge}`
@@ -559,7 +559,7 @@ per DESIGN.md.
 
 ### Tray
 
-- Cargo feature `tray-icon`; `TrayIconBuilder::with_id("ncd").icon(app.default_window_icon().unwrap().clone()).menu(&menu).show_menu_on_left_click(false)` (HubVoice `desktop.rs:tray`).
+- Cargo feature `tray-icon`; `TrayIconBuilder::with_id("ncd").icon(app.default_window_icon().unwrap().clone()).menu(&menu).show_menu_on_left_click(false)` (the sibling app's `desktop.rs:tray`).
 - **Linux, proven**: the icon registered with the StatusNotifierWatcher as
   `/org/ayatana/NotificationItem/tray_icon_tray_app_<id>`. Runtime needs
   `libayatana-appindicator3.so.1` (present here) and a host for

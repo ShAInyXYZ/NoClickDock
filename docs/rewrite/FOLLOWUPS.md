@@ -28,3 +28,6 @@ Not must-fix: noted so nothing is lost. One line each, with its source.
 - README copy: "Drag it anywhere; it snaps to the nearest edge" — it snaps only when dropped within 24 px of an edge; say "snaps to an edge when you drop it near one". (M8-design-r1)
 - README: "Needs … a compositing desktop" understates the shell, which falls back to one unmapped panel window without a compositor; say "best with a compositor". (M8-design-r1)
 - `docs/rewrite/design/readme-shots/` duplicates `assets/screenshots/` byte for byte (~1 MB); delete it now that `assets/` is canonical. (M8-design-r1)
+- [research M7] Windows `-RestoreLegacy` lets NoClickDock 1 delete NoClickDock 2's `config.json` (NCD 1 prunes `*.json` without a live pid in `%APPDATA%\NoClickDock`) — move NCD 2's config to a subfolder or refuse restore while NCD 2 is installed.
+- [research M8] `scripts/install.sh` without `--replace-legacy` leaves NoClickDock 1 running beside NCD 2, so two power loggers write PM-Log — make the installer refuse (or require an explicit flag) while NCD 1 is running.
+- [research secret scan] The branch docs name the user's other projects (HubVoice, DeadWhispr, Cerveau-Hub); decide before pushing whether those names may be public. main's older history still contains real hostnames from before the scrub.
