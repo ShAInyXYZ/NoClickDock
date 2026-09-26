@@ -22,6 +22,13 @@ func TestBlocksCarryTheirKind(t *testing.T) {
 	}
 }
 
+func TestTableCellsAreTextUnlessToned(t *testing.T) {
+	got, _ := json.Marshal(TableRow{Cells: []Cell{{Text: "GPU0"}, {Text: "92°C", Tone: ToneWarn}}})
+	if want := `{"cells":["GPU0",{"text":"92°C","tone":"warn"}]}`; string(got) != want {
+		t.Fatalf("got %s, want %s", got, want)
+	}
+}
+
 func TestEmptyBlocksAreAnArray(t *testing.T) {
 	got, _ := json.Marshal(Page{ID: "main"})
 	if want := `{"id":"main","label":"","blocks":[]}`; string(got) != want {

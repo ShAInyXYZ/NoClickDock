@@ -26,14 +26,14 @@ func TestPatchMergesValidatesAndPersists(t *testing.T) {
 	dir := t.TempDir()
 	s, _ := Open(dir)
 
-	cfg, err := s.Patch(json.RawMessage(`{"dock":{"orientation":"horizontal","position":{"x":40,"y":2300}}}`))
+	cfg, err := s.Patch(json.RawMessage(`{"dock":{"orientation":"horizontal","position":{"monitor":"DP-9","edge":"left","along":0.5,"x":40,"y":2300}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Dock.Orientation != "horizontal" || cfg.Dock.Density != "normal" || !cfg.Dock.Readouts {
 		t.Fatalf("patch lost or clobbered fields: %+v", cfg.Dock)
 	}
-	if p := cfg.Dock.Position; p == nil || p.X != 40 || p.Y != 2300 {
+	if p := cfg.Dock.Position; p == nil || p.X != 40 || p.Y != 2300 || p.Monitor != "DP-9" || p.Edge != "left" || *p.Along != 0.5 {
 		t.Fatalf("position = %+v", p)
 	}
 
@@ -59,6 +59,8 @@ func TestInvalidPatchChangesNothing(t *testing.T) {
 		`{"dock":{"orientation":"diagonal"}}`,
 		`{"dock":{"orientaton":"horizontal"}}`, // a typo is an error, not ignored
 		`{"dock":{"readouts":"yes"}}`,
+		`{"dock":{"position":{"x":1,"y":2,"edge":"middle"}}}`,
+		`{"dock":{"position":{"x":1,"y":2,"along":1.5}}}`,
 		`not json`,
 	} {
 		if _, err := s.Patch(json.RawMessage(patch)); err == nil {

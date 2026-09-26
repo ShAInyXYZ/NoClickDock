@@ -18,15 +18,16 @@ func Real() []hub.Collector {
 	return []hub.Collector{disk.New()}
 }
 
-// Mocks is every widget, each inventing its data.
-func Mocks() []hub.Collector {
-	return []hub.Collector{
-		hub.Mocked(claude.Widget{}),
-		hub.Mocked(codex.Widget{}),
-		hub.Mocked(comfyui.Widget{}),
-		hub.Mocked(disk.New()),
-		hub.Mocked(docker.Widget{}),
-		hub.Mocked(power.Widget{}),
-		hub.Mocked(tailscale.Widget{}),
+// Mocks is every widget, each inventing its data: still (one fixed instant,
+// for the gallery and README images) or live (moving with the clock, for
+// reviewing the real windows and their toasts).
+func Mocks(live bool) []hub.Collector {
+	var out []hub.Collector
+	for _, m := range []hub.Mocker{
+		claude.Widget{}, codex.Widget{}, comfyui.Widget{}, disk.New(),
+		docker.Widget{}, power.Widget{}, tailscale.Widget{},
+	} {
+		out = append(out, hub.Mocked(m, live))
 	}
+	return out
 }

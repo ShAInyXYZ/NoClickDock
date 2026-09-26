@@ -63,6 +63,8 @@ type entry struct {
 	armed      bool // one good collect has happened: toasts may follow
 	prevState  model.State
 	prevIssues map[string]bool
+	// transitionFrom is the state a transition is leaving, for Transitioner.
+	transitionFrom model.State
 
 	// What the interface was last sent, replayed to every new subscriber and
 	// used to check actions against; guarded by Hub.mu.
@@ -264,6 +266,7 @@ func (e *entry) transitions(s model.Snapshot, now time.Time) []model.Toast {
 		}
 	}
 	armed, changed := e.armed, s.State != e.prevState
+	e.transitionFrom = e.prevState
 	e.prevIssues, e.prevState, e.armed = ids, s.State, true
 	if !armed {
 		return nil
@@ -281,8 +284,15 @@ func (e *entry) transitions(s model.Snapshot, now time.Time) []model.Toast {
 		}
 		return out
 	}
-	if changed && s.StateLabel != "" {
-		out = append(out, model.Toast{Widget: s.ID, Tone: s.State.Tone(), Text: s.StateLabel, At: now})
+	if !changed {
+		return out
+	}
+	text := s.StateLabel
+	if t, ok := e.c.(Transitioner); ok {
+		text = t.Transition(e.transitionFrom, s.State, s)
+	}
+	if text != "" {
+		out = append(out, model.Toast{Widget: s.ID, Tone: s.State.Tone(), Text: text, At: now})
 	}
 	return out
 }
@@ -347,6 +357,15 @@ func (h *Hub) Handle(ctx context.Context, line []byte) error {
 func (h *Hub) act(ctx context.Context, req model.Request) {
 	ok, msg := h.runAction(ctx, req)
 	h.broadcast(model.NewResult(req.ID, ok, msg))
+	// Also a toast: an action chosen from a menu has no panel to answer in.
+	// The shell drops it when the widget's panel is open and already says it.
+	if msg != "" && h.byID[req.Widget] != nil {
+		tone := model.ToneOK
+		if !ok {
+			tone = model.ToneCrit
+		}
+		h.broadcast(model.NewToast(model.Toast{Widget: req.Widget, Tone: tone, Text: msg, At: h.now()}))
+	}
 	if ok {
 		h.Refresh(req.Widget) // the world changed; show it now
 	}
@@ -417,6 +436,28 @@ func offeredIn(blocks model.Blocks, action string, args map[string]string) bool 
 		}
 	}
 	return false
+}
+
+// Variants are the mocks' alternative panels, by widget and name, for the
+// gallery. Real collectors have none.
+func (h *Hub) Variants() map[string]map[string]model.Snapshot {
+	out := map[string]map[string]model.Snapshot{}
+	now := h.now()
+	for _, e := range h.entries {
+		v, ok := e.c.(Varianter)
+		if !ok {
+			continue
+		}
+		for name, s := range v.Variants(now) {
+			e.normalize(&s)
+			s.UpdatedAt = now
+			if out[e.meta.ID] == nil {
+				out[e.meta.ID] = map[string]model.Snapshot{}
+			}
+			out[e.meta.ID][name] = s
+		}
+	}
+	return out
 }
 
 // Hello is the first message of every session.

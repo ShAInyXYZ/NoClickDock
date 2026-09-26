@@ -27,7 +27,7 @@ func (still) Mock(time.Time) model.Snapshot {
 func running(t *testing.T) (*hub.Hub, context.Context) {
 	t.Helper()
 	cfg, _ := config.Open(t.TempDir())
-	h := hub.New("linux", cfg, []hub.Collector{hub.Mocked(still{})})
+	h := hub.New("linux", cfg, []hub.Collector{hub.Mocked(still{}, false)})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go h.Run(ctx)

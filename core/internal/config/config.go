@@ -22,14 +22,20 @@ type Dock struct {
 	Orientation string `json:"orientation"` // "vertical" | "horizontal"
 	Density     string `json:"density"`     // "compact" | "normal" | "large"
 	Readouts    bool   `json:"readouts"`
-	// Position is the rail's top-left corner in physical desktop pixels, as
-	// the shell last left it. Nil means "not placed yet": the shell picks.
-	Position *Point `json:"position,omitempty"`
+	// Position is where the shell last left the rail. Nil means "not placed
+	// yet": the shell picks.
+	Position *Position `json:"position,omitempty"`
 }
 
-type Point struct {
-	X int `json:"x"`
-	Y int `json:"y"`
+// Position survives resolution and scale changes: the monitor by name, the
+// edge the rail was snapped to and how far along it its centre sat (0..1 of
+// the work area), with the physical top-left corner as the fallback.
+type Position struct {
+	Monitor string   `json:"monitor,omitempty"`
+	Edge    string   `json:"edge,omitempty"` // "left" | "right" | "top" | "bottom" | "" (free)
+	Along   *float64 `json:"along,omitempty"`
+	X       int      `json:"x"`
+	Y       int      `json:"y"`
 }
 
 func Default() Config {
@@ -46,6 +52,16 @@ func (c Config) validate() error {
 	case "compact", "normal", "large":
 	default:
 		return fmt.Errorf("dock.density must be compact, normal or large, not %q", c.Dock.Density)
+	}
+	if p := c.Dock.Position; p != nil {
+		switch p.Edge {
+		case "", "left", "right", "top", "bottom":
+		default:
+			return fmt.Errorf("dock.position.edge must be left, right, top, bottom or empty, not %q", p.Edge)
+		}
+		if p.Along != nil && (*p.Along < 0 || *p.Along > 1) {
+			return fmt.Errorf("dock.position.along must be between 0 and 1")
+		}
 	}
 	return nil
 }

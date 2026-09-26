@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -28,9 +29,10 @@ const keepAlive = 15 * time.Second
 
 // HTTP serves the development API on 127.0.0.1:port until ctx ends:
 //
-//	GET  /v1/state   hello and every snapshot, as a JSON array of messages
-//	GET  /v1/events  the same messages as server-sent events, then live ones
-//	POST /v1/send    one UI → core message
+//	GET  /v1/state     hello and every snapshot, as a JSON array of messages
+//	GET  /v1/events    the same messages as server-sent events, then live ones
+//	GET  /v1/variants  the mocks' alternative panels, for the gallery
+//	POST /v1/send      one UI → core message
 //
 // It exists only under --dev and --mock. Production has no listening port,
 // so no web page and no local process can reach the widgets' actions.
@@ -61,6 +63,10 @@ func Handler(ctx context.Context, h *hub.Hub, addr string) http.Handler {
 	mux.HandleFunc("GET /v1/state", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(jsonArray(h.State()))
+	})
+	mux.HandleFunc("GET /v1/variants", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(h.Variants())
 	})
 	mux.HandleFunc("GET /v1/events", func(w http.ResponseWriter, r *http.Request) {
 		events(ctx, h, w, r)

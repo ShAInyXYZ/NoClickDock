@@ -127,10 +127,36 @@ type Column struct {
 }
 
 type TableRow struct {
-	Cells []string `json:"cells"`
-	Tone  Tone     `json:"tone,omitempty"`
-	LED   Tone     `json:"led,omitempty"`
-	Sub   string   `json:"sub,omitempty"`
+	Cells []Cell `json:"cells"`
+	Tone  Tone   `json:"tone,omitempty"`
+	LED   Tone   `json:"led,omitempty"`
+	Sub   string `json:"sub,omitempty"`
+}
+
+// Cell is one table cell: plain text on the wire, or {"text","tone"} when a
+// single reading needs its own colour (a GPU's VRAM temperature).
+type Cell struct {
+	Text string
+	Tone Tone
+}
+
+func (c Cell) MarshalJSON() ([]byte, error) {
+	if c.Tone == ToneNone {
+		return json.Marshal(c.Text)
+	}
+	return json.Marshal(struct {
+		Text string `json:"text"`
+		Tone Tone   `json:"tone"`
+	}{c.Text, c.Tone})
+}
+
+// Cells is shorthand for a row of untoned cells.
+func Cells(texts ...string) []Cell {
+	out := make([]Cell, len(texts))
+	for i, t := range texts {
+		out[i] = Cell{Text: t}
+	}
+	return out
 }
 
 // Donut is a split of one total (Power's monthly cost by component).
@@ -154,6 +180,12 @@ type Bars struct {
 	Unit      string    `json:"unit,omitempty"`
 }
 
+// Empty is a panel with nothing to list saying what is true, in one
+// sentence. Text in `backticks` is a command, drawn as a mono chip.
+type Empty struct {
+	Text string `json:"text"`
+}
+
 // Split lays blocks out in columns (Power's two-column body).
 type Split struct {
 	Columns []Blocks `json:"columns"`
@@ -171,3 +203,4 @@ func (Table) Kind() string   { return "table" }
 func (Donut) Kind() string   { return "donut" }
 func (Bars) Kind() string    { return "bars" }
 func (Split) Kind() string   { return "split" }
+func (Empty) Kind() string   { return "empty" }

@@ -310,6 +310,9 @@ func TestActionsAreCheckedAgainstWhatWasOffered(t *testing.T) {
 	if r["type"] != "result" || r["id"] != "a1" || r["ok"] != true || r["message"] != "stopped api-gateway" {
 		t.Fatalf("result = %v", r)
 	}
+	if toast := send2(t, sub); toast["type"] != "toast" || toast["toast"].(map[string]any)["text"] != "stopped api-gateway" {
+		t.Fatalf("a result must also toast (for menu actions): %v", toast)
+	}
 	select {
 	case <-h.entries[0].refresh:
 	default:
@@ -320,26 +323,73 @@ func TestActionsAreCheckedAgainstWhatWasOffered(t *testing.T) {
 	if r["ok"] != false || r["message"] != "container is gone" {
 		t.Fatalf("failure result = %v", r)
 	}
+	if toast := send2(t, sub)["toast"].(map[string]any); toast["tone"] != "crit" {
+		t.Fatalf("a failure toasts crit: %v", toast)
+	}
 	if r = send(`{"type":"action","id":"a3","widget":"docker","action":"open-portainer"}`); r["ok"] != true {
 		t.Fatalf("menu action refused: %v", r)
 	}
+	send2(t, sub)
 
 	// Anything the snapshot did not offer is refused before the widget sees it.
-	for _, line := range []string{
+	refused := []string{
 		`{"type":"action","id":"x1","widget":"docker","action":"stop","args":{"container":"database"}}`,
 		`{"type":"action","id":"x2","widget":"docker","action":"stop","args":{"container":"api-gateway","force":"1"}}`,
 		`{"type":"action","id":"x3","widget":"docker","action":"exec","args":{"container":"api-gateway"}}`,
 		`{"type":"action","id":"x4","widget":"docker","action":"docs"}`,
-	} {
+	}
+	for _, line := range refused {
 		if r := send(line); r["ok"] != false || r["message"] != "unknown action" {
 			t.Errorf("%s → %v", line, r)
 		}
+		send2(t, sub)
 	}
 	if len(c.acted) != 3 {
 		t.Fatalf("the widget ran %v", c.acted)
 	}
 	if r := send(`{"type":"action","id":"a4","widget":"nope","action":"stop"}`); r["ok"] != false || r["id"] != "a4" {
 		t.Fatalf("unknown widget result = %v", r)
+	}
+}
+
+// send2 reads the next message after a result.
+func send2(t *testing.T, sub *Subscription) map[string]any {
+	t.Helper()
+	select {
+	case raw := <-sub.C:
+		var m map[string]any
+		json.Unmarshal(raw, &m)
+		return m
+	case <-time.After(2 * time.Second):
+		t.Fatal("no message")
+		return nil
+	}
+}
+
+type worded struct{ scripted }
+
+func (worded) Transition(from, to model.State, _ model.Snapshot) string {
+	if from == model.StateBusy && to == model.StateOK {
+		return "Generation complete"
+	}
+	return ""
+}
+
+func TestAWidgetMayWordItsOwnTransitions(t *testing.T) {
+	c := &worded{scripted{meta: Meta{ID: "comfyui"}, results: []result{
+		{snap: snap(model.StateOK, "idle")},
+		{snap: snap(model.StateBusy, "generating")}, // worded as nothing: no toast
+		{snap: snap(model.StateOK, "idle")},
+	}}}
+	h := newHub(t, c)
+	_, sub := h.Subscribe()
+	var got []map[string]any
+	for range 3 {
+		h.poll(context.Background(), h.entries[0])
+		got = append(got, toasts(drain(sub))...)
+	}
+	if len(got) != 1 || got[0]["text"] != "Generation complete" || got[0]["tone"] != "ok" {
+		t.Fatalf("toasts = %v", got)
 	}
 }
 
@@ -387,7 +437,7 @@ func TestSlowSubscriberIsDroppedNotBlocking(t *testing.T) {
 }
 
 func TestMockedActionsNeverTouchTheMachine(t *testing.T) {
-	msg, err := Mocked(nil).(Actor).Act(context.Background(), "stop", map[string]string{"container": "api-gateway"})
+	msg, err := Mocked(nil, false).(Actor).Act(context.Background(), "stop", map[string]string{"container": "api-gateway"})
 	if err != nil || msg != "mock: stop api-gateway" {
 		t.Fatalf("got %q, %v", msg, err)
 	}

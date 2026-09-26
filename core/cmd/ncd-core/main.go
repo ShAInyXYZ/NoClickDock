@@ -6,6 +6,7 @@
 //	ncd-core --dev             real collectors, HTTP + SSE on 127.0.0.1:--port
 //	ncd-core --mock            invented data, HTTP + SSE on 127.0.0.1:--port
 //	ncd-core --mock --stdio    invented data over stdio (the shell's `ncd --mock`)
+//	ncd-core --mock --mock-live  invented data that moves: progress, failures that come and go
 //	ncd-core --once disk       print one snapshot and exit (add --mock for invented data)
 package main
 
@@ -36,6 +37,7 @@ func main() {
 		once      = flag.String("once", "", "print one `widget`'s snapshot as JSON and exit")
 		port      = flag.Int("port", 47810, "HTTP port for --dev and --mock (always on 127.0.0.1)")
 		stdio     = flag.Bool("stdio", false, "with --dev or --mock: speak stdio to the shell instead of serving HTTP")
+		live      = flag.Bool("mock-live", false, "with --mock: let the invented data move with the clock (progress, failures that come and go)")
 		configDir = flag.String("config", "", "config directory (default: the user's, or a scratch one for --dev and --mock)")
 	)
 	flag.Parse()
@@ -51,7 +53,7 @@ func main() {
 
 	collectors := widgets.Real()
 	if *mock {
-		collectors = widgets.Mocks()
+		collectors = widgets.Mocks(*live)
 	}
 
 	if *once != "" {
