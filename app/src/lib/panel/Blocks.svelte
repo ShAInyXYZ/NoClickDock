@@ -91,7 +91,9 @@
 
   .Split {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    /* The first column carries the names (Power's one table); the second,
+       its readings and charts, needs less. */
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
     column-gap: 24px;
     margin-top: 4px;
   }

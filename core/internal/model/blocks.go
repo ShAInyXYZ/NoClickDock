@@ -131,7 +131,15 @@ type TableRow struct {
 	Tone  Tone   `json:"tone,omitempty"`
 	LED   Tone   `json:"led,omitempty"`
 	Sub   string `json:"sub,omitempty"`
+	// Group opens a group of rows instead: a printed strip with its title
+	// and meta, a hairline above, in the same table — so every group's
+	// names and numbers share one set of columns. It has no cells.
+	Group string `json:"group,omitempty"`
+	Meta  string `json:"meta,omitempty"`
 }
+
+// Group is a table row that opens a group of rows.
+func Group(title, meta string) TableRow { return TableRow{Cells: []Cell{}, Group: title, Meta: meta} }
 
 // Cell is one table cell: plain text on the wire, or {"text","tone"} when a
 // single reading needs its own colour (a GPU's VRAM temperature).

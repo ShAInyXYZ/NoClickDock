@@ -47,8 +47,8 @@
     overflow: hidden;
   }
   .Alert-title {
-    flex: none;
-    max-width: 60%;
+    flex: 0 1 auto;
+    min-width: 0;
     font: 600 var(--fs-body)/24px var(--font-sans);
     color: var(--text);
     white-space: nowrap;
@@ -56,7 +56,7 @@
     text-overflow: ellipsis;
   }
   .Alert-meta {
-    min-width: 0;
+    flex: none; /* at most 24 characters (A12): it always fits */
     font: 400 var(--fs-small)/24px var(--font-mono);
     color: var(--tone);
     white-space: nowrap;

@@ -3,10 +3,11 @@
 
   // glance.text under a dial: the number the dock exists to show, in ink
   // bright enough to read without leaning in. Coloured only for a problem.
+  // Never empty: nothing measured reads as a dash.
   let { text, tone }: { text: string; tone?: Tone | "stale" } = $props();
 </script>
 
-<span class="Readout" data-tone={tone}>{text}</span>
+<span class="Readout" data-tone={tone}>{text || "—"}</span>
 
 <style>
   .Readout {

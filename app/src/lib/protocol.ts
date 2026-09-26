@@ -32,7 +32,8 @@ export type TableCell = string | { text: string; tone?: Tone };
 export interface TableBlock {
   kind: "table";
   columns: { label: string; align?: "left" | "right"; mono?: boolean }[];
-  rows: { cells: TableCell[]; tone?: Tone; led?: Tone; sub?: string }[];
+  /** A row with `group` opens a group of rows: a strip with its title and meta, no cells. */
+  rows: { cells: TableCell[]; tone?: Tone; led?: Tone; sub?: string; group?: string; meta?: string }[];
 }
 export interface DonutBlock { kind: "donut"; segments: { label: string; value: number; display: string }[]; center: string; unit?: string }
 export interface BarsBlock { kind: "bars"; values: number[]; labels?: string[]; highlight?: number; unit?: string }

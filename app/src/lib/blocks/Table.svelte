@@ -5,7 +5,9 @@
   // Aligned columns of readings (Power's draw). A left mono column is an
   // identifier (CPU, GPU0), a left prose column a name that takes the slack
   // and ellipsises; everything else is a number, right-aligned. A cell may
-  // carry its own tone: one hot sensor in an otherwise quiet row.
+  // carry its own tone: one hot sensor in an otherwise quiet row. Groups of
+  // rows share the one set of columns, each opened by a strip of its own;
+  // the header row is the first group's strip.
   let { block }: { block: TableBlock } = $props();
 
   const kind = (i: number) => {
@@ -31,6 +33,16 @@
   {/if}
   <tbody>
     {#each block.rows as row, r (r)}
+      {#if row.group}
+        <tr class="Table-group">
+          <td colspan={block.columns.length}>
+            <div class="Table-strip">
+              <span class="Table-title">{row.group}</span>
+              {#if row.meta}<span class="Table-meta">{row.meta}</span>{/if}
+            </div>
+          </td>
+        </tr>
+      {:else}
       <tr>
         {#each row.cells as cell, i (i)}
           <td class={kind(i)} data-tone={tone(cell) ?? row.tone} title={kind(i) === "name" ? text(cell) : undefined}>
@@ -40,6 +52,7 @@
           </td>
         {/each}
       </tr>
+      {/if}
     {/each}
   </tbody>
 </table>
@@ -89,4 +102,28 @@
   td[data-tone="warn"] { color: var(--warn); }
   td[data-tone="crit"] { color: var(--err); }
   td > :global(.Led) { margin-right: 8px; vertical-align: middle; }
+  /* A group's strip is a Section inside the table. */
+  .Table-group td { height: auto; padding: 0; }
+  .Table-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    height: 32px;
+    margin-top: 8px;
+    border-top: 1px solid var(--line);
+  }
+  .Table-title {
+    font: 500 var(--fs-micro)/1 var(--font-mono);
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--dim);
+    white-space: nowrap;
+  }
+  .Table-meta {
+    font: 400 var(--fs-micro)/1 var(--font-mono);
+    letter-spacing: .04em;
+    color: var(--dim);
+    white-space: nowrap;
+  }
 </style>

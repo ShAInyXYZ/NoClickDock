@@ -5,24 +5,28 @@
   import type { RowBlock } from "$lib/protocol";
 
   // name ............ value: an optional lamp on the name line, a quiet line
-  // under the name, and the row's actions as ghost pills at the right.
+  // under the name, and the row's actions as ghost pills at the right. One
+  // line, always: a long value ellipsizes, the pills never wrap under it.
+  // `mono` means the name is a path (A18).
   let { block, widget }: { block: RowBlock; widget: string } = $props();
   // A failed action says why under the row that ran it (M2-a).
   const failure = $derived(actions.failureOf(widget, block.actions));
 </script>
 
 <div class="Row">
-  <span class="Row-text" class:has-led={!!block.led}>
-    {#if block.led}<Led tone={block.led} />{/if}
-    <span class="Row-name" class:is-mono={block.mono}>{block.name}</span>
-    {#if block.sub}<span class="Row-sub">{block.sub}</span>{/if}
-  </span>
-  {#if block.value}<span class="Row-value" data-tone={block.tone} title={block.value}>{block.value}</span>{/if}
-  {#if block.actions?.length}
-    <span class="Row-actions">
-      {#each block.actions as action, i (`${i}:${action.id}`)}<PillButton {widget} {action} />{/each}
+  <div class="Row-line">
+    <span class="Row-text" class:has-led={!!block.led}>
+      {#if block.led}<Led tone={block.led} />{/if}
+      <span class="Row-name" class:is-mono={block.mono}>{block.name}</span>
+      {#if block.sub}<span class="Row-sub">{block.sub}</span>{/if}
     </span>
-  {/if}
+    {#if block.value}<span class="Row-value" data-tone={block.tone} title={block.value}>{block.value}</span>{/if}
+    {#if block.actions?.length}
+      <span class="Row-actions">
+        {#each block.actions as action, i (`${i}:${action.id}`)}<PillButton {widget} {action} />{/each}
+      </span>
+    {/if}
+  </div>
   {#if failure}<span class="Row-error" title={failure}>{failure}</span>{/if}
 </div>
 
@@ -30,11 +34,17 @@
   .Row {
     position: relative;
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    column-gap: 10px;
+    flex-direction: column;
+    justify-content: center;
     min-height: var(--row-h);
     padding: 4px 0;
+  }
+  .Row-line {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    column-gap: 10px;
+    min-width: 0;
   }
   /* The lamp lives with the name, centred on its 18px line — the same in a
      single-line row and a row with a sub line. */
@@ -63,7 +73,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .Row-name.is-mono { font: 500 var(--fs-small)/18px var(--font-mono); }
+  .Row-name.is-mono { font: 400 var(--fs-small)/18px var(--font-mono); }
   .Row-sub {
     display: block;
     font: 400 var(--fs-small)/14px var(--font-sans);
@@ -73,6 +83,7 @@
     text-overflow: ellipsis;
   }
   .Row-value {
+    flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -85,7 +96,7 @@
   .Row-value[data-tone="crit"] { color: var(--err); }
   .Row-actions { flex: none; display: flex; gap: 4px; }
   .Row-error {
-    flex: 1 0 100%;
+    display: block;
     min-width: 0;
     font: 400 var(--fs-small)/16px var(--font-mono);
     color: var(--err);
