@@ -546,3 +546,48 @@ func TestMockedActionsNeverTouchTheMachine(t *testing.T) {
 		t.Fatalf("got %q, %v", msg, err)
 	}
 }
+
+// slowActor holds every action until released.
+type slowActor struct {
+	scripted
+	release chan struct{}
+}
+
+func (s *slowActor) Act(context.Context, string, map[string]string) (string, error) {
+	<-s.release
+	return "done", nil
+}
+
+func TestTheSameActionRunsOnceAtATime(t *testing.T) {
+	c := &slowActor{scripted: scripted{meta: Meta{ID: "docker"}, results: []result{{snap: withActions()}}}, release: make(chan struct{})}
+	h := newHub(t, c)
+	h.poll(context.Background(), h.entries[0])
+	req := model.Request{Type: "action", ID: "a1", Widget: "docker", Action: "stop", Args: map[string]string{"container": "api-gateway"}}
+	first := make(chan bool)
+	go func() {
+		ok, _ := h.runAction(context.Background(), req)
+		first <- ok
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		h.mu.Lock()
+		n := len(h.running)
+		h.mu.Unlock()
+		if n == 1 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	req.ID = "a2"
+	if ok, msg := h.runAction(context.Background(), req); ok || msg != "that is still running" {
+		t.Fatalf("a second press while running: %v %q", ok, msg)
+	}
+	close(c.release)
+	if !<-first {
+		t.Fatal("the first press failed")
+	}
+	req.ID = "a3"
+	if ok, _ := h.runAction(context.Background(), req); !ok {
+		t.Fatal("once finished, it can run again")
+	}
+}

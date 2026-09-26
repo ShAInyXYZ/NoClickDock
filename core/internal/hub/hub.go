@@ -48,8 +48,11 @@ type Hub struct {
 	// (tests only; zero means the default).
 	stillAfter time.Duration
 
-	mu   sync.Mutex // guards subs and every entry's shown / lastMsg / lastTick
+	mu   sync.Mutex // guards subs, running and every entry's shown / lastMsg / lastTick
 	subs map[*Subscription]struct{}
+	// running is every action in flight, by widget/action/args: pressing
+	// the same button twice (from either panel window) runs it once.
+	running map[string]bool
 }
 
 type entry struct {
@@ -423,6 +426,24 @@ func (h *Hub) runAction(ctx context.Context, req model.Request) (bool, string) {
 	if !allowed {
 		return false, "unknown action"
 	}
+	key := actionKey(req)
+	h.mu.Lock()
+	busy := h.running[key]
+	if !busy {
+		if h.running == nil {
+			h.running = map[string]bool{}
+		}
+		h.running[key] = true
+	}
+	h.mu.Unlock()
+	if busy {
+		return false, "that is still running"
+	}
+	defer func() {
+		h.mu.Lock()
+		delete(h.running, key)
+		h.mu.Unlock()
+	}()
 	h.broadcast(model.NewRunning(req))
 	actx, cancel := context.WithTimeout(ctx, actionTimeout)
 	defer cancel()
@@ -431,6 +452,11 @@ func (h *Hub) runAction(ctx context.Context, req model.Request) (bool, string) {
 		return false, err.Error()
 	}
 	return true, msg
+}
+
+func actionKey(req model.Request) string {
+	args, _ := json.Marshal(req.Args) // map keys are sorted
+	return req.Widget + "/" + req.Action + "/" + string(args)
 }
 
 // offered reports whether a snapshot carries this action with exactly these

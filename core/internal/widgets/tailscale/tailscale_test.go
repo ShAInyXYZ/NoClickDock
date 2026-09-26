@@ -1,6 +1,7 @@
 package tailscale
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -78,8 +79,8 @@ func TestParseStatus(t *testing.T) {
 	if ps["build-agent"].Direct || ps["build-agent"].Relay != "fra" || !ps["atlas"].Direct {
 		t.Error("direct means a current address")
 	}
-	if ps["Phone"].id != "phone" {
-		t.Error("peers are known by their lower-cased host name")
+	if ps["phone"] == nil || ps["phone"].name != "phone" || !strings.HasPrefix(ps["phone"].id, "nodekey:") {
+		t.Error("peers are named by MagicDNS (Phone → phone) and known by node key")
 	}
 
 	if st := load(t, "status-stopped.json", now); st.Backend != "Stopped" || st.SelfOnline || len(st.Peers) != 0 || st.IP != "100.64.0.10" {
@@ -105,7 +106,7 @@ func TestState(t *testing.T) {
 	}{
 		{"a watched peer offline", "status-running.json", pin("fileserver", "atlas"), nil, model.StateWarn, "fileserver offline", "1/2"},
 		{"two watched peers offline", "status-running.json", pin("fileserver", "pi-garage", "atlas"), nil, model.StateWarn, "2 peers offline", "1/3"},
-		{"health", "status-running.json", pin("atlas"), nil, model.StateWarn, "Some peers are advertising routes but --", "1/1"},
+		{"health", "status-running.json", pin("atlas"), nil, model.StateWarn, "1 health warning", "1/1"},
 		{"key expiring alone", "status-running.json", pin("atlas"), func(st *status) { st.Health = nil }, model.StateWarn, "key expires in 3d", "3d"},
 		{"all well", "status-running.json", pin("atlas", "PHONE"), func(st *status) { st.Health, st.ExpiryDays = nil, 90 }, model.StateOK, "2 peers up", "2/2"},
 		{"one up", "status-running.json", pin("atlas"), func(st *status) { st.Health, st.HasExpiry = nil, false }, model.StateOK, "1 peer up", "1/1"},
@@ -248,6 +249,85 @@ func TestServeAndFunnel(t *testing.T) {
 	if _, err := parseServe("No serve config"); err == nil {
 		t.Error("text is not a config")
 	}
+
+	// A serve or funnel run in a terminal (no --bg) lives under Foreground:
+	// a public funnel must never read as nothing exposed (research M3 r1).
+	e, _ = parseServe(read("serve-foreground-funnel.json"))
+	if !reflect.DeepEqual(e.funnel, []string{"workstation.tail0c4fe.ts.net:443"}) || !e.session ||
+		!reflect.DeepEqual(e.serve, []served{{443, "127.0.0.1:5173"}}) {
+		t.Errorf("foreground funnel: %+v", e)
+	}
+	e, _ = parseServe(read("serve-mixed.json"))
+	if !reflect.DeepEqual(e.serve, []served{{8443, "localhost:8080"}, {10000, "127.0.0.1:3000"}}) || !e.session || len(e.funnel) != 0 {
+		t.Errorf("background + foreground: %+v", e)
+	}
+	e, _ = parseServe(read("serve-services.json"))
+	if !reflect.DeepEqual(e.services, []string{"svc:wiki"}) || e.unknown {
+		t.Errorf("services: %+v", e)
+	}
+	e, _ = parseServe(`{"Future":{"x":{"Port":443}}}`)
+	if !e.unknown {
+		t.Errorf("an unknown shape is unknown, not nothing: %+v", e)
+	}
+	e, _ = parseServe(`{"ETag":"abc"}`)
+	if e.unknown || len(e.serve) != 0 {
+		t.Errorf("nothing but an etag is nothing: %+v", e)
+	}
+	e, _ = parseServe(`{"AllowIngress":{"old.tail0c4fe.ts.net:443":true},"TCP":{"443":{"HTTPS":true}}}`)
+	if len(e.funnel) != 1 {
+		t.Errorf("an older client's AllowIngress is a funnel: %+v", e)
+	}
+}
+
+func TestExposureRows(t *testing.T) {
+	st := load(t, "status-running.json", now)
+	New(pin()).observe(st, now)
+	rows := func(file string) []string {
+		b, _ := os.ReadFile(filepath.Join("testdata", file))
+		e, err := parseServe(string(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, r := range rowsOf(render(&poll{available: true, st: st, now: now, pinned: true, exposure: e}).Pages[0].Blocks) {
+			if strings.HasPrefix(r, "- Funnel") || strings.HasPrefix(r, "- Serve") || strings.HasPrefix(r, "- Services") {
+				out = append(out, r)
+			}
+		}
+		return out
+	}
+	if got := rows("serve-foreground-funnel.json"); !reflect.DeepEqual(got, []string{
+		"- Funnel | :443 · public internet · session | crit crit",
+		"- Serve | :443 → 127.0.0.1:5173 · session | warn warn",
+	}) {
+		t.Errorf("foreground funnel rows: %q", got)
+	}
+	if got := rows("serve-services.json"); !reflect.DeepEqual(got, []string{"- Services | svc:wiki | warn warn"}) {
+		t.Errorf("service rows: %q", got)
+	}
+}
+
+func TestPeersWithOneHostnameStayApart(t *testing.T) {
+	status := func(rxA, rxB int64) []byte {
+		return []byte(fmt.Sprintf(`{"BackendState":"Running","Self":{"HostName":"workstation","Online":true},"Peer":{
+			"nodekey:aa":{"HostName":"ubuntu","DNSName":"ubuntu.tail0c4fe.ts.net.","Online":true,"RxBytes":%d},
+			"nodekey:bb":{"HostName":"ubuntu","DNSName":"ubuntu-1.tail0c4fe.ts.net.","Online":true,"RxBytes":%d}}}`, rxA, rxB))
+	}
+	w := New(pin("ubuntu-1"))
+	st, err := parseStatus(status(1000, 5_000_000), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.observe(st, now)
+	st, _ = parseStatus(status(1000+10*1024*10, 5_000_000), now.Add(10*time.Second))
+	w.observe(st, now.Add(10*time.Second))
+	ps := peers(st)
+	if ps["ubuntu"].Rate != 10*1024 || ps["ubuntu-1"].Rate != 0 {
+		t.Errorf("rates mixed: %v / %v", ps["ubuntu"].Rate, ps["ubuntu-1"].Rate)
+	}
+	if ps["ubuntu"].Watched || !ps["ubuntu-1"].Watched {
+		t.Error("a pin names one of the two by its MagicDNS name")
+	}
 }
 
 func rowsOf(blocks model.Blocks) []string {
@@ -289,8 +369,8 @@ func TestPanel(t *testing.T) {
 		"- Key expires | 3d | warn warn",
 		"- Exit node | exit-fra | warn warn",
 		"# Exposure  ",
-		"- Serve | :443 → 127.0.0.1:3000 | warn warn",
 		"- Funnel | :443 · public internet | crit crit",
+		"- Serve | :443 → 127.0.0.1:3000 | warn warn",
 		"- Exit node | offered by this node | warn warn",
 		"- Route advertised | 10.10.0.0/16 | warn warn",
 		"- Exit nodes available | exit-fra |  ",
@@ -298,8 +378,8 @@ func TestPanel(t *testing.T) {
 		"# Online 5 ",
 		"- atlas | linux · direct | ok ",
 		"- build-agent | linux · relay fra | warn warn",
-		"- Phone | iOS · relay ams | warn warn",
 		"- exit-fra | linux · direct | ok ",
+		"- phone | iOS · relay ams | warn warn",
 		"- router | linux · direct | ok ",
 		"# Dormant 3 ",
 		"  [old-desktop 12d ago idle]",

@@ -185,6 +185,12 @@ func (w *Widget) run(ctx context.Context, bin string, p plan) (string, error) {
 	}
 	w.mu.Lock()
 	for _, m := range p.marks {
+		if verb, busy := w.pending[m]; busy {
+			w.mu.Unlock()
+			return "", fmt.Errorf("%s is still %s", p.label, verb)
+		}
+	}
+	for _, m := range p.marks {
 		w.pending[m] = ongoing[p.verb]
 	}
 	w.mu.Unlock()

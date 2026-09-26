@@ -1,0 +1,34 @@
+{
+ "TCP": {
+  "8443": {
+   "HTTPS": true
+  }
+ },
+ "Web": {
+  "workstation.tail0c4fe.ts.net:8443": {
+   "Handlers": {
+    "/": {
+     "Proxy": "http://localhost:8080"
+    }
+   }
+  }
+ },
+ "Foreground": {
+  "77e0aa01": {
+   "TCP": {
+    "10000": {
+     "HTTP": true
+    }
+   },
+   "Web": {
+    "workstation.tail0c4fe.ts.net:10000": {
+     "Handlers": {
+      "/": {
+       "Proxy": "http://127.0.0.1:3000"
+      }
+     }
+    }
+   }
+  }
+ }
+}

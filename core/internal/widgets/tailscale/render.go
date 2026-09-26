@@ -55,7 +55,9 @@ func render(p *poll) model.Snapshot {
 	case len(down) > 1:
 		s.State, s.StateLabel = model.StateWarn, fmt.Sprintf("%d peers offline", len(down))
 	case len(st.Health) > 0:
-		s.State, s.StateLabel = model.StateWarn, cut(st.Health[0], 40)
+		// The fact, in the label's budget; the messages lead the panel.
+		n := len(st.Health)
+		s.State, s.StateLabel = model.StateWarn, fmt.Sprintf("%d health %s", n, plural(n, "warning", "warnings"))
 	case expiring:
 		s.State, s.StateLabel = model.StateWarn, fmt.Sprintf("key expires in %.0fd", st.ExpiryDays)
 	default:
@@ -188,20 +190,28 @@ func panel(p *poll, down []*peer) model.Blocks {
 	// exposed is said out loud: it is the reassuring case.
 	out = append(out, model.Section{Title: "Exposure"})
 	switch e := p.exposure; {
-	case e == nil:
+	case e == nil || e.unknown:
 		out = append(out, model.Row{Name: "Serve / funnel", Value: "unknown", LED: idle})
-	case len(e.serve) == 0 && len(e.funnel) == 0:
+	case len(e.serve) == 0 && len(e.funnel) == 0 && len(e.services) == 0:
 		out = append(out, model.Row{Name: "Serve / funnel", Value: "nothing exposed", LED: ok})
 	default:
-		if len(e.serve) > 0 {
-			out = append(out, model.Row{Name: "Serve", Value: serveValue(e.serve), Tone: warn, LED: warn})
+		// A terminal session's serve ends with the terminal; say so.
+		session := ""
+		if e.session {
+			session = " · session"
 		}
 		if len(e.funnel) > 0 {
 			var ports []string
 			for _, hp := range e.funnel {
 				ports = append(ports, ":"+hp[strings.LastIndex(hp, ":")+1:])
 			}
-			out = append(out, model.Row{Name: "Funnel", Value: strings.Join(ports, ", ") + " · public internet", Tone: crit, LED: crit})
+			out = append(out, model.Row{Name: "Funnel", Value: strings.Join(ports, ", ") + " · public internet" + session, Tone: crit, LED: crit})
+		}
+		if len(e.serve) > 0 {
+			out = append(out, model.Row{Name: "Serve", Value: serveValue(e.serve) + session, Tone: warn, LED: warn})
+		}
+		if len(e.services) > 0 {
+			out = append(out, model.Row{Name: "Services", Value: strings.Join(e.services, ", "), Tone: warn, LED: warn})
 		}
 	}
 	if st.ExitOffered {

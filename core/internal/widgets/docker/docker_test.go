@@ -568,6 +568,13 @@ func TestRunFallsBackAndSaysWhy(t *testing.T) {
 		t.Errorf("a failure refreshes itself: %d pokes", pokes)
 	}
 
+	// Something already being done to the unit refuses a second action.
+	w.pending["unit:ledger"] = "stopping"
+	if _, err := w.run(ctx, fakeDocker(t, "exit 0"), plan{verb: "restart", label: "ledger", marks: []string{"unit:ledger"}, cmd: []string{"restart"}}); err == nil || err.Error() != "ledger is still stopping" {
+		t.Errorf("busy unit: %v", err)
+	}
+	delete(w.pending, "unit:ledger")
+
 	w.sysAt = time.Now()
 	if _, err := w.run(ctx, fakeDocker(t, "exit 0"), plan{verb: "prune", label: "images", prune: true, cmd: []string{"image", "prune", "-a", "-f"}}); err != nil {
 		t.Fatal(err)

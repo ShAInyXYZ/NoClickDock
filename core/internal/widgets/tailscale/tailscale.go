@@ -104,15 +104,19 @@ func (w *Widget) observe(st *status, now time.Time) (pinned bool) {
 		}
 		w.prev[p.id] = sample{now, p.rx, p.tx}
 	}
-	watched := w.seen
+	var pins map[string]bool
 	if list != nil {
-		watched = map[string]bool{}
+		pins = map[string]bool{}
 		for _, h := range *list {
-			watched[strings.ToLower(strings.TrimSpace(h))] = true
+			pins[strings.ToLower(strings.TrimSpace(h))] = true
 		}
 	}
 	for _, p := range st.Peers {
-		p.Watched = watched[p.id]
+		if pins != nil {
+			p.Watched = pins[p.name]
+		} else {
+			p.Watched = w.seen[p.id]
+		}
 	}
 	return list != nil
 }

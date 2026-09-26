@@ -19,11 +19,11 @@ func (Mock) Mock(now time.Time) model.Snapshot {
 	ago := func(d time.Duration) time.Time { return now.Add(-d) }
 	day := 24 * time.Hour
 	on := func(host, os string, active, direct bool, relay string, rate float64) *peer {
-		return &peer{Host: host, id: host, Online: true, Active: active, OS: os, Direct: direct, Relay: relay,
+		return &peer{Host: host, id: "nodekey:" + host, name: host, Online: true, Active: active, OS: os, Direct: direct, Relay: relay,
 			Rate: rate, HasRate: rate > 0, Last: now}
 	}
 	off := func(host string, last time.Time) *peer {
-		return &peer{Host: host, id: host, OS: "linux", Last: last}
+		return &peer{Host: host, id: "nodekey:" + host, name: host, OS: "linux", Last: last}
 	}
 	exitFra := on("exit-fra", "linux", false, true, "", 0)
 	exitFra.ExitOption = true
