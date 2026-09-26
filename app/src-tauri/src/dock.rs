@@ -9,12 +9,14 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, PhysicalPosition, WebviewWindow};
 
-use crate::{core, hover, main_thread, overlay};
+use crate::{core, hover, main_thread, overlay, toast};
 
 /// Distance, in CSS px, within which a dropped rail snaps to an edge.
 const SNAP: f64 = 24.0;
 /// A drag is over when the rail has not moved for this long.
 const SETTLE: Duration = Duration::from_millis(400);
+/// The rail's moves this soon after the shell placed it are the shell's own.
+const PLACING: Duration = Duration::from_millis(400);
 
 /// What the rail page measured, in CSS px relative to the window.
 #[derive(Clone, Deserialize)]
@@ -47,8 +49,10 @@ struct DockState {
     /// Hidden from the tray: the rail stays measured but off screen.
     hidden: bool,
     moves: u64,
-    /// Moves the shell made itself, which are not the user's drag.
-    placing: u32,
+    /// Until then, a move is the shell's own placement, not the user's
+    /// drag. A deadline, not a count: a placement that changes nothing
+    /// emits no move, and a count would then swallow the next real drag.
+    placing_until: Option<Instant>,
 }
 
 impl Dock {
@@ -205,10 +209,10 @@ fn on_edge(area: Area, size: (i32, i32), edge: &str, along: f64) -> (i32, i32) {
     clamp(at, size, area)
 }
 
-/// Marks the next `Moved` as the shell's own, not a drag to save.
+/// Marks the moves of the next moment as the shell's own, not a drag to save.
 fn placing(app: &AppHandle) {
     if let Ok(mut state) = app.state::<Dock>().0.lock() {
-        state.placing += 1;
+        state.placing_until = Some(Instant::now() + PLACING);
     }
 }
 
@@ -242,13 +246,18 @@ pub fn set_hidden(app: &AppHandle, hidden: bool) {
         state.size
     };
     if hidden {
+        // Toasts first, so the panel closing does not release them.
+        toast::set_dock_hidden(app, true);
         hover::close(app);
         let _ = overlay::conceal(&rail);
-    } else if let Some(size) = size {
-        let vertical = app.state::<Dock>().layout().is_some_and(|l| l.height >= l.width);
-        let (x, y) = restore(app, size, vertical);
-        placing(app);
-        let _ = overlay::reveal(&rail, PhysicalPosition::new(x, y));
+    } else {
+        if let Some(size) = size {
+            let vertical = app.state::<Dock>().layout().is_some_and(|l| l.height >= l.width);
+            let (x, y) = restore(app, size, vertical);
+            placing(app);
+            let _ = overlay::reveal(&rail, PhysicalPosition::new(x, y));
+        }
+        toast::set_dock_hidden(app, false);
     }
 }
 
@@ -281,8 +290,7 @@ pub fn moved(app: &AppHandle) {
         let dock = app.state::<Dock>();
         let Ok(mut state) = dock.0.lock() else { return };
         state.moves += 1;
-        let ours = state.placing > 0;
-        state.placing = state.placing.saturating_sub(1);
+        let ours = state.placing_until.is_some_and(|until| Instant::now() < until);
         (state.moves, ours)
     };
     if ours {
@@ -372,23 +380,11 @@ fn settle(app: &AppHandle) {
 pub fn observe_monitors(app: &AppHandle) {
     main_thread::assert();
     use gtk::prelude::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::sync::Arc;
 
     let Some(display) = gtk::gdk::Display::default() else { return };
-    let bursts = Arc::new(AtomicU64::new(0));
     let queue = {
         let app = app.clone();
-        move || {
-            let burst = bursts.fetch_add(1, Ordering::AcqRel) + 1;
-            let bursts = bursts.clone();
-            let app = app.clone();
-            gtk::glib::timeout_add_local_once(Duration::from_millis(150), move || {
-                if bursts.load(Ordering::Acquire) == burst {
-                    replace(&app);
-                }
-            });
-        }
+        move || queue_replace(&app)
     };
     let watch = {
         let queue = queue.clone();
@@ -411,6 +407,83 @@ pub fn observe_monitors(app: &AppHandle) {
     });
     display.connect_monitor_removed(move |_, _| removed());
     display.default_screen().connect_monitors_changed(move |_| changed());
+    if let Err(error) = observe_x11_workareas(app) {
+        eprintln!("ncd: {error}");
+    }
+}
+
+/// Puts the rail back once a burst of monitor notifications has settled.
+/// Main thread.
+#[cfg(target_os = "linux")]
+fn queue_replace(app: &AppHandle) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static BURSTS: AtomicU64 = AtomicU64::new(0);
+    main_thread::assert();
+    let burst = BURSTS.fetch_add(1, Ordering::AcqRel) + 1;
+    let app = app.clone();
+    gtk::glib::timeout_add_local_once(Duration::from_millis(150), move || {
+        if BURSTS.load(Ordering::Acquire) == burst {
+            replace(&app);
+        }
+    });
+}
+
+/// Mutter keeps each monitor's work area in the root window's
+/// `_GTK_WORKAREAS_D<n>` without always telling GDK (HubVoice learnt this):
+/// a top bar or a dock that changes size would leave the rail where it was.
+/// A connection of our own watches the root's properties on a thread of its
+/// own and hands every relevant change to the main thread. It changes no
+/// window and no property, and subscribes only its own connection.
+#[cfg(target_os = "linux")]
+fn observe_x11_workareas(app: &AppHandle) -> Result<(), String> {
+    use x11rb::connection::Connection;
+    use x11rb::protocol::xproto::{ChangeWindowAttributesAux, ConnectionExt, EventMask};
+    use x11rb::protocol::Event;
+
+    let failed = |_| "could not watch the X11 work areas".to_owned();
+    let (connection, screen) = x11rb::connect(None).map_err(failed)?;
+    let root = connection.setup().roots[screen].root;
+    connection
+        .change_window_attributes(root, &ChangeWindowAttributesAux::new().event_mask(EventMask::PROPERTY_CHANGE))
+        .map_err(|_| "could not watch the X11 work areas".to_owned())?
+        .check()
+        .map_err(|_| "could not watch the X11 work areas".to_owned())?;
+    connection.flush().map_err(|_| "could not watch the X11 work areas".to_owned())?;
+    let app = app.clone();
+    std::thread::Builder::new()
+        .name("ncd-workareas".into())
+        .spawn(move || {
+            let mut relevant = std::collections::HashMap::<u32, bool>::new();
+            while let Ok(event) = connection.wait_for_event() {
+                let Event::PropertyNotify(event) = event else { continue };
+                if event.window != root {
+                    continue;
+                }
+                let changed = *relevant.entry(event.atom).or_insert_with(|| {
+                    let name = connection
+                        .get_atom_name(event.atom)
+                        .ok()
+                        .and_then(|cookie| cookie.reply().ok())
+                        .map(|reply| reply.name)
+                        .unwrap_or_default();
+                    name.starts_with(b"_GTK_WORKAREAS_D")
+                        || matches!(name.as_slice(), b"_NET_WORKAREA" | b"_NET_CURRENT_DESKTOP" | b"_NET_DESKTOP_GEOMETRY")
+                });
+                // Other clients create root properties too: keep the cache small.
+                if relevant.len() > 256 {
+                    relevant.clear();
+                }
+                if changed && app.run_on_main_thread({
+                    let app = app.clone();
+                    move || queue_replace(&app)
+                }).is_err()
+                {
+                    break;
+                }
+            }
+        })
+        .map_err(|_| "could not start the X11 work-area watcher".to_owned())?;
+    Ok(())
 }
 
 /// Windows re-places on ScaleChanged instead (on_window_event).

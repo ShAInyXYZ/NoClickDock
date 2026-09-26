@@ -141,19 +141,36 @@ fn park(window: &WebviewWindow) -> tauri::Result<()> {
         return Ok(()); // never shown: nothing to hide (and no GdkWindow yet)
     }
     window.gtk_window()?.set_opacity(0.0);
-    if clickable(window) {
-        window.set_ignore_cursor_events(true)?;
-    }
-    Ok(())
+    pass_through(window, true)
 }
 
 #[cfg(target_os = "linux")]
 fn unpark(window: &WebviewWindow) -> tauri::Result<()> {
     use gtk::prelude::WidgetExt;
     if clickable(window) {
-        window.set_ignore_cursor_events(false)?;
+        pass_through(window, false)?;
     }
     window.gtk_window()?.set_opacity(1.0);
+    Ok(())
+}
+
+/// Lets every pointer event through the window (an empty input shape), or
+/// takes them again. Not tao's `set_ignore_cursor_events`: that keeps a 1×1
+/// input region at the window's corner, and a parked window stays mapped
+/// and on top — that pixel would swallow a click meant for what is below.
+/// A window not realised yet has nothing to shape.
+#[cfg(target_os = "linux")]
+pub fn pass_through(window: &WebviewWindow, through: bool) -> tauri::Result<()> {
+    use gtk::prelude::WidgetExt;
+    crate::main_thread::assert();
+    let gtk_window = window.gtk_window()?;
+    if through {
+        if let Some(gdk_window) = gtk_window.window() {
+            gdk_window.input_shape_combine_region(&gtk::cairo::Region::create(), 0, 0);
+        }
+    } else {
+        gtk_window.input_shape_combine_region(None);
+    }
     Ok(())
 }
 

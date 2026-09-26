@@ -5,6 +5,10 @@
 //! - each for 5 s, then a 160 ms fade;
 //! - while any panel is open they wait, and a toast for the widget whose panel
 //!   is open is dropped — the panel already says it;
+//! - while the dock is hidden they wait too: no toast floats beside no rail;
+//! - waiting is bounded: the newest three per widget, none older than 30 s
+//!   when its turn comes; and a widget whose toasts keep coming yields the
+//!   stack to one that is waiting, so a crit elsewhere is never starved;
 //! - the pointer passes through them on Linux; on Windows, where click-through
 //!   is unreliable, pointing at them dismisses them.
 use std::collections::VecDeque;
@@ -21,6 +25,8 @@ const VISIBLE: Duration = Duration::from_millis(5000);
 const FADE: Duration = Duration::from_millis(160);
 const MAX: usize = 3;
 const TICK: Duration = Duration::from_millis(100);
+/// A waiting toast older than this is no longer news.
+const STALE: Duration = Duration::from_secs(30);
 
 #[derive(Default)]
 pub struct Toasts(Mutex<State>);
@@ -33,12 +39,14 @@ struct State {
     widget: Option<String>,
     /// The widget whose panel is open: toasts wait meanwhile.
     held: Option<String>,
+    /// The dock is hidden from the tray: toasts wait meanwhile.
+    dock_hidden: bool,
     next_key: u64,
     seq: u64,
     visible: bool,
     ticking: bool,
     /// Linux only: the toast window lets the pointer through once shown.
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     click_through: bool,
 }
 
@@ -48,6 +56,7 @@ struct Item {
     widget: String,
     tone: String,
     text: String,
+    at: Instant,
 }
 
 struct Shown {
@@ -89,8 +98,39 @@ fn push_here(app: &AppHandle, widget: String, tone: String, text: String) {
     }
     st.next_key += 1;
     let key = st.next_key;
-    st.pending.push_back(Item { key, widget, tone, text });
+    // Keep the newest three per widget waiting: older ones would only be
+    // pushed out of the stack by these anyway.
+    let waiting = st.pending.iter().filter(|item| item.widget == widget).count();
+    if waiting >= MAX {
+        if let Some(i) = st.pending.iter().position(|item| item.widget == widget) {
+            st.pending.remove(i);
+        }
+    }
+    st.pending.push_back(Item { key, widget, tone, text, at: Instant::now() });
     pump(app, &mut st);
+}
+
+/// The dock was hidden from the tray (toasts wait) or shown again.
+pub fn set_dock_hidden(app: &AppHandle, hidden: bool) {
+    main_thread::assert();
+    let toasts = app.state::<Toasts>();
+    let Ok(mut st) = toasts.0.lock() else { return };
+    st.dock_hidden = hidden;
+    if hidden {
+        requeue(&mut st);
+        hide(app, &mut st);
+    } else {
+        pump(app, &mut st);
+    }
+}
+
+/// What was showing goes back to wait, in front, with a fresh five seconds.
+fn requeue(st: &mut State) {
+    let shown: Vec<Item> = st.shown.drain(..).rev().map(|s| s.item).collect();
+    for item in shown {
+        st.pending.push_front(item);
+    }
+    st.widget = None;
 }
 
 /// A panel opened: its widget's toasts are dropped, the rest wait.
@@ -99,13 +139,8 @@ pub fn hold(app: &AppHandle, widget: &str) {
     let toasts = app.state::<Toasts>();
     let Ok(mut st) = toasts.0.lock() else { return };
     st.held = Some(widget.to_owned());
-    // What was showing goes back to wait, in front, with a fresh five seconds.
-    let shown: Vec<Item> = st.shown.drain(..).rev().map(|s| s.item).collect();
-    for item in shown {
-        st.pending.push_front(item);
-    }
+    requeue(&mut st);
     st.pending.retain(|item| item.widget != widget);
-    st.widget = None;
     hide(app, &mut st);
 }
 
@@ -151,23 +186,29 @@ pub fn toast_layout(app: AppHandle, seq: u64, width: f64, height: f64, anchor: f
     let shown = if st.visible { window.set_position(position) } else { overlay::reveal(&window, position) };
     if shown.is_ok() {
         st.visible = true;
-        // Only after the first show: before it, tao aborts the app (research).
-        #[cfg(not(windows))]
+        // Only once shown: before, there is no X window to shape.
+        #[cfg(target_os = "linux")]
         if !st.click_through {
-            st.click_through = window.set_ignore_cursor_events(true).is_ok();
+            st.click_through = overlay::pass_through(&window, true).is_ok();
         }
     }
 }
 
 /// Moves waiting toasts into the stack when nothing holds them.
 fn pump(app: &AppHandle, st: &mut State) {
-    if st.held.is_some() {
+    if st.held.is_some() || st.dock_hidden {
         return;
     }
+    st.pending.retain(|item| item.at.elapsed() < STALE);
     if st.widget.is_none() {
         st.widget = st.pending.front().map(|item| item.widget.clone());
     }
     let Some(widget) = st.widget.clone() else { return };
+    // Another widget is waiting: this one's new toasts queue behind it
+    // instead of keeping the stack for good.
+    if !st.shown.is_empty() && st.pending.iter().any(|item| item.widget != widget) {
+        return;
+    }
     let mut moved = false;
     while let Some(i) = st.pending.iter().position(|item| item.widget == widget) {
         let item = st.pending.remove(i).expect("position is in range");
