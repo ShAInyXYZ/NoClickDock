@@ -20,7 +20,7 @@ started on Windows yet.
 - **ncd-core.exe:** 10.0 MB, GUI subsystem (`-H=windowsgui`), so no console
   window flashes. It embeds `time/tzdata`.
 
-## install.ps1 (rewritten for NoClickDock 2)
+## scripts/install.ps1 (rewritten for NoClickDock 2; moved from the root in M8)
 
 - **NoClickDock 1 first:** its Python widgets are stopped (matched by their
   script names), and their `NCD *.lnk` Startup shortcuts are moved aside to

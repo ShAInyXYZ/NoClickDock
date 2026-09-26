@@ -8,6 +8,7 @@
 //	ncd-core --mock --stdio    invented data over stdio (the shell's `ncd --mock`)
 //	ncd-core --mock --mock-live  invented data that moves: progress, failures that come and go
 //	ncd-core --once disk       print one snapshot and exit (add --mock for invented data)
+//	ncd-core --migrate         bring the Python widgets' settings over, once, and exit
 //
 // Only the first form is production: Power writes its hourly log to
 // ~/Documents/PM-Log then, and to a scratch directory in every other.
@@ -43,6 +44,7 @@ func main() {
 		stdio     = flag.Bool("stdio", false, "with --dev or --mock: speak stdio to the shell instead of serving HTTP")
 		live      = flag.Bool("mock-live", false, "with --mock: let the invented data move with the clock (progress, failures that come and go)")
 		configDir = flag.String("config", "", "config directory (default: the user's, or a scratch one for --dev and --mock)")
+		migrate   = flag.Bool("migrate", false, "bring the Python widgets' settings over now (once: only while config.json does not exist), say what came, and exit")
 	)
 	flag.Parse()
 	log.SetFlags(0)
@@ -63,6 +65,25 @@ func main() {
 	cfg, err := config.Open(dir)
 	if err != nil {
 		log.Print(err) // defaults are in use; keep running
+	}
+	// The installer asks for the migration before it disables the legacy
+	// autostart entries (which say which widgets were installed).
+	if *migrate {
+		legacy, err := config.LegacyDirs()
+		if err != nil {
+			log.Fatal(err)
+		}
+		brought, err := cfg.Migrate(legacy)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if len(brought) == 0 {
+			fmt.Println("nothing to bring over (config.json exists, or no Python widget settings)")
+		}
+		for _, b := range brought {
+			fmt.Println("brought over:", b)
+		}
+		return
 	}
 	// The Python generation's settings come over once, on the real
 	// config's first run only (read, never written): development never

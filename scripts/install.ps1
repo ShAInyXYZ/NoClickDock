@@ -13,8 +13,9 @@
   every *.json in %APPDATA%\NoClickDock, config.json included.
   -RestoreLegacy puts those shortcuts back.
 
-  The binaries are taken from -From, else from this folder, else from a
-  cross-build in app\src-tauri\target\x86_64-pc-windows-msvc\release.
+  The binaries are taken from -From, else from this folder (dist\windows
+  holds all three), else from a cross-build in the checkout
+  (app\src-tauri\target\x86_64-pc-windows-msvc\release).
 
   Needs the WebView2 runtime (part of Windows 11 and of current Windows 10).
 
@@ -113,7 +114,7 @@ function Find-Source {
     $candidates = @()
     if ($From) { $candidates += $From }
     $candidates += $Here
-    $candidates += (Join-Path $Here 'app\src-tauri\target\x86_64-pc-windows-msvc\release')
+    $candidates += (Join-Path $Here '..\app\src-tauri\target\x86_64-pc-windows-msvc\release')
     foreach ($dir in $candidates) {
         if ((Test-Path (Join-Path $dir 'ncd.exe')) -and (Test-Path (Join-Path $dir 'ncd-core.exe'))) { return $dir }
     }

@@ -29,6 +29,6 @@ pnpm tauri build --runner cargo-xwin --target "$target" --no-bundle
 
 out="$root/dist/windows"
 mkdir -p "$out"
-cp "$root/app/src-tauri/target/$target/release/ncd.exe" "$root/app/src-tauri/target/$target/release/ncd-core.exe" "$root/install.ps1" "$out/"
+cp "$root/app/src-tauri/target/$target/release/ncd.exe" "$root/app/src-tauri/target/$target/release/ncd-core.exe" "$root/scripts/install.ps1" "$out/"
 echo "build-windows: $out"
 ls -l "$out"
