@@ -14,7 +14,7 @@
 
 <div class="PanelHeader">
   {#if mark}
-    <svg class="PanelHeader-mark" viewBox={mark.viewBox} aria-hidden="true"><path d={mark.d} /></svg>
+    <svg class="PanelHeader-mark" viewBox={mark.viewBox} aria-hidden="true"><path d={mark.d} fill-rule={mark.rule} /></svg>
   {/if}
   <span class="PanelHeader-title">{snapshot.title}</span>
   <span class="PanelHeader-state" data-tone={tone}>

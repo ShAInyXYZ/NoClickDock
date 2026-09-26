@@ -24,6 +24,8 @@ class Core {
   heard = $state<Record<string, number>>({});
   toasts = $state<(Toast & { key: number })[]>([]);
   linked = $state(false);
+  /** Why the core is not answering, when the shell knows. */
+  linkError = $state<string | null>(null);
   /** A one-second clock: staleness is a matter of time passing. */
   now = $state(Date.now());
 
@@ -43,7 +45,10 @@ class Core {
     this.#clock ??= setInterval(() => (this.now = Date.now()), 1000);
     return this.#transport.connect(
       (message) => this.#apply(message),
-      (up) => (this.linked = up),
+      (up, error) => {
+        this.linked = up;
+        this.linkError = up ? null : (error ?? null);
+      },
     );
   }
 
@@ -126,6 +131,40 @@ class Core {
 }
 
 export const core = new Core();
+
+/** The id of the rail's own dial, shown while the core is not answering. */
+export const CORE_DIAL = "ncd";
+
+/**
+ * The shell's own snapshot while ncd-core is not answering: a dial of its
+ * own on the rail, so the failure is on screen rather than an empty,
+ * invisible app. It says only what is true.
+ */
+export function coreDown(error: string, now: number): WidgetSnapshot {
+  return {
+    id: CORE_DIAL,
+    title: "NoClickDock",
+    order: -1,
+    state: "idle",
+    stateLabel: "core not running",
+    glance: { text: "off", tone: "idle" },
+    updatedAt: new Date(now).toISOString(),
+    pollSecs: 0,
+    error,
+    pages: [
+      {
+        id: "main",
+        label: "",
+        blocks: [
+          {
+            kind: "empty",
+            text: `ncd-core is not answering, so nothing here can be measured: ${error}. NoClickDock keeps trying to start it.`,
+          },
+        ],
+      },
+    ],
+  };
+}
 
 /** 12:41:07 — the one time format the interface uses. */
 export function clock(ms: number): string {

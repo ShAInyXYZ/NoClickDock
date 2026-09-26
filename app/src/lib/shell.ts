@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Side } from "./dock/side";
+import type { Tone } from "./protocol";
 
 export interface Rect { x: number; y: number; width: number; height: number }
 
@@ -47,6 +48,20 @@ export const hoverPanel = (inside: boolean) => invoke<void>("hover_panel", { ins
 export const panelLayout = (seq: number, width: number, height: number) =>
   invoke<void>("panel_layout", { seq, width, height });
 export const startDrag = () => getCurrentWindow().startDragging();
+export const dialMenu = (widget: string) => invoke<void>("dial_menu", { widget });
+export const railMenu = () => invoke<void>("rail_menu");
+
+/** The toast stack the shell wants drawn, newest first. */
+export interface ToastStackMessage {
+  seq: number;
+  side: Side;
+  items: { key: number; tone: Tone; text: string; leaving: boolean }[];
+}
+export const onToasts = (fn: (stack: ToastStackMessage) => void): Promise<UnlistenFn> =>
+  listen<ToastStackMessage>("toasts", (event) => fn(event.payload));
+export const toastLayout = (seq: number, width: number, height: number, anchor: number) =>
+  invoke<void>("toast_layout", { seq, width, height, anchor });
+export const toastDismiss = () => invoke<void>("toast_dismiss");
 
 export const onPanelOpen = (fn: (open: PanelOpen) => void): Promise<UnlistenFn> =>
   listen<PanelOpen>("panel-open", (event) => fn(event.payload));

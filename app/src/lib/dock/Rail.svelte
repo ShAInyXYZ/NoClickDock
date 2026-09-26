@@ -21,6 +21,7 @@
     element = $bindable(),
     onhover,
     ongrab,
+    onmenu,
     children,
   }: {
     widgets: WidgetSnapshot[];
@@ -32,6 +33,8 @@
     element?: HTMLElement;
     onhover?: (widget: string | null) => void;
     ongrab?: (event: PointerEvent) => void;
+    /** Right-click: on a dial with its widget, on the rail itself with null. */
+    onmenu?: (widget: string | null) => void;
     children?: Snippet;
   } = $props();
 
@@ -49,6 +52,11 @@
   aria-label="NoClickDock"
   bind:this={element}
   onpointerdown={grab}
+  oncontextmenu={(event) => {
+    if (!onmenu) return;
+    event.preventDefault();
+    onmenu(null);
+  }}
 >
   <div class="Rail-grip" aria-hidden="true"><i></i><i></i><i></i></div>
   {#if children}
@@ -63,6 +71,7 @@
         readout={readouts && density !== "compact"}
         onenter={() => onhover?.(snapshot.id)}
         onleave={() => onhover?.(null)}
+        oncontext={onmenu && (() => onmenu(snapshot.id))}
       />
     {/each}
   {/if}

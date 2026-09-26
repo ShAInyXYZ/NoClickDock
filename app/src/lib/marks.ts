@@ -9,6 +9,8 @@ export interface Mark {
   viewBox: string;
   /** Optical size correction, so every mark reads the same size in its box. */
   scale: number;
+  /** Paths that cut holes with overlapping shapes. */
+  rule?: "evenodd";
 }
 
 export const marks: Record<string, Mark> = {
@@ -53,5 +55,13 @@ export const marks: Record<string, Mark> = {
     scale: .84,
     viewBox: "0 0 24 24",
     d: "M24 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm-9 9a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm0-9a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm6-6a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM3 24a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm18 .5a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM6 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm9-9a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm-3 2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM6 3a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM3 5.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z",
+  },
+  // NoClickDock itself: a rail with three dials, for its own dial when the
+  // core is not answering
+  ncd: {
+    scale: 0.92,
+    rule: "evenodd",
+    viewBox: "0 0 24 24",
+    d: "M9 1h6a4 4 0 0 1 4 4v14a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V5a4 4 0 0 1 4-4zm3 3a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zm0 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zm0 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z",
   },
 };

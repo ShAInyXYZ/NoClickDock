@@ -3,7 +3,9 @@
 mod core;
 mod dock;
 mod hover;
+mod menu;
 mod overlay;
+mod toast;
 #[cfg(windows)]
 mod win;
 
@@ -18,8 +20,10 @@ fn page_error(window: WebviewWindow, message: String) {
 }
 
 /// `ncd [--mock] [--instance <name>]`, or NCD_INSTANCE. `--mock` runs the
-/// real windows on invented data, with a scratch config, so they can be
-/// reviewed without showing (or changing) anything about this machine.
+/// real windows on invented data that moves (a job's progress, a service
+/// that falls ill and recovers, so toasts appear), with a scratch config, so
+/// they can be reviewed without showing (or changing) anything about this
+/// machine.
 struct Options {
     mock: bool,
     instance: Option<String>,
@@ -49,7 +53,7 @@ impl Options {
         }
         let name = format!("mock-{}", self.instance.as_deref().unwrap_or("default"));
         let config = user_cache_dir().join("noclickdock-dev").join(name);
-        vec!["--mock".into(), "--stdio".into(), "--config".into(), config.to_string_lossy().into_owned()]
+        vec!["--mock".into(), "--mock-live".into(), "--stdio".into(), "--config".into(), config.to_string_lossy().into_owned()]
     }
 }
 
@@ -70,30 +74,53 @@ pub fn run() {
     let options = Options::from_env();
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(core::Core::new(options.core_args()))
         .manage(dock::Dock::default())
         .manage(hover::Hover::default())
+        .manage(toast::Toasts::default())
+        .manage(menu::Tray::default())
         .manage(overlay::Scale::default())
         .manage(overlay::Shown::default())
         .invoke_handler(tauri::generate_handler![
             core::core_state,
             core::core_send,
+            core::core_link,
             dock::rail_layout,
             hover::hover_dial,
             hover::hover_panel,
             hover::panel_layout,
+            toast::toast_layout,
+            toast::toast_dismiss,
+            menu::dial_menu,
+            menu::rail_menu,
             page_error,
         ])
         .setup(|app| {
             overlay::init_scale(app);
+            // Built once and reused: each webview is a WebKit process.
             overlay::build(app, "rail", "dock")?;
             overlay::build(app, "panel", "panel")?;
+            overlay::build(app, "toast", "toast")?;
+            if let Err(error) = menu::tray(app) {
+                // No tray host (vanilla GNOME): the rail's menu has everything.
+                eprintln!("ncd: no tray: {error}");
+            }
+            dock::observe_monitors(app.handle());
             core::supervise(app.handle().clone());
             Ok(())
         })
+        .on_menu_event(|app, event| menu::chosen(app, event.id().as_ref()))
         .on_window_event(|window, event| {
-            if window.label() == "rail" && matches!(event, WindowEvent::Moved(_)) {
-                dock::moved(window.app_handle());
+            if window.label() != "rail" {
+                return;
+            }
+            match event {
+                WindowEvent::Moved(_) => dock::moved(window.app_handle()),
+                // A monitor with another scale: the rail's geometry changes.
+                WindowEvent::ScaleFactorChanged { .. } => dock::replace(window.app_handle()),
+                _ => {}
             }
         })
         .build(tauri::generate_context!())

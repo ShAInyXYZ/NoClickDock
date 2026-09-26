@@ -5,7 +5,7 @@
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_EXSTYLE, HWND_TOPMOST, MA_NOACTIVATE,
+    GetForegroundWindow, GetWindowLongPtrW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_EXSTYLE, HWND_TOPMOST, MA_NOACTIVATE,
     STYLESTRUCT, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOWNOACTIVATE,
     WM_MOUSEACTIVATE, WM_STYLECHANGING, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
@@ -66,4 +66,20 @@ pub fn hide(window: &tauri::WebviewWindow) -> tauri::Result<()> {
         let _ = ShowWindow(window.hwnd()?, SW_HIDE);
     }
     Ok(())
+}
+
+/// A native menu makes its owner the foreground window (muda); give the
+/// foreground back to the user's application once the menu closes.
+pub fn popup_menu_keep_foreground<M: tauri::menu::ContextMenu>(
+    window: &tauri::WebviewWindow,
+    menu: &M,
+) -> tauri::Result<()> {
+    let previous = unsafe { GetForegroundWindow() };
+    let result = window.popup_menu(menu);
+    if !previous.is_invalid() {
+        unsafe {
+            let _ = SetForegroundWindow(previous);
+        }
+    }
+    result
 }

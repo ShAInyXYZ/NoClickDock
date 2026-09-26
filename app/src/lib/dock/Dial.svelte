@@ -20,6 +20,7 @@
     focus = false,
     onenter,
     onleave,
+    oncontext,
   }: {
     snapshot: WidgetSnapshot;
     open?: boolean;
@@ -31,6 +32,7 @@
     focus?: boolean;
     onenter?: () => void;
     onleave?: () => void;
+    oncontext?: () => void;
   } = $props();
 
   const LAMP: Record<State, Tone> = { ok: "ok", warn: "warn", crit: "crit", idle: "idle", busy: "busy" };
@@ -68,11 +70,17 @@
     onpointerleave={onleave}
     onfocus={onenter}
     onblur={onleave}
+    oncontextmenu={(event) => {
+      if (!oncontext) return;
+      event.preventDefault();
+      event.stopPropagation();
+      oncontext();
+    }}
   >
     <span class="Dial-recess"></span>
     {#if mark}
       <svg class="Dial-mark" viewBox={mark.viewBox} style:--mark-scale={mark.scale} aria-hidden="true">
-        <path d={mark.d} />
+        <path d={mark.d} fill-rule={mark.rule} />
       </svg>
     {/if}
     {#if ring}

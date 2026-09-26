@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { core } from "$lib/core.svelte";
+  import { core, coreDown } from "$lib/core.svelte";
   import Rail from "$lib/dock/Rail.svelte";
   import type { Side } from "$lib/dock/side";
-  import { hoverDial, onPanelState, railLayout, report, reportUncaught, startDrag } from "$lib/shell";
+  import { dialMenu, hoverDial, onPanelState, railLayout, railMenu, report, reportUncaught, startDrag } from "$lib/shell";
 
   // The rail window. The shell sizes the window to whatever this page
   // measures and opens panels against the dial rectangles reported here.
@@ -13,14 +13,24 @@
   let open = $state<string | null>(null);
   let side = $state<Side>("right");
 
+  // While the core is not answering, the rail still stands, with a dial of
+  // its own that says so — never an invisible app.
+  const down = $derived(core.linkError ? coreDown(core.linkError, core.now) : null);
+  const dials = $derived(down ? [down, ...core.widgets] : core.widgets);
+  const dock = $derived(core.config?.dock);
+
   function measure() {
     if (!frame) return;
     const { width, height } = frame.getBoundingClientRect();
-    const dials = [...frame.querySelectorAll<HTMLElement>(".Slot[data-widget]")].map((slot) => {
+    const rects = [...frame.querySelectorAll<HTMLElement>(".Slot[data-widget]")].map((slot) => {
       const dial = slot.querySelector(".Dial")!.getBoundingClientRect();
       return { widget: slot.dataset.widget!, x: dial.x, y: dial.y, width: dial.width, height: dial.height };
     });
-    railLayout({ width, height, viewport: window.innerWidth, dials }).catch(report);
+    railLayout({ width, height, viewport: window.innerWidth, dials: rects }).catch(report);
+  }
+
+  function menu(widget: string | null) {
+    (widget ? dialMenu(widget) : railMenu()).catch(report);
   }
 
   onMount(() => {
@@ -44,7 +54,7 @@
   // rendering updates for a window that has never been shown, and the rail
   // is shown only once it has been measured.
   $effect(() => {
-    void [core.widgets, core.config];
+    void [dials, dock];
     tick().then(measure);
   });
   // Fonts arriving after the first measurement change the size again.
@@ -56,17 +66,18 @@
   });
 </script>
 
-{#if core.config && core.widgets.length}
+{#if dials.length}
   <div class="window" bind:this={frame}>
     <Rail
-      widgets={core.widgets}
-      orientation={core.config.dock.orientation}
-      density={core.config.dock.density}
-      readouts={core.config.dock.readouts}
+      widgets={dials}
+      orientation={dock?.orientation}
+      density={dock?.density}
+      readouts={dock?.readouts ?? true}
       {open}
       {side}
       onhover={(widget) => hoverDial(widget).catch(report)}
       ongrab={() => startDrag().catch(report)}
+      onmenu={menu}
     />
   </div>
 {/if}

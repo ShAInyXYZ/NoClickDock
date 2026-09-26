@@ -13,10 +13,12 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition};
 
 use crate::dock::{self, Area, Dock};
-use crate::overlay;
+use crate::{overlay, toast};
 
 const DWELL: Duration = Duration::from_millis(120);
 const GRACE: Duration = Duration::from_millis(280);
+/// The panel page fades out over this before its window is hidden.
+const FADE: Duration = Duration::from_millis(100);
 /// The panel sits 8 CSS px from the rail; each window keeps 1px of margin.
 const GAP: f64 = 8.0 - 2.0;
 /// The panel keeps this far from the work area's edges.
@@ -50,6 +52,8 @@ struct State {
     side: Side,
     visible: bool,
     size: Option<(f64, f64)>,
+    /// Bumped by every close, so a fade that ends after a reopen hides nothing.
+    closes: u64,
 }
 
 #[derive(Default, Clone, PartialEq)]
@@ -216,35 +220,56 @@ fn place(app: &AppHandle, st: &mut State) {
     let shown = if st.visible { panel.set_position(position) } else { overlay::reveal(&panel, position) };
     if shown.is_ok() {
         st.visible = true;
+        toast::hold(app, &widget);
         let _ = app.emit_to("rail", "panel-state", PanelState { widget: Some(widget), side: st.side });
     }
 }
 
+/// Fades the panel out (the page does it on "panel-close"), then hides its
+/// window — unless it has been asked open again meanwhile.
 fn hide(app: &AppHandle, st: &mut State) {
-    if let Some(panel) = app.get_webview_window("panel") {
-        let _ = overlay::conceal(&panel);
-    }
+    let was_visible = st.visible;
     st.visible = false;
     st.widget = None;
     st.size = None;
     // A window hidden under the pointer may never hear it leave.
     st.in_panel = false;
+    st.closes += 1;
+    let close = st.closes;
     let _ = app.emit_to("panel", "panel-close", ());
     let _ = app.emit_to("rail", "panel-state", PanelState { widget: None, side: st.side });
+    toast::release(app);
+    if !was_visible {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(FADE).await;
+        let main = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            let hover = main.state::<Hover>();
+            let Ok(st) = hover.0.lock() else { return };
+            if st.closes == close && !st.visible {
+                if let Some(panel) = main.get_webview_window("panel") {
+                    let _ = overlay::conceal(&panel);
+                }
+            }
+        });
+    });
 }
 
 /// Where the rail and one of its dials are, in physical px.
-struct Geometry {
+pub struct Geometry {
     rail: (i32, i32, i32, i32),
     /// The dial's centre.
     dial: (i32, i32),
     vertical: bool,
-    area: Area,
-    scale: f64,
+    pub area: Area,
+    pub scale: f64,
 }
 
 impl Geometry {
-    fn of(app: &AppHandle, widget: &str) -> Option<Self> {
+    pub fn of(app: &AppHandle, widget: &str) -> Option<Self> {
         let rail = app.get_webview_window("rail")?;
         let layout = app.state::<Dock>().layout()?;
         let dial = layout.dials.iter().find(|d| d.widget == widget)?;
@@ -266,7 +291,7 @@ impl Geometry {
     }
 
     /// Perpendicular to the rail, on the side with more room.
-    fn side(&self) -> Side {
+    pub fn side(&self) -> Side {
         let (x, y, w, h) = self.rail;
         if self.vertical {
             if self.area.right() - (x + w) >= x - self.area.x { Side::Right } else { Side::Left }
@@ -274,6 +299,21 @@ impl Geometry {
             Side::Bottom
         } else {
             Side::Top
+        }
+    }
+
+    /// A toast stack beside the rail: its newest toast (`anchor` px from the
+    /// stack's top) level with the dial on a vertical rail, the stack
+    /// centred on the dial on a horizontal one.
+    pub fn beside(&self, side: Side, size: (i32, i32), anchor: i32) -> (i32, i32) {
+        let (x, y) = self.place(side, size);
+        match side {
+            Side::Left | Side::Right => {
+                let edge = (EDGE * self.scale).round() as i32;
+                let top = (self.dial.1 - anchor).clamp(self.area.y + edge, (self.area.bottom() - edge - size.1).max(self.area.y + edge));
+                (x, top)
+            }
+            Side::Top | Side::Bottom => (x, y),
         }
     }
 

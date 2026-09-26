@@ -1,4 +1,4 @@
-//! The overlay windows — rail and panel — and the three things every one of
+//! The overlay windows — rail, panel, toast — and the three things every one of
 //! them needs: exact sizing, placement before reveal, and the scale between
 //! the page's CSS pixels and the desktop's physical ones.
 //! Facts behind each choice: docs/rewrite/research/tauri-windows.md.
@@ -31,8 +31,14 @@ pub fn build(app: &tauri::App, label: &str, route: &str) -> tauri::Result<Webvie
     {
         use gtk::prelude::GtkWindowExt;
         // Before the first show: the hint is read at map time. UTILITY, not
-        // DOCK, which Mutter stacks above every keep-above window.
-        window.gtk_window()?.set_type_hint(gtk::gdk::WindowTypeHint::Utility);
+        // DOCK, which Mutter stacks above every keep-above window; toasts are
+        // NOTIFICATIONs.
+        let hint = if label == "toast" {
+            gtk::gdk::WindowTypeHint::Notification
+        } else {
+            gtk::gdk::WindowTypeHint::Utility
+        };
+        window.gtk_window()?.set_type_hint(hint);
     }
     #[cfg(windows)]
     crate::win::harden(&window)?;

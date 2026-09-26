@@ -3,23 +3,40 @@
 //! keeps the latest hello, config, snapshot and tick per widget, so a window
 //! that loads late, or reloads, starts from the full state.
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
+
+use crate::toast;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 /// The only messages a page may send; anything else never reaches the core.
 const ALLOWED: [&str; 3] = ["action", "refresh", "config.patch"];
+/// A core that has not said hello this long after starting is reported.
+const HELLO_WITHIN: Duration = Duration::from_secs(8);
 
 pub struct Core {
     args: Vec<String>,
     child: Mutex<Option<CommandChild>>,
     quitting: AtomicBool,
     cache: Mutex<Cache>,
+    link: Mutex<Link>,
+    /// Counts starts, so a watchdog knows which start it is watching.
+    starts: AtomicU64,
+    actions: AtomicU64,
+}
+
+/// Whether the core is answering, and if not, why — shown on the rail as a
+/// dial of its own, never an invisible app.
+#[derive(Clone, Default, Serialize)]
+pub struct Link {
+    pub up: bool,
+    pub error: Option<String>,
 }
 
 #[derive(Default)]
@@ -38,7 +55,27 @@ impl Core {
             child: Mutex::new(None),
             quitting: AtomicBool::new(false),
             cache: Mutex::new(Cache::default()),
+            link: Mutex::new(Link::default()),
+            starts: AtomicU64::new(0),
+            actions: AtomicU64::new(0),
         }
+    }
+
+    /// A widget's right-click items, as its last snapshot offered them.
+    pub fn menu_of(&self, widget: &str) -> Vec<Value> {
+        let Ok(cache) = self.cache.lock() else { return Vec::new() };
+        cache
+            .snapshots
+            .get(widget)
+            .and_then(|line| serde_json::from_str::<Value>(line).ok())
+            .and_then(|message| message.pointer("/widget/menu").cloned())
+            .and_then(|menu| menu.as_array().cloned())
+            .unwrap_or_default()
+    }
+
+    /// A fresh id for an action the shell sends on the user's behalf.
+    pub fn action_id(&self) -> String {
+        format!("shell-{}", self.actions.fetch_add(1, Ordering::Relaxed))
     }
 
     /// The dock's section of the config, as the core last announced it.
@@ -59,6 +96,7 @@ pub fn supervise(app: AppHandle) {
                 Ok(pair) => pair,
                 Err(error) => {
                     eprintln!("ncd: could not start ncd-core: {error}");
+                    set_link(&app, false, Some(format!("ncd-core could not be started: {error}")));
                     tokio::time::sleep(backoff).await;
                     backoff = (backoff * 2).min(Duration::from_secs(10));
                     continue;
@@ -67,6 +105,7 @@ pub fn supervise(app: AppHandle) {
             if let Ok(mut slot) = app.state::<Core>().child.lock() {
                 *slot = Some(child);
             }
+            watch_hello(&app);
             let started = Instant::now();
             while let Some(event) = events.recv().await {
                 match event {
@@ -75,6 +114,14 @@ pub fn supervise(app: AppHandle) {
                     CommandEvent::Stderr(bytes) => eprintln!("{}", String::from_utf8_lossy(&bytes).trim_end()),
                     CommandEvent::Terminated(status) => {
                         eprintln!("ncd: ncd-core exited (code {:?}, signal {:?})", status.code, status.signal);
+                        if !app.state::<Core>().quitting.load(Ordering::Acquire) {
+                            let why = match (status.code, status.signal) {
+                                (Some(code), _) => format!("ncd-core stopped with exit code {code}"),
+                                (_, Some(signal)) => format!("ncd-core was stopped by signal {signal}"),
+                                _ => "ncd-core stopped".to_owned(),
+                            };
+                            set_link(&app, false, Some(why));
+                        }
                         break;
                     }
                     _ => {}
@@ -92,6 +139,35 @@ pub fn supervise(app: AppHandle) {
     });
 }
 
+/// Starts a watchdog for this start: a core that runs but never says hello
+/// is as broken as one that does not start.
+fn watch_hello(app: &AppHandle) {
+    let start = app.state::<Core>().starts.fetch_add(1, Ordering::AcqRel) + 1;
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(HELLO_WITHIN).await;
+        let core = app.state::<Core>();
+        let silent = core.starts.load(Ordering::Acquire) == start && !core.link.lock().map(|l| l.up).unwrap_or(false);
+        if silent {
+            set_link(&app, false, Some("ncd-core started but has not answered".to_owned()));
+        }
+    });
+}
+
+fn set_link(app: &AppHandle, up: bool, error: Option<String>) {
+    let link = Link { up, error };
+    if let Ok(mut current) = app.state::<Core>().link.lock() {
+        *current = link.clone();
+    }
+    let _ = app.emit("core-link", link);
+}
+
+/// Whether the core is answering, for a page that loads after the fact.
+#[tauri::command]
+pub fn core_link(core: tauri::State<Core>) -> Link {
+    core.link.lock().map(|l| l.clone()).unwrap_or_default()
+}
+
 /// Remembers what a line changes, then hands it to every window.
 fn relay(app: &AppHandle, line: &str) {
     if line.is_empty() {
@@ -101,8 +177,9 @@ fn relay(app: &AppHandle, line: &str) {
         eprintln!("ncd: ncd-core wrote a line that is not JSON");
         return;
     };
+    let kind = message.get("type").and_then(Value::as_str);
     if let Ok(mut cache) = app.state::<Core>().cache.lock() {
-        match message.get("type").and_then(Value::as_str) {
+        match kind {
             Some("hello") => {
                 // A (re)started core: everything before it is gone.
                 *cache = Cache {
@@ -130,6 +207,16 @@ fn relay(app: &AppHandle, line: &str) {
         }
     }
     let _ = app.emit("core", line);
+    match kind {
+        Some("hello") => set_link(app, true, None),
+        Some("toast") => {
+            if let Some(t) = message.get("toast") {
+                let field = |k: &str| t.get(k).and_then(Value::as_str).unwrap_or_default().to_owned();
+                toast::push(app, field("widget"), field("tone"), field("text"));
+            }
+        }
+        _ => {}
+    }
 }
 
 /// The full state, in the order the core itself would replay it.
