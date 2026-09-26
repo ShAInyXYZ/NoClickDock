@@ -519,3 +519,35 @@ func TestConfigurationIsNotAProblem(t *testing.T) {
 		t.Errorf("a public funnel: %q %q", s.State, s.StateLabel)
 	}
 }
+
+// A20-a: an expired key on a watched peer stays warn; on a dormant one it
+// is info.
+func TestAWatchedPeersExpiredKeyIsAProblem(t *testing.T) {
+	st := load(t, "status-running.json", now)
+	var target *peer
+	for _, p := range st.Peers {
+		if !p.Online {
+			target = p
+			break
+		}
+	}
+	if target == nil {
+		t.Skip("no offline peer in the fixture")
+	}
+	target.KeyExpired = true
+	w := New(func() *[]string { return &[]string{target.Host} })
+	w.observe(st, now)
+	s := render(&poll{available: true, pinned: true, now: now, st: st})
+	found := false
+	for _, b := range s.Pages[0].Blocks {
+		if r, ok := b.(model.Row); ok && r.Name == target.Host {
+			found = true
+			if r.Tone != model.ToneWarn || !strings.HasPrefix(r.Value, "key expired") {
+				t.Errorf("watched: %+v", r)
+			}
+		}
+	}
+	if !found || s.State != model.StateWarn {
+		t.Errorf("found %v state %q", found, s.State)
+	}
+}

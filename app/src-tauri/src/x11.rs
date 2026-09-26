@@ -44,11 +44,19 @@ pub fn xid(window: &WebviewWindow) -> Option<u32> {
     Some(x11.xid() as u32)
 }
 
-/// Shows (`true`) or hides (`false`) windows at the compositor, all at once.
-/// Showing deletes the property (fully opaque, the default); hiding sets it
-/// to 0.
+/// A parked window's opacity: 1/255, not 0. At 0 Mutter stops painting the
+/// window and answers its frames only on a slow fallback timer, so a panel
+/// drawn ahead in the parked window was rarely "painted" by the time the
+/// pointer arrived (design M1 r5: ~110 ms). At 1/255 it keeps painting it
+/// every frame, and the window changes any pixel under it by at most one
+/// level of 255 — which no eye can see. Its input shape is empty either way.
+pub const PARKED: u32 = u32::MAX / 255;
+
+/// Shows (`true`) or parks (`false`) windows at the compositor, all at once.
+/// Showing deletes the property (fully opaque, the default); parking sets it
+/// to `PARKED`.
 pub fn set_visible(changes: &[(u32, bool)]) -> bool {
-    let changes: Vec<(u32, Option<u32>)> = changes.iter().map(|&(id, visible)| (id, if visible { None } else { Some(0) })).collect();
+    let changes: Vec<(u32, Option<u32>)> = changes.iter().map(|&(id, visible)| (id, if visible { None } else { Some(PARKED) })).collect();
     set_opacity(&changes)
 }
 

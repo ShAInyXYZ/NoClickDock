@@ -301,6 +301,11 @@ func panel(p *poll, down []*peer) model.Blocks {
 			if when == "" {
 				when = "offline"
 			}
+			if pr.KeyExpired {
+				// A watched peer's expired key is a problem (A20-a): it
+				// cannot come back without a login.
+				when = "key expired · " + when
+			}
 			offline = append(offline, model.Row{Name: pr.Host, Value: when, Tone: warn, LED: warn})
 		}
 	}

@@ -232,15 +232,16 @@ pub fn after_next_frame(window: &WebviewWindow, f: impl FnOnce() + 'static) {
     }
 }
 
-/// Shows `incoming` where it is and parks `outgoing`, as one change at the
-/// compositor: no frame with neither, none with both.
+/// Shows `incoming` where it already is and parks `outgoing`, as one change
+/// at the compositor: no frame with neither, none with both. The incoming
+/// window was sized and placed while it was drawn (hover::place): the swap
+/// is only the two properties in a server grab — no geometry query, no
+/// move (design M1 r5: those cost 11–18 ms before the flip reached the
+/// server). `position` is for the fallback without a compositor.
 pub fn swap(incoming: &WebviewWindow, outgoing: &WebviewWindow, position: PhysicalPosition<i32>) -> tauri::Result<()> {
     crate::main_thread::assert();
     #[cfg(target_os = "linux")]
     if composited() && is_parked(incoming) {
-        if incoming.outer_position().ok() != Some(position) {
-            incoming.set_position(position)?;
-        }
         if let (Some(a), Some(b)) = (crate::x11::xid(incoming), crate::x11::xid(outgoing)) {
             if crate::x11::set_visible(&[(a, true), (b, false)]) {
                 if clickable(incoming) {
