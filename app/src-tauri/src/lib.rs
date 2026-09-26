@@ -72,6 +72,7 @@ fn user_cache_dir() -> std::path::PathBuf {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    main_thread::init_xlib();
     let options = Options::from_env();
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())

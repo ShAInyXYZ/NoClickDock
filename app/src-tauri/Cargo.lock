@@ -2245,6 +2245,7 @@ name = "ncd"
 version = "2.0.0"
 dependencies = [
  "gtk",
+ "libloading",
  "serde",
  "serde_json",
  "tauri",
@@ -2253,7 +2254,9 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-shell",
  "tokio",
+ "url",
  "windows",
+ "x11rb",
 ]
 
 [[package]]

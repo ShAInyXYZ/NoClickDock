@@ -102,9 +102,29 @@ fn popup(window: &WebviewWindow, items: Vec<Box<dyn IsMenuItem<Wry>>>) -> Result
 }
 
 /// The tray: show or hide the dock, Settings, Quit. On a GNOME without an
-/// AppIndicator host there is no tray at all — the rail's menu has the same
-/// items, so nothing depends on it.
-pub fn tray(app: &tauri::App) -> tauri::Result<()> {
+/// AppIndicator host, or without the AppIndicator library, there is no tray
+/// at all — the rail's menu has the same items, so nothing depends on it.
+pub fn tray(app: &tauri::App) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    if !indicator_library() {
+        return Err("neither libayatana-appindicator3 nor libappindicator3 is installed".into());
+    }
+    build_tray(app).map_err(|e| e.to_string())
+}
+
+/// libappindicator-sys loads one of these on first use and panics when
+/// neither is there — an abort in a release build, which no `Result` can
+/// catch. Fedora, Arch and openSUSE do not install either by default.
+#[cfg(target_os = "linux")]
+fn indicator_library() -> bool {
+    ["libayatana-appindicator3.so.1", "libappindicator3.so.1"]
+        .iter()
+        // SAFETY: loading a system library runs its initialisers; these are
+        // the libraries the tray is about to load anyway.
+        .any(|name| unsafe { libloading::Library::new(name) }.is_ok())
+}
+
+fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let toggle = MenuItem::with_id(app, "app:toggle", "Hide dock", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
@@ -165,11 +185,13 @@ fn widget_item(app: &AppHandle, widget: &str, id: &str) {
     let items = app.state::<core::Core>().menu_of(widget);
     let Some(item) = items.iter().find(|i| i.get("id").and_then(Value::as_str) == Some(id)) else { return };
     if let Some(url) = item.get("url").and_then(Value::as_str) {
-        // Only web pages: a snapshot never gets to launch a program.
-        if url.starts_with("https://") || url.starts_with("http://") {
-            if let Err(error) = app.opener().open_url(url, None::<&str>) {
-                toast::push(app, widget.to_owned(), "crit".into(), format!("Could not open {url}: {error}"));
+        match web_page(url) {
+            Some(url) => {
+                if let Err(error) = app.opener().open_url(url.as_str(), None::<&str>) {
+                    toast::push(app, widget.to_owned(), "crit".into(), format!("Could not open {url}: {error}"));
+                }
             }
+            None => eprintln!("ncd: {widget} offered {url:?}, which is not a web page; not opened"),
         }
     } else if let Some(text) = item.get("copy").and_then(Value::as_str) {
         match app.clipboard().write_text(text) {
@@ -180,6 +202,18 @@ fn widget_item(app: &AppHandle, widget: &str, id: &str) {
         let id_ = app.state::<core::Core>().action_id();
         send(app, json!({"type": "action", "id": id_, "widget": widget, "action": id}));
     }
+}
+
+/// Only web pages: a snapshot never gets to launch a program or open a file.
+/// Parsed, not prefix-matched: http or https exactly, a host, no user or
+/// password, nothing hidden in control characters or spaces.
+fn web_page(raw: &str) -> Option<url::Url> {
+    if raw.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return None;
+    }
+    let url = url::Url::parse(raw).ok()?;
+    let web = matches!(url.scheme(), "http" | "https");
+    (web && url.host_str().is_some_and(|h| !h.is_empty()) && url.username().is_empty() && url.password().is_none()).then_some(url)
 }
 
 fn send(app: &AppHandle, message: Value) {
@@ -203,5 +237,32 @@ pub fn settings(app: &AppHandle) {
         .build();
     if let Err(error) = built {
         eprintln!("ncd: could not open Settings: {error}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::web_page;
+
+    #[test]
+    fn only_plain_web_pages_open() {
+        for ok in ["https://localhost:9443", "http://127.0.0.1:8188/", "https://example.org/a?b=c#d"] {
+            assert!(web_page(ok).is_some(), "{ok}");
+        }
+        for bad in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "https://user:pass@example.org/",
+            "https://user@example.org/",
+            "https://exa mple.org/",
+            "https://example.org/\n",
+            "https://example.org/\u{7}",
+            "ftp://example.org/",
+            "smb://server/share",
+            "https://",
+            "",
+        ] {
+            assert!(web_page(bad).is_none(), "{bad:?}");
+        }
     }
 }

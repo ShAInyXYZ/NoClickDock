@@ -10,24 +10,49 @@ use tauri::AppHandle;
 
 static MAIN: OnceLock<ThreadId> = OnceLock::new();
 
+/// Makes Xlib safe to call from more than one thread, before anything opens
+/// a display — defence in depth behind keeping every X call on the main
+/// thread (the clipboard and the work-area watcher hold connections of
+/// their own). Loaded at run time: without libX11 there is nothing to guard.
+pub fn init_xlib() {
+    #[cfg(target_os = "linux")]
+    // SAFETY: libX11 is the library GDK itself uses; XInitThreads takes no
+    // arguments and must only come before any other Xlib call, which it does.
+    unsafe {
+        if let Ok(lib) = libloading::Library::new("libX11.so.6") {
+            if let Ok(init) = lib.get::<unsafe extern "C" fn() -> std::os::raw::c_int>(b"XInitThreads\0") {
+                init();
+            }
+            std::mem::forget(lib); // Xlib stays loaded for the life of the app
+        }
+    }
+}
+
 /// Remembers the main thread. Called from `setup`, which runs on it.
 pub fn init() {
     let _ = MAIN.set(std::thread::current().id());
 }
 
 /// Debug builds: panics when called off the main thread, so a regression
-/// shows in testing instead of as a rare xcb abort. Unit tests never call
-/// `init`, so pure geometry stays testable.
+/// shows in testing instead of as a rare xcb abort. Release builds say so
+/// once on stderr. Unit tests never call `init`, so pure geometry stays
+/// testable.
 #[track_caller]
 pub fn assert() {
+    let Some(main) = MAIN.get() else { return };
+    if std::thread::current().id() == *main {
+        return;
+    }
+    let at = std::panic::Location::caller();
     #[cfg(debug_assertions)]
-    if let Some(main) = MAIN.get() {
-        assert_eq!(
-            std::thread::current().id(),
-            *main,
-            "a window, monitor or GTK call off the main thread ({:?})",
-            std::thread::current().name()
-        );
+    panic!("a window, monitor or GTK call off the main thread ({:?}) at {at}", std::thread::current().name());
+    #[cfg(not(debug_assertions))]
+    {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static SAID: AtomicBool = AtomicBool::new(false);
+        if !SAID.swap(true, Ordering::Relaxed) {
+            eprintln!("ncd: a window, monitor or GTK call off the main thread at {at}");
+        }
     }
 }
 
