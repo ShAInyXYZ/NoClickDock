@@ -232,6 +232,15 @@ One surface, no nested cards.
   footer never repeats the error the empty sentence already states — it says
   what the app is doing about it (`retrying every 10 s · since 03:27:52`).
 - A row's lamp and its value tone agree.
+- **State is the worst of its signals (A20).** A widget's state, lamp, header
+  and glance agree: a `warn`/`crit` limit, meter or row raises the widget to
+  that state, and the state label names the worst signal (`week 90%`,
+  `console degraded`). A green lamp next to a red readout is a contradiction.
+- **Time only moves forward.** A reset time that has passed is never shown as
+  upcoming, and a reading taken before a reset is not shown as current: say
+  it in words (`reset 20m ago · no reading since`) with no percentage. Text
+  the writer cannot parse (a CLI's free-form reset phrase) is omitted, never
+  passed through verbatim.
 
 ## Toasts
 
