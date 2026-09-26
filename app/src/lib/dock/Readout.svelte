@@ -12,6 +12,10 @@
   .Readout {
     display: block;
     min-width: var(--dial);
+    /* Five characters is the core's budget; a longer glance never runs
+       into its neighbour. */
+    max-width: calc(var(--dial) + var(--slot-gap));
+    overflow: hidden;
     font: 500 var(--fs-micro)/var(--readout-h) var(--font-mono);
     letter-spacing: .02em;
     text-align: center;

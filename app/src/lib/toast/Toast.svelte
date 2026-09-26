@@ -22,7 +22,7 @@
     padding: 9px 14px 9px 12px;
     background: var(--s2);
     border-radius: var(--r-toast);
-    box-shadow: var(--elev-2);
+    box-shadow: var(--edge-2);
     font: 500 var(--fs-body)/18px var(--font-sans);
     color: var(--text);
     transition: opacity 160ms var(--ease-out);

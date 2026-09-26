@@ -17,7 +17,7 @@
     {#if block.meta}<span class="Alert-meta">{block.meta}</span>{/if}
   </div>
   <div class="Alert-actions">
-    {#each block.actions ?? [] as action (action.id)}<PillButton {widget} {action} />{/each}
+    {#each block.actions ?? [] as action, i (`${i}:${action.id}`)}<PillButton {widget} {action} />{/each}
   </div>
   {#if block.body}<div class="Alert-body" class:is-mono={block.mono}>{block.body}</div>{/if}
 </div>

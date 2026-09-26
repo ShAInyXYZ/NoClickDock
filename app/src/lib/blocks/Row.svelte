@@ -9,15 +9,15 @@
 </script>
 
 <div class="Row">
-  {#if block.led}<Led tone={block.led} />{/if}
-  <span class="Row-text">
+  <span class="Row-text" class:has-led={!!block.led}>
+    {#if block.led}<Led tone={block.led} />{/if}
     <span class="Row-name" class:is-mono={block.mono}>{block.name}</span>
     {#if block.sub}<span class="Row-sub">{block.sub}</span>{/if}
   </span>
-  {#if block.value}<span class="Row-value" data-tone={block.tone}>{block.value}</span>{/if}
+  {#if block.value}<span class="Row-value" data-tone={block.tone} title={block.value}>{block.value}</span>{/if}
   {#if block.actions?.length}
     <span class="Row-actions">
-      {#each block.actions as action (action.id)}<PillButton {widget} {action} />{/each}
+      {#each block.actions as action, i (`${i}:${action.id}`)}<PillButton {widget} {action} />{/each}
     </span>
   {/if}
 </div>
@@ -31,8 +31,10 @@
     min-height: var(--row-h);
     padding: 4px 0;
   }
-  /* The lamp belongs to the name line, not to the middle of two lines. */
-  .Row > :global(.Led) { align-self: flex-start; margin-top: 10px; }
+  /* The lamp lives with the name, centred on its 18px line — the same in a
+     single-line row and a row with a sub line. */
+  .Row-text.has-led { padding-left: 16px; }
+  .Row-text > :global(.Led) { position: absolute; left: 0; top: calc((18px - var(--led)) / 2); }
   /* A hover wash that bleeds 8px, so the text stays on the inset. */
   .Row::before {
     content: '';
@@ -45,7 +47,9 @@
   }
   .Row:hover::before { background: color-mix(in srgb, var(--text) 2.5%, transparent); }
   .Row > * { position: relative; }
-  .Row-text { flex: 1; min-width: 0; }
+  /* The name is the row's identity: it keeps a floor while a long value
+     gives way first. */
+  .Row-text { position: relative; flex: 1; min-width: 30%; }
   .Row-name {
     display: block;
     font: 500 var(--fs-body)/18px var(--font-sans);
@@ -64,6 +68,9 @@
     text-overflow: ellipsis;
   }
   .Row-value {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font: 400 var(--fs-small)/18px var(--font-mono);
     color: var(--muted);
     text-align: right;
@@ -71,5 +78,5 @@
   }
   .Row-value[data-tone="warn"] { color: var(--warn); }
   .Row-value[data-tone="crit"] { color: var(--err); }
-  .Row-actions { display: flex; gap: 4px; }
+  .Row-actions { flex: none; display: flex; gap: 4px; }
 </style>

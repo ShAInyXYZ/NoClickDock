@@ -163,7 +163,7 @@
     pointer-events: none;
     transform: rotate(-90deg);
   }
-  .Dial-ring circle { fill: none; stroke-width: 2; }
+  .Dial-ring circle { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; } /* 2px at 32, 40 and 48 */
   .Dial[data-state="crit"] .Dial-ring circle {
     stroke: var(--err);
     animation: breathe 2.4s var(--ease-mech) infinite;

@@ -28,9 +28,13 @@
     text-transform: uppercase;
     color: var(--dim);
     white-space: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .Section[data-tone] .Section-title { color: var(--tone); }
   .Section-meta {
+    flex: none;
     font: 400 var(--fs-micro)/1 var(--font-mono);
     letter-spacing: .04em;
     color: var(--dim);

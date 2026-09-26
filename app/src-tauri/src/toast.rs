@@ -37,6 +37,8 @@ struct State {
     seq: u64,
     visible: bool,
     ticking: bool,
+    /// Linux only: the toast window lets the pointer through once shown.
+    #[cfg(not(windows))]
     click_through: bool,
 }
 

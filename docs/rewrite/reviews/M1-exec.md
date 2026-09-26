@@ -183,3 +183,56 @@ The pointer was restored. Screenshots stay in the scratchpad.
   under `os.UserCacheDir()/noclickdock-dev/…`, and the shell's `--mock`
   config under the user cache dir too), 6 (a rejected `config.patch`
   re-broadcasts the unchanged config).
+
+## Design round 2 (after M1-design-r1)
+
+Must-fix:
+1. **Tab hover never moves the header.** A panel is centred on its dial
+   when first placed for a widget; after that a resize keeps its header
+   edge — beside a vertical rail the top stays and it grows/shrinks
+   downward (moving up only by what would leave the work area), below a
+   rail the top is the rail edge, above a rail the panel takes the height
+   of its tallest page (measured from hidden copies), so its header does
+   not move either. X11: Docker Now → System → Now kept the top at 2937
+   (height 849 → 831 → 849), panel stayed mapped.
+2. **Edge ring drawn inside** (`--edge-2`, inset ring + top light + bottom
+   shade) on rail, panel and toast. X11 pixel samples over the dark
+   desktop: rail edge 56, panel edge 56 (background 28–31).
+3. Row lamp inside `.Row-text`, centred on the 18px name line.
+4. Meter/limit label and value are blocks with ellipsis; the header state
+   text is its own `.PanelHeader-label` with ellipsis.
+5. Stats items carry their separator; the leading one on any line is
+   clipped (reference CSS).
+6. Disk: the Docker headline row and the prune note are untoned; only the
+   sizes over the line (stats) keep `warn`.
+7. All meters on a page share one label and one value column (and limits
+   theirs): the panel measures the widest text on the page and sets
+   `--meter-cols` / `--limit-cols` on its body.
+
+Should-fix taken: ring stroke `vector-effect: non-scaling-stroke`; readout
+width guard; section title ellipsis with the meta kept whole; Segmented
+fits the panel; the row name keeps a 30 % floor while a long value
+ellipsises; action keys `i:id` (a duplicate id no longer blanks a panel).
+Research r2's note: only transport errors (EHOSTDOWN, EHOSTUNREACH,
+ESTALE, EIO, ENOTCONN, ETIMEDOUT, ECONNREFUSED/RESET) or a probe timeout
+make a share "not responding"; anything else skips the mount.
+
+**Latency** (main's addendum). The panel is now prepared during the dwell
+(the page draws and measures the widget, the hidden window is sized and
+placed), `fit`/`set_position` are skipped when unchanged, and on Linux an
+overlay is mapped once and then *parked* (opacity 0, click-through) rather
+than unmapped: Mutter spent ~60 ms mapping a window on every show.
+Measured on X11 with `NCD_TRACE=1` (wall-clock traces against the
+measuring script's clock) and `xwininfo`:
+
+| | before (design r1) | after |
+|---|---|---|
+| pointer → hover event reaches the shell | — | 9–15 ms (incl. xdotool) |
+| hover → show call | ~205 ms total | 121 ms (the dwell) |
+| show → on screen | incl. ~60 ms map | ≤ 1 compositor frame (already mapped and drawn) |
+| **open, pointer → visible** | 205–288 ms | ≈ 140–150 ms |
+| **switch dial → dial** | 144 ms | 24–76 ms (mean ~50) |
+
+Also: right-click closed the panel but the menu's pointer grab re-entered
+the dial and reopened it under the menu; hover now stays quiet for 400 ms
+after a menu pops (X11: panel not visible while the menu is up).

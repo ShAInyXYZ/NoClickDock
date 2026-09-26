@@ -18,22 +18,22 @@
 <style>
   .Meter { display: contents; }
   .Meter-label, .Meter-value {
-    display: flex;
-    align-items: center;
+    display: block;
     height: 28px;
+    line-height: 28px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .Meter-label {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font: 500 var(--fs-body)/1 var(--font-sans);
+    font: 500 var(--fs-body)/28px var(--font-sans);
     color: var(--muted);
   }
-  .Meter-label.is-mono { font: 400 var(--fs-small)/1 var(--font-mono); }
+  .Meter-label.is-mono { font: 400 var(--fs-small)/28px var(--font-mono); }
   .Meter-value {
-    justify-content: flex-end;
-    font: 400 var(--fs-small)/1 var(--font-mono);
+    text-align: right;
+    font: 400 var(--fs-small)/28px var(--font-mono);
     color: var(--text);
   }
   .Meter-value[data-tone="warn"] { color: var(--warn); }

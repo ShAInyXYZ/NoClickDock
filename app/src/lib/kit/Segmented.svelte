@@ -37,7 +37,7 @@
       onpointerenter={() => dwell(option.value)}
       onpointerleave={cancel}
     >
-      {option.label}
+      <span class="Segmented-label">{option.label}</span>
       {#if problem(option.tone)}<Led tone={option.tone} />{/if}
       {#if option.badge}<span class="Segmented-badge" data-tone={problem(option.tone) ? option.tone : undefined}>{option.badge}</span>{/if}
     </button>
@@ -47,6 +47,7 @@
 <style>
   .Segmented {
     display: inline-flex;
+    max-width: 100%;
     gap: 2px;
     padding: 2px;
     border: 1px solid var(--line2);
@@ -69,8 +70,10 @@
     text-transform: uppercase;
     cursor: default;
     white-space: nowrap;
+    min-width: 0;
     transition: color .1s, background .1s;
   }
+  .Segmented-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .Segmented-btn:hover { color: var(--text); }
   .Segmented-btn[aria-selected="true"] {
     color: var(--text);

@@ -83,9 +83,11 @@
     align-items: center;
     column-gap: 12px;
   }
-  /* Labels size the column, but a very long mount path cannot squeeze the bar away. */
-  .MeterGroup { grid-template-columns: fit-content(45%) minmax(0, 1fr) max-content; }
-  .LimitGroup { grid-template-columns: fit-content(40%) minmax(0, 1fr) max-content max-content; }
+  /* The panel sets the page's shared columns (--meter-cols, --limit-cols);
+     until it has measured, each group sizes itself. A long label never
+     squeezes the bar away. */
+  .MeterGroup { grid-template-columns: var(--meter-cols, fit-content(45%) minmax(0, 1fr) max-content); }
+  .LimitGroup { grid-template-columns: var(--limit-cols, fit-content(40%) minmax(0, 1fr) max-content max-content); }
 
   .Split {
     display: grid;

@@ -1,6 +1,7 @@
 package disk
 
 import (
+	"errors"
 	"os"
 	"syscall"
 )
@@ -14,7 +15,9 @@ type usage struct {
 // a bind mount or btrfs subvolume shares its device with one already listed
 // and is skipped. Every mount is measured against a deadline, so one that
 // hangs is reported as not responding instead of freezing the poll; a share
-// that answers with an error (EHOSTDOWN, ESTALE) is not responding too.
+// whose server is gone (EHOSTDOWN, ESTALE…) is not responding too; any
+// other error (permission, a vanished mount point) skips the mount, as the
+// Python widget did, rather than warn forever.
 func (w *Widget) filesystems() ([]Filesystem, error) {
 	f, err := os.Open("/proc/mounts")
 	if err != nil {
@@ -34,7 +37,7 @@ func (w *Widget) filesystems() ([]Filesystem, error) {
 			timeout = networkTimeout
 		}
 		u, err, answered := probe(&w.probe, m.point, timeout, func() (usage, error) { return measure(m.point) })
-		if !answered || (err != nil && m.kind == Network) {
+		if !answered || (m.kind == Network && unreachable(err)) {
 			fs.Unresponsive = true
 			out = append(out, fs)
 			continue
@@ -71,4 +74,18 @@ func measure(point string) (usage, error) {
 		used:  (fs.Blocks - fs.Bfree) * block,
 		free:  fs.Bavail * block,
 	}, nil
+}
+
+// unreachable is an error that means the share's server is not answering,
+// not that this user may not look.
+func unreachable(err error) bool {
+	for _, e := range []syscall.Errno{
+		syscall.EHOSTDOWN, syscall.EHOSTUNREACH, syscall.ESTALE, syscall.EIO, syscall.ENOTCONN,
+		syscall.ETIMEDOUT, syscall.ECONNREFUSED, syscall.ECONNRESET,
+	} {
+		if errors.Is(err, e) {
+			return true
+		}
+	}
+	return false
 }

@@ -80,6 +80,12 @@ pub struct Shown(Mutex<HashSet<String>>);
 
 /// Places, then shows: Mutter re-places a re-mapped window that was not
 /// moved first. Never focuses.
+///
+/// On Linux a window is mapped once and never unmapped again: mapping a
+/// window costs Mutter ~60 ms (it waits for WebKit's first frame), which
+/// would sit between the hover dwell and the panel appearing. Hiding parks
+/// it instead — invisible and click-through, still mapped — and showing it
+/// again is immediate.
 pub fn reveal(window: &WebviewWindow, position: PhysicalPosition<i32>) -> tauri::Result<()> {
     window.set_position(position)?;
     let shown = window.app_handle().state::<Shown>();
@@ -87,6 +93,10 @@ pub fn reveal(window: &WebviewWindow, position: PhysicalPosition<i32>) -> tauri:
     #[cfg(windows)]
     if !first {
         return crate::win::show(window);
+    }
+    #[cfg(target_os = "linux")]
+    if !first {
+        return unpark(window);
     }
     let _ = first;
     window.show()?;
@@ -96,7 +106,9 @@ pub fn reveal(window: &WebviewWindow, position: PhysicalPosition<i32>) -> tauri:
         // freshly mapped window; put it back once it is on screen.
         let window = window.clone();
         gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(60), move || {
-            let _ = window.set_position(position);
+            if window.outer_position().ok() != Some(position) {
+                let _ = window.set_position(position);
+            }
         });
     }
     Ok(())
@@ -105,8 +117,41 @@ pub fn reveal(window: &WebviewWindow, position: PhysicalPosition<i32>) -> tauri:
 pub fn conceal(window: &WebviewWindow) -> tauri::Result<()> {
     #[cfg(windows)]
     return crate::win::hide(window);
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    return park(window);
+    #[cfg(not(any(windows, target_os = "linux")))]
     window.hide()
+}
+
+/// The toast window is click-through for good; the others take the pointer
+/// while they show.
+#[cfg(target_os = "linux")]
+fn clickable(window: &WebviewWindow) -> bool {
+    window.label() != "toast"
+}
+
+#[cfg(target_os = "linux")]
+fn park(window: &WebviewWindow) -> tauri::Result<()> {
+    use gtk::prelude::WidgetExt;
+    let shown = window.app_handle().state::<Shown>();
+    if !shown.0.lock().map(|set| set.contains(window.label())).unwrap_or(false) {
+        return Ok(()); // never shown: nothing to hide (and no GdkWindow yet)
+    }
+    window.gtk_window()?.set_opacity(0.0);
+    if clickable(window) {
+        window.set_ignore_cursor_events(true)?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn unpark(window: &WebviewWindow) -> tauri::Result<()> {
+    use gtk::prelude::WidgetExt;
+    if clickable(window) {
+        window.set_ignore_cursor_events(false)?;
+    }
+    window.gtk_window()?.set_opacity(1.0);
+    Ok(())
 }
 
 /// Physical pixels per CSS pixel. WebKitGTK lays pages out at the desktop's

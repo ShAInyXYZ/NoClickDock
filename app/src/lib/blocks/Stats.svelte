@@ -21,9 +21,15 @@
     min-height: 28px;
     padding: 5px 0;
     font: 400 var(--fs-small)/18px var(--font-mono);
+    /* Every item carries its 16px separator in front. The box is pulled
+       left by one separator, into the panel's inset, and its leftmost 16px
+       are clipped: the separator that starts a line — the first, or one
+       that wrapped — is never seen. */
+    margin-left: -16px;
+    clip-path: inset(0 0 0 16px);
   }
   .Stats-item { white-space: nowrap; }
-  .Stats-item + .Stats-item::before { content: '·'; color: var(--faint); margin: 0 8px; }
+  .Stats-item::before { content: '·'; display: inline-block; width: 16px; text-align: center; color: var(--faint); }
   .Stats-key { color: var(--dim); margin-right: 6px; }
   .Stats-value { color: var(--text); }
   .Stats-value[data-tone="warn"] { color: var(--warn); }

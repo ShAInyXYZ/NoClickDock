@@ -26,7 +26,7 @@ pub struct Tray(Mutex<Option<MenuItem<Wry>>>);
 #[tauri::command]
 pub fn dial_menu(window: WebviewWindow, widget: String) -> Result<(), String> {
     let app = window.app_handle();
-    hover::close(app);
+    hover::close_for_menu(app);
     let e = |error: tauri::Error| error.to_string();
     let mut items: Vec<Box<dyn IsMenuItem<Wry>>> =
         vec![Box::new(MenuItem::with_id(app, format!("refresh:{widget}"), "Refresh now", true, None::<&str>).map_err(e)?)];
@@ -46,7 +46,7 @@ pub fn dial_menu(window: WebviewWindow, widget: String) -> Result<(), String> {
 #[tauri::command]
 pub fn rail_menu(window: WebviewWindow) -> Result<(), String> {
     let app = window.app_handle();
-    hover::close(app);
+    hover::close_for_menu(app);
     let e = |error: tauri::Error| error.to_string();
     let dock = app.state::<core::Core>().dock_config().unwrap_or(Value::Null);
     let is = |key: &str, value: &str| dock.get(key).and_then(Value::as_str) == Some(value);

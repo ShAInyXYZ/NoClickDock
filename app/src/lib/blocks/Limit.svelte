@@ -18,24 +18,24 @@
 <style>
   .Limit { display: contents; }
   .Limit-label, .Limit-pct, .Limit-resets {
-    display: flex;
-    align-items: center;
+    display: block;
     height: 28px;
+    line-height: 28px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .Limit-label {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font: 500 var(--fs-body)/1 var(--font-sans);
+    font: 500 var(--fs-body)/28px var(--font-sans);
     color: var(--muted);
   }
   .Limit-pct {
-    justify-content: flex-end;
-    font: 400 var(--fs-small)/1 var(--font-mono);
+    text-align: right;
+    font: 400 var(--fs-small)/28px var(--font-mono);
     color: var(--text);
   }
   .Limit-pct[data-tone="warn"] { color: var(--warn); }
   .Limit-pct[data-tone="crit"] { color: var(--err); }
-  .Limit-resets { font: 400 var(--fs-small)/1 var(--font-mono); color: var(--dim); }
+  .Limit-resets { font: 400 var(--fs-small)/28px var(--font-mono); color: var(--dim); }
 </style>

@@ -159,7 +159,7 @@ func TestDockerSection(t *testing.T) {
 	if sec := blocks[0].(model.Section); sec.Title != "Docker" || sec.Meta != "reclaimable" {
 		t.Fatalf("section = %+v", sec)
 	}
-	if row := blocks[1].(model.Row); row.Name != "63G could be freed" || row.Value != "/var/lib/docker" || row.Tone != model.ToneWarn {
+	if row := blocks[1].(model.Row); row.Name != "63G could be freed" || row.Value != "/var/lib/docker" || row.Tone != model.ToneNone {
 		t.Fatalf("headline = %+v", row)
 	}
 	stats := blocks[2].(model.Stats)
@@ -167,7 +167,7 @@ func TestDockerSection(t *testing.T) {
 		stats.Items[1] != (model.Stat{Key: "containers", Value: "1.3G"}) {
 		t.Fatalf("stats = %+v", stats.Items)
 	}
-	if hint := blocks[3].(model.Note); !hint.Mono || !strings.HasPrefix(hint.Text, "docker system prune -a") {
+	if hint := blocks[3].(model.Note); !hint.Mono || hint.Tone != model.ToneNone || !strings.HasPrefix(hint.Text, "docker system prune -a") {
 		t.Fatalf("hint = %+v", hint)
 	}
 

@@ -120,13 +120,12 @@ func parseSize(text string) uint64 {
 
 // blocks say plainly what this is — space you could get back, and where —
 // then what it is made of, and the commands when it is worth running them.
+// Only the sizes over the line are coloured: a path and a command are not
+// problems.
 func (d *dockerSpace) blocks() model.Blocks {
 	headline := model.Row{
 		Name:  sys.FmtBytes(float64(d.total)) + " could be freed",
 		Value: d.root,
-	}
-	if d.total > dockerNoteworthy {
-		headline.Tone = model.ToneWarn
 	}
 	out := model.Blocks{model.Section{Title: "Docker", Meta: "reclaimable"}, headline}
 	if len(d.rows) > 0 {
@@ -141,7 +140,7 @@ func (d *dockerSpace) blocks() model.Blocks {
 		out = append(out, stats)
 	}
 	if d.total > dockerNoteworthy {
-		out = append(out, model.Note{Text: "docker system prune -a · docker builder prune", Tone: model.ToneWarn, Mono: true})
+		out = append(out, model.Note{Text: "docker system prune -a · docker builder prune", Mono: true})
 	}
 	return out
 }

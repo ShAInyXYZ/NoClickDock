@@ -6,8 +6,13 @@
 //! - while a panel is open, another dial switches it at once;
 //! - off the dial and the panel → it closes after 280 ms, unless the pointer
 //!   comes back to either first.
+//!
+//! The panel is prepared during the dwell — the page draws and measures the
+//! widget, the hidden window is sized and placed — so the dwell's end only
+//! shows it. Once shown, its header never moves under the pointer: a page
+//! switch or a growing snapshot resizes it away from the header's edge.
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition};
@@ -25,6 +30,21 @@ const GAP: f64 = 8.0 - 2.0;
 const EDGE: f64 = 8.0;
 /// The panel is at most the work area's height less this (DESIGN.md).
 const HEADROOM: f64 = 32.0;
+/// A native menu's pointer grab sends the rail leave and enter events as it
+/// pops; the panel it just closed must not open again under the menu.
+const MENU_QUIET: Duration = Duration::from_millis(400);
+
+/// `NCD_TRACE=1` prints hover timings (wall-clock ms) to stderr, for
+/// measuring the path from pointer to panel against an outside clock.
+fn trace(what: &str) {
+    if std::env::var_os("NCD_TRACE").is_some() {
+        let ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs_f64() * 1000.0)
+            .unwrap_or_default();
+        eprintln!("ncd-trace {ms:.1} {what}");
+    }
+}
 
 #[derive(Clone, Copy, Default, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -54,6 +74,13 @@ struct State {
     size: Option<(f64, f64)>,
     /// Bumped by every close, so a fade that ends after a reopen hides nothing.
     closes: u64,
+    /// Where the panel was put for this widget: its header edge stays there.
+    anchor: Option<(i32, i32)>,
+    /// The window's size and place as last set, to skip what did not change.
+    fitted: Option<(i32, i32)>,
+    at: Option<(i32, i32)>,
+    /// Until then, pointer entries do not open a panel (a menu is popping).
+    quiet_until: Option<Instant>,
 }
 
 #[derive(Default, Clone, PartialEq)]
@@ -72,7 +99,6 @@ struct PanelOpen {
     seq: u64,
     side: Side,
     max_height: f64,
-    reveal: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -86,18 +112,27 @@ struct PanelState {
 pub fn hover_dial(app: AppHandle, widget: Option<String>) {
     let hover = app.state::<Hover>();
     let Ok(mut st) = hover.0.lock() else { return };
+    trace(&format!("hover_dial {widget:?}"));
     st.over_dial = widget.clone();
     st.generation += 1;
     let generation = st.generation;
+    if widget.is_some() && st.quiet_until.is_some_and(|t| Instant::now() < t) {
+        return;
+    }
     match (widget, st.phase.clone()) {
         (Some(w), Phase::Closed | Phase::Dwell(_)) => {
-            st.phase = Phase::Dwell(w);
+            st.phase = Phase::Dwell(w.clone());
+            // Draw and measure now; the dwell's end only has to show it.
+            if st.widget.as_deref() != Some(w.as_str()) || st.size.is_none() {
+                open(&app, &mut st, w);
+            }
             after(&app, DWELL, generation, dwell_done);
         }
         (Some(w), Phase::Open(current) | Phase::Grace(current)) => {
             st.phase = Phase::Open(w.clone());
             if current != w {
-                open(&app, &mut st, w);
+                open(&app, &mut st, w.clone());
+                toast::hold(&app, &w);
             }
         }
         (None, Phase::Dwell(_)) => st.phase = Phase::Closed,
@@ -136,14 +171,32 @@ pub fn panel_layout(app: AppHandle, seq: u64, width: f64, height: f64) {
         return; // a measurement for a panel that is no longer asked for
     }
     st.size = Some((width, height));
-    place(&app, &mut st);
+    trace(&format!("panel_layout {width}x{height}"));
+    match st.phase {
+        // During the dwell: size and place the hidden window, ready to show.
+        Phase::Dwell(_) => stage(&app, &mut st),
+        Phase::Open(_) | Phase::Grace(_) => place(&app, &mut st),
+        Phase::Closed => {}
+    }
 }
 
-/// Closes the panel at once: the rail is being dragged.
+/// Closes the panel at once: the rail is being dragged, or a menu opens
+/// (then pointer entries stay quiet for a moment).
 pub fn close(app: &AppHandle) {
+    close_for(app, None);
+}
+
+pub fn close_for_menu(app: &AppHandle) {
+    close_for(app, Some(Instant::now() + MENU_QUIET));
+}
+
+fn close_for(app: &AppHandle, quiet_until: Option<Instant>) {
     let hover = app.state::<Hover>();
     let Ok(mut st) = hover.0.lock() else { return };
     st.generation += 1;
+    if quiet_until.is_some() {
+        st.quiet_until = quiet_until;
+    }
     if st.phase != Phase::Closed {
         st.phase = Phase::Closed;
         hide(app, &mut st);
@@ -160,9 +213,14 @@ pub fn replace(app: &AppHandle) {
 }
 
 fn dwell_done(app: &AppHandle, st: &mut State) {
+    trace("dwell done");
     if let Phase::Dwell(w) = st.phase.clone() {
         st.phase = Phase::Open(w.clone());
-        open(app, st, w);
+        if st.widget.as_deref() != Some(w.as_str()) {
+            open(app, st, w);
+        } else if st.size.is_some() {
+            place(app, st); // measured during the dwell: show it now
+        }
     }
 }
 
@@ -190,20 +248,60 @@ fn after(app: &AppHandle, delay: Duration, generation: u64, then: fn(&AppHandle,
     });
 }
 
-/// Asks the panel page to draw a widget. The window is placed and revealed
-/// when the page answers with its size (`panel_layout`).
+/// Asks the panel page to draw a widget. It answers with its size
+/// (`panel_layout`); the window is then staged (during a dwell) or placed.
 fn open(app: &AppHandle, st: &mut State, widget: String) {
     let Some(g) = Geometry::of(app, &widget) else { return };
     st.seq += 1;
     st.widget = Some(widget.clone());
     st.side = g.side();
     st.size = None;
+    st.anchor = None;
     let max_height = (f64::from(g.area.height) - HEADROOM * g.scale) / g.scale;
-    let _ = app.emit_to(
-        "panel",
-        "panel-open",
-        PanelOpen { widget, seq: st.seq, side: st.side, max_height, reveal: !st.visible },
-    );
+    let _ = app.emit_to("panel", "panel-open", PanelOpen { widget, seq: st.seq, side: st.side, max_height });
+}
+
+/// Where the panel goes: centred on its dial when first placed for a
+/// widget; after that, wherever keeps its header still — a panel beside a
+/// vertical rail keeps its top edge and grows downward (moving up only by
+/// what would leave the work area), one below a rail keeps its top, one
+/// above a rail keeps the edge against the rail (the panel page gives it
+/// the height of its tallest page, so its header does not move either).
+fn position(st: &mut State, g: &Geometry, size: (i32, i32)) -> (i32, i32) {
+    let fresh = g.place(st.side, size);
+    let (x, y) = match (st.anchor, st.side) {
+        (Some((_, top)), Side::Left | Side::Right) => {
+            let edge = (EDGE * g.scale).round() as i32;
+            (fresh.0, top.min(g.area.bottom() - edge - size.1).max(g.area.y + edge))
+        }
+        (Some((left, _)), Side::Bottom) => {
+            let edge = (EDGE * g.scale).round() as i32;
+            (left.min(g.area.right() - edge - size.0).max(g.area.x + edge), fresh.1)
+        }
+        _ => fresh,
+    };
+    if st.anchor.is_none() {
+        st.anchor = Some((x, y));
+    }
+    (x, y)
+}
+
+/// Sizes and places the hidden window during the dwell.
+fn stage(app: &AppHandle, st: &mut State) {
+    let (Some(widget), Some((width, height))) = (st.widget.clone(), st.size) else { return };
+    let (Some(panel), Some(g)) = (app.get_webview_window("panel"), Geometry::of(app, &widget)) else { return };
+    if st.visible {
+        return place(app, st);
+    }
+    st.side = g.side();
+    let size = ((width * g.scale).ceil() as i32, (height * g.scale).ceil() as i32);
+    let (x, y) = position(st, &g, size);
+    if st.fitted != Some(size) && overlay::fit(&panel, size.0, size.1).is_ok() {
+        st.fitted = Some(size);
+    }
+    if st.at != Some((x, y)) && panel.set_position(PhysicalPosition::new(x, y)).is_ok() {
+        st.at = Some((x, y));
+    }
 }
 
 fn place(app: &AppHandle, st: &mut State) {
@@ -212,15 +310,29 @@ fn place(app: &AppHandle, st: &mut State) {
     let Some(g) = Geometry::of(app, &widget) else { return };
     st.side = g.side();
     let size = ((width * g.scale).ceil() as i32, (height * g.scale).ceil() as i32);
-    let (x, y) = g.place(st.side, size);
-    if overlay::fit(&panel, size.0, size.1).is_err() {
-        return;
+    let (x, y) = position(st, &g, size);
+    if st.fitted != Some(size) {
+        if overlay::fit(&panel, size.0, size.1).is_err() {
+            return;
+        }
+        st.fitted = Some(size);
     }
-    let position = PhysicalPosition::new(x, y);
-    let shown = if st.visible { panel.set_position(position) } else { overlay::reveal(&panel, position) };
+    let at = PhysicalPosition::new(x, y);
+    let shown = if st.visible {
+        if st.at == Some((x, y)) { Ok(()) } else { panel.set_position(at) }
+    } else {
+        // The page starts its arrival animation as the window maps.
+        let _ = app.emit_to("panel", "panel-reveal", st.side);
+        trace("show");
+        overlay::reveal(&panel, at)
+    };
     if shown.is_ok() {
+        st.at = Some((x, y));
+        let was_visible = st.visible;
         st.visible = true;
-        toast::hold(app, &widget);
+        if !was_visible {
+            toast::hold(app, &widget);
+        }
         let _ = app.emit_to("rail", "panel-state", PanelState { widget: Some(widget), side: st.side });
     }
 }
@@ -234,6 +346,7 @@ fn hide(app: &AppHandle, st: &mut State) {
     st.size = None;
     // A window hidden under the pointer may never hear it leave.
     st.in_panel = false;
+    st.anchor = None;
     st.closes += 1;
     let close = st.closes;
     let _ = app.emit_to("panel", "panel-close", ());

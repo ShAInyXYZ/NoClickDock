@@ -18,7 +18,7 @@
   {/if}
   <span class="PanelHeader-title">{snapshot.title}</span>
   <span class="PanelHeader-state" data-tone={tone}>
-    <Led {tone} />{stale ? "stale" : snapshot.stateLabel}
+    <Led {tone} /><span class="PanelHeader-label" title={snapshot.stateLabel}>{stale ? "stale" : snapshot.stateLabel}</span>
   </span>
 </div>
 
@@ -45,9 +45,7 @@
     min-width: 0;
     font: 600 var(--fs-body)/1 var(--font-sans);
     color: var(--tone);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
+  .PanelHeader-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .PanelHeader-state[data-tone="ok"], .PanelHeader-state[data-tone="idle"] { color: var(--muted); }
 </style>

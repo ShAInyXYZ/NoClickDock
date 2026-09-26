@@ -24,8 +24,6 @@ export interface PanelOpen {
   side: Side;
   /** The tallest the panel may be on this monitor, in CSS px. */
   maxHeight: number;
-  /** True when the panel was closed: the reveal animates, a switch does not. */
-  reveal: boolean;
 }
 
 export interface PanelState { widget: string | null; side: Side }
@@ -66,5 +64,8 @@ export const toastDismiss = () => invoke<void>("toast_dismiss");
 export const onPanelOpen = (fn: (open: PanelOpen) => void): Promise<UnlistenFn> =>
   listen<PanelOpen>("panel-open", (event) => fn(event.payload));
 export const onPanelClose = (fn: () => void): Promise<UnlistenFn> => listen("panel-close", () => fn());
+/** The window is about to map: time for the arrival animation. */
+export const onPanelReveal = (fn: (side: Side) => void): Promise<UnlistenFn> =>
+  listen<Side>("panel-reveal", (event) => fn(event.payload));
 export const onPanelState = (fn: (state: PanelState) => void): Promise<UnlistenFn> =>
   listen<PanelState>("panel-state", (event) => fn(event.payload));

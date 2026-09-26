@@ -86,7 +86,7 @@
     padding: 6px;
     background: var(--s1);
     border-radius: var(--r-control);
-    box-shadow: var(--elev-2);
+    box-shadow: var(--edge-2);
     user-select: none;
     -webkit-user-select: none;
   }

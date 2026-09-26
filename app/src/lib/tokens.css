@@ -294,6 +294,15 @@ body {
   /* the open dial's recess, one step below --bg */
   --recess-open: #111111;
 
+  /* The floating surfaces' edge, drawn inside them. The same look as
+     --elev-2, but no translucent pixel ever sits over the transparent
+     window around a rail, panel or toast: WebKitGTK composites those
+     without premultiplying and the ring came out near-white (M1 review). */
+  --edge-2:
+    inset 0 0 0 1px var(--ring-strong),
+    0 1px 0 0 var(--lift-strong) inset,
+    0 -1px 0 0 var(--shade) inset;
+
   /* panel rhythm */
   --inset: 16px;           /* body inset: header, sections and rows align to it */
   --row-h: 32px;           /* single-line row; a row with a sub line is 40px */
