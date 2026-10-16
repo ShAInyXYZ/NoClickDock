@@ -1,0 +1,51 @@
+[package]
+name = "ncd"
+version = "2.0.0"
+description = "NoClickDock: every status you need, with no click"
+authors = ["Shiny Studio"]
+license = "MIT"
+edition = "2021"
+
+[lib]
+# The `_lib` suffix keeps the library's name apart from the `ncd` binary;
+# on Windows they would otherwise collide (cargo #8519).
+name = "ncd_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2.11", features = ["tray-icon", "image-png"] }
+tauri-plugin-shell = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-clipboard-manager = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["time", "sync"] }
+url = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+# Probes for the AppIndicator library before the tray loads it: without
+# one, libappindicator-sys panics (an abort in release).
+libloading = "0.7"
+# Mutter publishes per-monitor work areas as root properties without
+# always telling GDK.
+x11rb = "0.13"
+# The X window of a GTK toplevel, for compositor-side opacity.
+gdkx11 = "0.18"
+# To relate the overlays' webviews: one WebKit web process for all four.
+webkit2gtk = "2.0"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

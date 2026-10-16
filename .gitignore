@@ -1,3 +1,14 @@
 __pycache__/
 *.pyc
 .venv/
+
+# NCD 2 build outputs
+app/node_modules/
+app/build/
+app/.svelte-kit/
+app/src-tauri/target/
+app/src-tauri/binaries/
+app/src-tauri/gen/
+core/ncd-core
+core/ncd-core.exe
+dist/

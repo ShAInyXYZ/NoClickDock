@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "NoClickDock",
+  "version": "2.0.0",
+  "identifier": "xyz.shinystudio.noclickdock",
+  "build": {
+    "beforeDevCommand": "sh ../scripts/build-core.sh && pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "sh ../scripts/build-core.sh && pnpm build",
+    "frontendDist": "../build"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": ["binaries/ncd-core"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

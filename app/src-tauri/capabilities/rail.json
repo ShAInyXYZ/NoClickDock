@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "rail",
+  "description": "Only the rail can be dragged across the desktop.",
+  "windows": ["rail"],
+  "permissions": ["core:window:allow-start-dragging"]
+}

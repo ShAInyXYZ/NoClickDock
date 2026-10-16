@@ -1,0 +1,652 @@
+[
+ {
+  "Id": "0000000000000000000000000000000000000000000000000eb1c240ce52736b",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "running",
+   "Running": true,
+   "Paused": false,
+   "Restarting": false,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 0,
+   "Error": "",
+   "StartedAt": "2026-09-24T18:00:00.123456789Z",
+   "FinishedAt": "0001-01-01T00:00:00Z",
+   "Health": {
+    "Status": "healthy",
+    "FailingStreak": 0,
+    "Log": []
+   }
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/api-gateway",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "unless-stopped",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "api-gateway",
+   "Image": "traefik:v3",
+   "Labels": {
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {
+    "8080/tcp": [
+     {
+      "HostIp": "0.0.0.0",
+      "HostPort": "8080"
+     },
+     {
+      "HostIp": "::",
+      "HostPort": "8080"
+     }
+    ],
+    "9100/tcp": null
+   }
+  }
+ },
+ {
+  "Id": "0000000000000000000000000000000000000000000000002325290cf06dda9d",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "running",
+   "Running": true,
+   "Paused": false,
+   "Restarting": false,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 0,
+   "Error": "",
+   "StartedAt": "2026-09-26T11:57:00Z",
+   "FinishedAt": "0001-01-01T00:00:00Z",
+   "Health": {
+    "Status": "unhealthy",
+    "FailingStreak": 3,
+    "Log": []
+   }
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/ledger-api",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "always",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "ledger-api",
+   "Image": "example/ledger-api:2.4",
+   "Labels": {
+    "com.docker.compose.project": "ledger",
+    "com.docker.compose.service": "api",
+    "com.docker.compose.oneoff": "False",
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {}
+  }
+ },
+ {
+  "Id": "00000000000000000000000000000000000000000000000042b6aa5345897cf9",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "running",
+   "Running": true,
+   "Paused": false,
+   "Restarting": false,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 0,
+   "Error": "",
+   "StartedAt": "2026-09-14T00:00:00Z",
+   "FinishedAt": "0001-01-01T00:00:00Z",
+   "Health": {
+    "Status": "healthy",
+    "FailingStreak": 0,
+    "Log": []
+   }
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/ledger-db",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "no",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "ledger-db",
+   "Image": "postgres:16",
+   "Labels": {
+    "com.docker.compose.project": "ledger",
+    "com.docker.compose.service": "db",
+    "com.docker.compose.oneoff": "False",
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {
+    "5432/tcp": [
+     {
+      "HostIp": "127.0.0.1",
+      "HostPort": "5432"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "Id": "0000000000000000000000000000000000000000000000002738649646da8455",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "exited",
+   "Running": false,
+   "Paused": false,
+   "Restarting": false,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 1,
+   "Error": "",
+   "StartedAt": "2026-09-26T08:00:00Z",
+   "FinishedAt": "2026-09-26T10:00:00Z"
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/ledger-worker",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "always",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "ledger-worker",
+   "Image": "example/ledger-worker:2.4",
+   "Labels": {
+    "com.docker.compose.project": "ledger",
+    "com.docker.compose.service": "worker",
+    "com.docker.compose.oneoff": "False",
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {}
+  }
+ },
+ {
+  "Id": "00000000000000000000000000000000000000000000000033bdb4107d57ebec",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "restarting",
+   "Running": true,
+   "Paused": false,
+   "Restarting": true,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 2,
+   "Error": "",
+   "StartedAt": "2026-09-26T11:59:30Z",
+   "FinishedAt": "2026-09-26T11:59:20Z"
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/cron-runner",
+  "RestartCount": 14,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "always",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "cron-runner",
+   "Image": "example/cron:1",
+   "Labels": {
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {}
+  }
+ },
+ {
+  "Id": "000000000000000000000000000000000000000000000000272343f03fa19919",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "exited",
+   "Running": false,
+   "Paused": false,
+   "Restarting": false,
+   "OOMKilled": true,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 137,
+   "Error": "",
+   "StartedAt": "2026-09-25T20:00:00Z",
+   "FinishedAt": "2026-09-26T09:00:00Z"
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/thumbnailer",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "unless-stopped",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "thumbnailer",
+   "Image": "example/thumbs:0.9",
+   "Labels": {
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {}
+  }
+ },
+ {
+  "Id": "00000000000000000000000000000000000000000000000010592a12b696a498",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "exited",
+   "Running": false,
+   "Paused": false,
+   "Restarting": false,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 143,
+   "Error": "",
+   "StartedAt": "2026-09-20T09:00:00Z",
+   "FinishedAt": "2026-09-24T12:00:00Z"
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/docs-preview",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "no",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "docs-preview",
+   "Image": "example/docs:latest",
+   "Labels": {
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {}
+  }
+ },
+ {
+  "Id": "0000000000000000000000000000000000000000000000007c97993139e671ed",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "exited",
+   "Running": false,
+   "Paused": false,
+   "Restarting": false,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 137,
+   "Error": "",
+   "StartedAt": "2026-08-20T09:00:00Z",
+   "FinishedAt": "2026-08-27T12:00:00Z"
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/batch-job",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "no",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "batch-job",
+   "Image": "example/batch:3",
+   "Labels": {
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {}
+  }
+ },
+ {
+  "Id": "00000000000000000000000000000000000000000000000033203598c598afed",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "exited",
+   "Running": false,
+   "Paused": false,
+   "Restarting": false,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 0,
+   "Error": "",
+   "StartedAt": "2026-06-01T09:00:00Z",
+   "FinishedAt": "2026-07-01T12:00:00Z"
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/legacy-cron",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "no",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "legacy-cron",
+   "Image": "example/legacy:1",
+   "Labels": {
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {}
+  }
+ },
+ {
+  "Id": "000000000000000000000000000000000000000000000000666eff0e0fe4c0c5",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "created",
+   "Running": false,
+   "Paused": false,
+   "Restarting": false,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 0,
+   "Error": "",
+   "StartedAt": "0001-01-01T00:00:00Z",
+   "FinishedAt": "0001-01-01T00:00:00Z"
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/scratch",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "no",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "scratch",
+   "Image": "busybox:1",
+   "Labels": {
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {}
+  }
+ },
+ {
+  "Id": "00000000000000000000000000000000000000000000000035d7cf7b0749980b",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "paused",
+   "Running": true,
+   "Paused": true,
+   "Restarting": false,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 0,
+   "Error": "",
+   "StartedAt": "2026-09-20T00:00:00Z",
+   "FinishedAt": "0001-01-01T00:00:00Z"
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/media-proxy",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "no",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "media-proxy",
+   "Image": "nginx:1.27",
+   "Labels": {
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {
+    "443/tcp": [
+     {
+      "HostIp": "0.0.0.0",
+      "HostPort": "8443"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "Id": "0000000000000000000000000000000000000000000000003547f239a99af3cc",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "running",
+   "Running": true,
+   "Paused": false,
+   "Restarting": false,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 0,
+   "Error": "",
+   "StartedAt": "2026-09-21T06:00:00Z",
+   "FinishedAt": "0001-01-01T00:00:00Z"
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/shop-web",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "no",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "shop-web",
+   "Image": "example/shop-web:5",
+   "Labels": {
+    "com.docker.compose.project": "shopfront",
+    "com.docker.compose.service": "web",
+    "com.docker.compose.oneoff": "False",
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {
+    "80/tcp": [
+     {
+      "HostIp": "",
+      "HostPort": "8081"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "Id": "0000000000000000000000000000000000000000000000002a8b8add93875e54",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "running",
+   "Running": true,
+   "Paused": false,
+   "Restarting": false,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 0,
+   "Error": "",
+   "StartedAt": "2026-09-21T06:00:00Z",
+   "FinishedAt": "0001-01-01T00:00:00Z"
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/shop-cache",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "no",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "shop-cache",
+   "Image": "redis:7",
+   "Labels": {
+    "com.docker.compose.project": "shopfront",
+    "com.docker.compose.service": "cache",
+    "com.docker.compose.oneoff": "False",
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {}
+  }
+ },
+ {
+  "Id": "0000000000000000000000000000000000000000000000000a1484ae0ea09610",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "exited",
+   "Running": false,
+   "Paused": false,
+   "Restarting": false,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 143,
+   "Error": "",
+   "StartedAt": "2026-09-21T06:00:00Z",
+   "FinishedAt": "2026-09-25T12:00:00Z"
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/shop-worker",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "no",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "shop-worker",
+   "Image": "example/shop-worker:5",
+   "Labels": {
+    "com.docker.compose.project": "shopfront",
+    "com.docker.compose.service": "worker",
+    "com.docker.compose.oneoff": "False",
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {}
+  }
+ },
+ {
+  "Id": "00000000000000000000000000000000000000000000000027440c1c6462ad44",
+  "Created": "2026-06-01T08:00:00.000000000Z",
+  "Path": "/entrypoint",
+  "Args": [],
+  "State": {
+   "Status": "running",
+   "Running": true,
+   "Paused": false,
+   "Restarting": false,
+   "OOMKilled": false,
+   "Dead": false,
+   "Pid": 0,
+   "ExitCode": 0,
+   "Error": "",
+   "StartedAt": "2026-09-01T00:00:00Z",
+   "FinishedAt": "0001-01-01T00:00:00Z"
+  },
+  "Image": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "Name": "/portainer",
+  "RestartCount": 0,
+  "HostConfig": {
+   "RestartPolicy": {
+    "Name": "always",
+    "MaximumRetryCount": 0
+   }
+  },
+  "Config": {
+   "Hostname": "portainer",
+   "Image": "portainer/portainer-ce:2",
+   "Labels": {
+    "org.example.note": "a label\twith a tab\nand a newline"
+   }
+  },
+  "NetworkSettings": {
+   "Ports": {
+    "8000/tcp": [
+     {
+      "HostIp": "0.0.0.0",
+      "HostPort": "8000"
+     }
+    ],
+    "9000/tcp": null,
+    "9443/tcp": [
+     {
+      "HostIp": "0.0.0.0",
+      "HostPort": "9443"
+     }
+    ]
+   }
+  }
+ }
+]

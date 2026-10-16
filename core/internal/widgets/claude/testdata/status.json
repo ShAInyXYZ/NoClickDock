@@ -1,0 +1,10 @@
+{
+ "page": {
+  "id": "x",
+  "name": "Example"
+ },
+ "status": {
+  "indicator": "minor",
+  "description": "Minor Service Outage"
+ }
+}

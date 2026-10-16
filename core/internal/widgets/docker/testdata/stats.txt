@@ -1,0 +1,7 @@
+api-gateway	0.41%	48.2MiB / 62.5GiB
+ledger-api	7.12%	492.1MiB / 62.5GiB
+ledger-db	1.30%	1.21GiB / 62.5GiB
+shop-web	2.05%	22.21GiB / 62.5GiB
+shop-cache	0.20%	812KiB / 62.5GiB
+portainer	0.00%	18.9MiB / 62.5GiB
+media-proxy	--	0B / 0B

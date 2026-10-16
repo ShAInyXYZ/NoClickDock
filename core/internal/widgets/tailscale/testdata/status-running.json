@@ -1,0 +1,363 @@
+{
+ "Version": "1.80.2-t1234abcd-g5678ef90",
+ "TUN": true,
+ "BackendState": "Running",
+ "HaveNodeKey": true,
+ "AuthURL": "",
+ "TailscaleIPs": [
+  "100.64.0.10",
+  "fd7a:115c:a1e0::a"
+ ],
+ "Self": {
+  "ID": "n10CNTRL",
+  "PublicKey": "nodekey:000000000000000000000000000000000000000000000000000000000000000a",
+  "HostName": "workstation",
+  "DNSName": "workstation.tail0c4fe.ts.net.",
+  "OS": "linux",
+  "UserID": 1001,
+  "TailscaleIPs": [
+   "100.64.0.10",
+   "fd7a:115c:a1e0::a"
+  ],
+  "AllowedIPs": [
+   "100.64.0.10/32"
+  ],
+  "Addrs": null,
+  "CurAddr": "",
+  "Relay": "fra",
+  "RxBytes": 0,
+  "TxBytes": 0,
+  "Created": "2025-01-10T09:00:00Z",
+  "LastWrite": "0001-01-01T00:00:00Z",
+  "LastSeen": "0001-01-01T00:00:00Z",
+  "LastHandshake": "0001-01-01T00:00:00Z",
+  "Online": true,
+  "ExitNode": false,
+  "ExitNodeOption": true,
+  "Active": false,
+  "InNetworkMap": true,
+  "InMagicSock": true,
+  "InEngine": true,
+  "PrimaryRoutes": [
+   "10.10.0.0/16"
+  ],
+  "KeyExpiry": "2026-09-29T12:00:00Z"
+ },
+ "Health": [
+  "Some peers are advertising routes but --accept-routes is false",
+  ""
+ ],
+ "MagicDNSSuffix": "tail0c4fe.ts.net",
+ "CurrentTailnet": {
+  "Name": "example.org",
+  "MagicDNSSuffix": "tail0c4fe.ts.net",
+  "MagicDNSEnabled": true
+ },
+ "CertDomains": [
+  "workstation.tail0c4fe.ts.net"
+ ],
+ "Peer": {
+  "nodekey:0000000000000000000000000000000000000000000000000000000000000001": {
+   "ID": "n1CNTRL",
+   "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000001",
+   "HostName": "fileserver",
+   "DNSName": "fileserver.tail0c4fe.ts.net.",
+   "OS": "linux",
+   "UserID": 1001,
+   "TailscaleIPs": [
+    "100.64.0.11",
+    "fd7a:115c:a1e0::1"
+   ],
+   "AllowedIPs": [
+    "100.64.0.11/32"
+   ],
+   "Addrs": null,
+   "CurAddr": "",
+   "Relay": "fra",
+   "RxBytes": 0,
+   "TxBytes": 0,
+   "Created": "2025-01-10T09:00:00Z",
+   "LastWrite": "2026-09-26T11:48:00.1Z",
+   "LastSeen": "2026-09-26T11:48:00.1Z",
+   "LastHandshake": "2026-09-26T11:48:00.1Z",
+   "Online": false,
+   "ExitNode": false,
+   "ExitNodeOption": false,
+   "Active": false,
+   "InNetworkMap": true,
+   "InMagicSock": true,
+   "InEngine": true,
+   "KeyExpiry": "2027-03-01T00:00:00Z"
+  },
+  "nodekey:0000000000000000000000000000000000000000000000000000000000000002": {
+   "ID": "n2CNTRL",
+   "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000002",
+   "HostName": "build-agent",
+   "DNSName": "build-agent.tail0c4fe.ts.net.",
+   "OS": "linux",
+   "UserID": 1001,
+   "TailscaleIPs": [
+    "100.64.0.12",
+    "fd7a:115c:a1e0::2"
+   ],
+   "AllowedIPs": [
+    "100.64.0.12/32"
+   ],
+   "Addrs": null,
+   "CurAddr": "",
+   "Relay": "fra",
+   "RxBytes": 5000000,
+   "TxBytes": 1000000,
+   "Created": "2025-01-10T09:00:00Z",
+   "LastWrite": "0001-01-01T00:00:00Z",
+   "LastSeen": "0001-01-01T00:00:00Z",
+   "LastHandshake": "0001-01-01T00:00:00Z",
+   "Online": true,
+   "ExitNode": false,
+   "ExitNodeOption": false,
+   "Active": true,
+   "InNetworkMap": true,
+   "InMagicSock": true,
+   "InEngine": true,
+   "KeyExpiry": "2027-03-01T00:00:00Z"
+  },
+  "nodekey:0000000000000000000000000000000000000000000000000000000000000003": {
+   "ID": "n3CNTRL",
+   "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000003",
+   "HostName": "atlas",
+   "DNSName": "atlas.tail0c4fe.ts.net.",
+   "OS": "linux",
+   "UserID": 1001,
+   "TailscaleIPs": [
+    "100.64.0.13",
+    "fd7a:115c:a1e0::3"
+   ],
+   "AllowedIPs": [
+    "100.64.0.13/32"
+   ],
+   "Addrs": null,
+   "CurAddr": "203.0.113.7:41641",
+   "Relay": "ams",
+   "RxBytes": 90000000,
+   "TxBytes": 10000000,
+   "Created": "2025-01-10T09:00:00Z",
+   "LastWrite": "0001-01-01T00:00:00Z",
+   "LastSeen": "0001-01-01T00:00:00Z",
+   "LastHandshake": "0001-01-01T00:00:00Z",
+   "Online": true,
+   "ExitNode": false,
+   "ExitNodeOption": false,
+   "Active": true,
+   "InNetworkMap": true,
+   "InMagicSock": true,
+   "InEngine": true,
+   "KeyExpiry": "2027-03-01T00:00:00Z"
+  },
+  "nodekey:0000000000000000000000000000000000000000000000000000000000000004": {
+   "ID": "n4CNTRL",
+   "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000004",
+   "HostName": "exit-fra",
+   "DNSName": "exit-fra.tail0c4fe.ts.net.",
+   "OS": "linux",
+   "UserID": 1001,
+   "TailscaleIPs": [
+    "100.64.0.14",
+    "fd7a:115c:a1e0::4"
+   ],
+   "AllowedIPs": [
+    "100.64.0.14/32"
+   ],
+   "Addrs": null,
+   "CurAddr": "203.0.113.8:41641",
+   "Relay": "fra",
+   "RxBytes": 0,
+   "TxBytes": 0,
+   "Created": "2025-01-10T09:00:00Z",
+   "LastWrite": "0001-01-01T00:00:00Z",
+   "LastSeen": "0001-01-01T00:00:00Z",
+   "LastHandshake": "0001-01-01T00:00:00Z",
+   "Online": true,
+   "ExitNode": true,
+   "ExitNodeOption": true,
+   "Active": false,
+   "InNetworkMap": true,
+   "InMagicSock": true,
+   "InEngine": true,
+   "KeyExpiry": "2027-03-01T00:00:00Z"
+  },
+  "nodekey:0000000000000000000000000000000000000000000000000000000000000005": {
+   "ID": "n5CNTRL",
+   "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000005",
+   "HostName": "router",
+   "DNSName": "router.tail0c4fe.ts.net.",
+   "OS": "linux",
+   "UserID": 1001,
+   "TailscaleIPs": [
+    "100.64.0.15",
+    "fd7a:115c:a1e0::5"
+   ],
+   "AllowedIPs": [
+    "100.64.0.15/32"
+   ],
+   "Addrs": null,
+   "CurAddr": "203.0.113.9:41641",
+   "Relay": "",
+   "RxBytes": 0,
+   "TxBytes": 0,
+   "Created": "2025-01-10T09:00:00Z",
+   "LastWrite": "0001-01-01T00:00:00Z",
+   "LastSeen": "0001-01-01T00:00:00Z",
+   "LastHandshake": "0001-01-01T00:00:00Z",
+   "Online": true,
+   "ExitNode": false,
+   "ExitNodeOption": false,
+   "Active": false,
+   "InNetworkMap": true,
+   "InMagicSock": true,
+   "InEngine": true,
+   "PrimaryRoutes": [
+    "192.168.50.0/24"
+   ],
+   "KeyExpiry": "2027-03-01T00:00:00Z"
+  },
+  "nodekey:0000000000000000000000000000000000000000000000000000000000000006": {
+   "ID": "n6CNTRL",
+   "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000006",
+   "HostName": "Phone",
+   "DNSName": "phone.tail0c4fe.ts.net.",
+   "OS": "iOS",
+   "UserID": 1001,
+   "TailscaleIPs": [
+    "100.64.0.16",
+    "fd7a:115c:a1e0::6"
+   ],
+   "AllowedIPs": [
+    "100.64.0.16/32"
+   ],
+   "Addrs": null,
+   "CurAddr": "",
+   "Relay": "ams",
+   "RxBytes": 0,
+   "TxBytes": 0,
+   "Created": "2025-01-10T09:00:00Z",
+   "LastWrite": "0001-01-01T00:00:00Z",
+   "LastSeen": "0001-01-01T00:00:00Z",
+   "LastHandshake": "0001-01-01T00:00:00Z",
+   "Online": true,
+   "ExitNode": false,
+   "ExitNodeOption": false,
+   "Active": false,
+   "InNetworkMap": true,
+   "InMagicSock": true,
+   "InEngine": true,
+   "KeyExpiry": "2027-03-01T00:00:00Z"
+  },
+  "nodekey:0000000000000000000000000000000000000000000000000000000000000007": {
+   "ID": "n7CNTRL",
+   "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000007",
+   "HostName": "pi-garage",
+   "DNSName": "pi-garage.tail0c4fe.ts.net.",
+   "OS": "linux",
+   "UserID": 1001,
+   "TailscaleIPs": [
+    "100.64.0.17",
+    "fd7a:115c:a1e0::7"
+   ],
+   "AllowedIPs": [
+    "100.64.0.17/32"
+   ],
+   "Addrs": null,
+   "CurAddr": "",
+   "Relay": "",
+   "RxBytes": 0,
+   "TxBytes": 0,
+   "Created": "2025-01-10T09:00:00Z",
+   "LastWrite": "0001-01-01T00:00:00Z",
+   "LastSeen": "0001-01-01T00:00:00Z",
+   "LastHandshake": "0001-01-01T00:00:00Z",
+   "Online": false,
+   "ExitNode": false,
+   "ExitNodeOption": false,
+   "Active": false,
+   "InNetworkMap": true,
+   "InMagicSock": true,
+   "InEngine": true,
+   "KeyExpiry": "2027-03-01T00:00:00Z"
+  },
+  "nodekey:0000000000000000000000000000000000000000000000000000000000000008": {
+   "ID": "n8CNTRL",
+   "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000008",
+   "HostName": "old-vm",
+   "DNSName": "old-vm.tail0c4fe.ts.net.",
+   "OS": "linux",
+   "UserID": 1001,
+   "TailscaleIPs": [
+    "100.64.0.18",
+    "fd7a:115c:a1e0::8"
+   ],
+   "AllowedIPs": [
+    "100.64.0.18/32"
+   ],
+   "Addrs": null,
+   "CurAddr": "",
+   "Relay": "",
+   "RxBytes": 0,
+   "TxBytes": 0,
+   "Created": "2025-01-10T09:00:00Z",
+   "LastWrite": "2026-05-01T08:00:00Z",
+   "LastSeen": "2026-05-01T08:00:00Z",
+   "LastHandshake": "2026-05-01T08:00:00Z",
+   "Online": false,
+   "ExitNode": false,
+   "ExitNodeOption": false,
+   "Active": false,
+   "InNetworkMap": true,
+   "InMagicSock": true,
+   "InEngine": true,
+   "KeyExpiry": "2026-06-01T00:00:00Z"
+  },
+  "nodekey:0000000000000000000000000000000000000000000000000000000000000009": {
+   "ID": "n9CNTRL",
+   "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000009",
+   "HostName": "old-desktop",
+   "DNSName": "old-desktop.tail0c4fe.ts.net.",
+   "OS": "windows",
+   "UserID": 1001,
+   "TailscaleIPs": [
+    "100.64.0.19",
+    "fd7a:115c:a1e0::9"
+   ],
+   "AllowedIPs": [
+    "100.64.0.19/32"
+   ],
+   "Addrs": null,
+   "CurAddr": "",
+   "Relay": "",
+   "RxBytes": 0,
+   "TxBytes": 0,
+   "Created": "2025-01-10T09:00:00Z",
+   "LastWrite": "2026-09-14T12:00:00Z",
+   "LastSeen": "2026-09-14T12:00:00Z",
+   "LastHandshake": "2026-09-14T12:00:00Z",
+   "Online": false,
+   "ExitNode": false,
+   "ExitNodeOption": false,
+   "Active": false,
+   "InNetworkMap": true,
+   "InMagicSock": true,
+   "InEngine": true,
+   "KeyExpiry": "2027-03-01T00:00:00Z"
+  }
+ },
+ "User": {
+  "1001": {
+   "ID": 1001,
+   "LoginName": "someone@example.org",
+   "DisplayName": "Someone"
+  }
+ },
+ "ClientVersion": {
+  "RunningLatest": false,
+  "LatestVersion": "1.82.0"
+ }
+}

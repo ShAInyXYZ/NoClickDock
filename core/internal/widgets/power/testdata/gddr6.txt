@@ -1,0 +1,5 @@
+Device: RTX 4090 GDDR6X (AD102 / 0x2684) pci=11:0:0
+11:00.0 92
+Device: RTX 3090 GDDR6X (GA102 / 0x2204) pci=2a:0:0
+2A:00.0 64
+garbage line here

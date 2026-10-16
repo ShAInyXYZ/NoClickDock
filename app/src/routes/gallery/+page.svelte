@@ -1,0 +1,239 @@
+<script lang="ts">
+  import { onMount, tick } from "svelte";
+  import { core, coreDown } from "$lib/core.svelte";
+  import Dial from "$lib/dock/Dial.svelte";
+  import Rail from "$lib/dock/Rail.svelte";
+  import type { Side } from "$lib/dock/side";
+  import Panel from "$lib/panel/Panel.svelte";
+  import type { State, Tone, WidgetSnapshot } from "$lib/protocol";
+  import Settings from "$lib/settings/Settings.svelte";
+  import { titles } from "$lib/settings/titles";
+  import ToastStack from "$lib/toast/ToastStack.svelte";
+  import { coreURL } from "$lib/transport";
+
+  // Every surface at once, from a development core (`ncd-core --mock` for
+  // invented data): the rail in each orientation and density, every dial
+  // state, every page of every panel, the footer's error and stale states,
+  // and a toast stack. This is what the design review shoots
+  // (docs/rewrite/design/shoot.mjs) and what README images are made from.
+  //
+  // Contract: each capturable surface carries data-surface="<kind>/<id>",
+  // <html> gets data-gallery-ready once fonts and every widget have drawn,
+  // and ?surface=<id> renders that surface alone.
+  //
+  // The mocks' named variants (a daemon unreachable, a server offline) come
+  // from GET /v1/variants. Dial specimens, the error panel, the stale panel
+  // and a toast stack without live toasts are the mock's snapshots with one
+  // thing forced (a state, an error, staleness), so every state can be
+  // judged without waiting for it to happen.
+
+  const only = new URLSearchParams(location.search).get("surface");
+  const show = (id: string) => !only || only === id;
+
+  let open = $state<string | null>(null);
+  let variants = $state<Record<string, Record<string, WidgetSnapshot>> | null>(null);
+
+  const byId = $derived(Object.fromEntries(core.widgets.map((w) => [w.id, w])));
+  const variantList = $derived(
+    Object.entries(variants ?? {}).flatMap(([widget, byName]) =>
+      Object.entries(byName).map(([name, snapshot]) => ({ id: `panel/${widget}/${name}`, snapshot })),
+    ),
+  );
+  const pick = (state: State) =>
+    core.widgets.find((w) => w.state === state) ?? variantList.find((v) => v.snapshot.state === state)?.snapshot;
+
+  interface Specimen { name: string; snapshot: WidgetSnapshot; open?: boolean; side?: Side; hover?: boolean; focus?: boolean; stale?: boolean }
+  const specimens = $derived.by(() => {
+    const ok = pick("ok");
+    const busy = pick("busy");
+    const out: (Specimen | undefined)[] = [
+      ok && { name: "ok", snapshot: ok },
+      pick("warn") && { name: "warn", snapshot: pick("warn")! },
+      pick("crit") && { name: "crit", snapshot: pick("crit")! },
+      busy && { name: "busy", snapshot: busy },
+      busy && { name: "spin", snapshot: { ...busy, progress: undefined } },
+      pick("idle") && { name: "idle", snapshot: pick("idle")! },
+      ok && { name: "hover", snapshot: ok, hover: true },
+      ok && { name: "open", snapshot: ok, open: true, side: "top" },
+      ok && { name: "focus", snapshot: ok, focus: true },
+      pick("crit") && { name: "stale", snapshot: pick("crit")!, stale: true },
+    ];
+    return out.filter((s): s is Specimen => !!s);
+  });
+
+  // One panel surface per page; a single-page panel is just panel/<widget>.
+  const panels = $derived(
+    core.widgets.flatMap((w) =>
+      w.pages.length > 1
+        ? w.pages.map((p) => ({ id: `panel/${w.id}/${p.id}`, snapshot: w, page: p.id }))
+        : [{ id: `panel/${w.id}`, snapshot: w, page: w.pages[0]?.id }],
+    ),
+  );
+  const failing = $derived(
+    byId.disk && { ...byId.disk, error: "statfs /mnt/offsite: gave up after 60s", state: "idle" as State, stateLabel: "unavailable" },
+  );
+  const quiet = $derived(pick("crit"));
+  // A stack the shell can actually show (M2-b): one widget's toasts, newest
+  // first, in its own transition words.
+  const toasts = $derived(
+    core.toasts.length
+      ? core.toasts.slice(-3).reverse().map((t) => ({ key: t.key, tone: t.tone, text: t.text }))
+      : [
+          { key: "done", tone: "ok" as Tone, text: "Generation complete" },
+          { key: "busy", tone: "info" as Tone, text: "Generating…" },
+          { key: "online", tone: "ok" as Tone, text: "ComfyUI is online" },
+        ],
+  );
+  // The shell's own dial when the core will not start, down since a fixed
+  // instant so the shot does not change.
+  const down = coreDown("ncd-core stopped with exit code 1 (config.json: unexpected end of JSON input)");
+  const downSince = new Date(2026, 8, 26, 3, 27, 52).getTime();
+
+  onMount(() => {
+    const disconnect = core.connect();
+    fetch(`${coreURL()}/v1/variants`)
+      .then((response) => (response.ok ? response.json() : {}))
+      .catch(() => ({}))
+      .then((found) => (variants = found));
+    return () => {
+      disconnect.then((stop) => stop());
+    };
+  });
+
+  // Ready once the fonts are in, every widget the core runs has drawn, and
+  // the variants have arrived.
+  let ready = false;
+  $effect(() => {
+    if (ready || !variants || !core.expected.length || core.expected.some((id) => !core.snapshots[id])) return;
+    ready = true;
+    document.fonts.ready.then(tick).then(() => document.documentElement.setAttribute("data-gallery-ready", ""));
+  });
+</script>
+
+<svelte:head><title>NoClickDock · gallery</title></svelte:head>
+
+<main class:alone={!!only}>
+  {#if !only}
+    <header class="Sheet-head">
+      <h1>NoClickDock</h1>
+      <span class="Sheet-note">gallery · {coreURL()} · {core.linked ? "linked" : "not linked"} · {core.widgets.length} widgets</span>
+    </header>
+  {/if}
+
+  {#if core.config && core.widgets.length}
+    <section class="Sheet-row">
+      {#if show("dock/v-normal")}
+        <figure data-surface="dock/v-normal">
+          <Rail widgets={core.widgets} {open} side="right" onhover={(w) => (open = w)} />
+        </figure>
+      {/if}
+      {#if show("dock/v-compact")}
+        <figure data-surface="dock/v-compact"><Rail widgets={core.widgets} density="compact" /></figure>
+      {/if}
+      {#if show("dock/v-large")}
+        <figure data-surface="dock/v-large"><Rail widgets={core.widgets} density="large" /></figure>
+      {/if}
+      <div class="Sheet-col">
+        {#if show("dock/h-normal")}
+          <figure data-surface="dock/h-normal"><Rail widgets={core.widgets} orientation="horizontal" side="top" /></figure>
+        {/if}
+        {#if show("dock/h-compact")}
+          <figure data-surface="dock/h-compact">
+            <Rail widgets={core.widgets} orientation="horizontal" density="compact" side="top" />
+          </figure>
+        {/if}
+        {#if !only || only.startsWith("dial/")}
+          <figure data-surface="dial/states">
+            <Rail widgets={[]} orientation="horizontal">
+              {#each specimens as s (s.name)}
+                <div class="Specimen" data-surface="dial/{s.name}">
+                  <Dial snapshot={s.snapshot} open={s.open} side={s.side} hover={s.hover} focus={s.focus} stale={s.stale} />
+                  <span class="Specimen-name">{s.name}</span>
+                </div>
+              {/each}
+            </Rail>
+          </figure>
+        {/if}
+        {#if show("toast/stack") && toasts.length}
+          <figure data-surface="toast/stack"><ToastStack {toasts} /></figure>
+        {/if}
+      </div>
+    </section>
+
+    {#if show("settings")}
+      <!-- The Settings window at its size, on the mock core's config. Save
+           here changes nothing; Test and the peer list ask the mock core,
+           which invents its answers. -->
+      <section class="Sheet-row">
+        <figure class="Sheet-window" data-surface="settings">
+          <Settings
+            config={core.config}
+            {titles}
+            platform={core.platform}
+            save={async () => ({ ok: true })}
+            ask={(widget, what, args) => core.ask(widget, what, args)}
+            controls={{ drag: () => {}, minimize: () => {}, close: () => {} }}
+          />
+        </figure>
+      </section>
+    {/if}
+
+    <section class="Sheet-panels">
+      {#each panels as p (p.id)}
+        {#if show(p.id)}
+          <div class="Sheet-panel" class:is-open={open === p.snapshot.id} data-surface={p.id}>
+            <Panel snapshot={p.snapshot} page={p.page} />
+          </div>
+        {/if}
+      {/each}
+      {#each variantList as v (v.id)}
+        {#if show(v.id)}
+          <div class="Sheet-panel" data-surface={v.id}><Panel snapshot={v.snapshot} stale={false} /></div>
+        {/if}
+      {/each}
+      {#if failing && show("panel/disk/collector-error")}
+        <div class="Sheet-panel" data-surface="panel/disk/collector-error"><Panel snapshot={failing} /></div>
+      {/if}
+      {#if show("panel/ncd/core-down")}
+        <div class="Sheet-panel" data-surface="panel/ncd/core-down"><Panel snapshot={down} stale={false} since={downSince} /></div>
+      {/if}
+      {#if quiet && show(`panel/${quiet.id}/stale`)}
+        <div class="Sheet-panel" data-surface="panel/{quiet.id}/stale"><Panel snapshot={quiet} stale /></div>
+      {/if}
+    </section>
+  {/if}
+</main>
+
+<style>
+  /* Sheet chrome, not product: plates on the app's own background. */
+  main {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    padding: 24px 32px 64px;
+  }
+  main.alone { padding: 16px; }
+  .Sheet-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    height: 48px;
+    border-bottom: 1px solid var(--line);
+  }
+  h1 { font: 600 var(--fs-title)/1 var(--font-sans); }
+  .Sheet-note { font: 400 var(--fs-micro)/1 var(--font-mono); letter-spacing: .04em; color: var(--dim); }
+  .Sheet-row { display: flex; align-items: flex-start; gap: 40px; }
+  .Sheet-col { display: flex; flex-direction: column; align-items: flex-start; gap: 32px; }
+  figure { margin: 0; display: inline-flex; padding: 1px; }
+  .Specimen { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 52px; }
+  .Specimen-name {
+    font: 500 var(--fs-micro)/1 var(--font-mono);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .Sheet-window { width: 560px; height: 680px; border-radius: var(--r-lg); overflow: hidden; box-shadow: 0 0 0 1px var(--line2), var(--elev-2); }
+  .Sheet-panels { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px; }
+  .Sheet-panel { padding: 1px; border-radius: var(--r-panel); }
+  .Sheet-panel.is-open { box-shadow: 0 0 0 2px var(--accent-line); }
+</style>
