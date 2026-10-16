@@ -13,7 +13,7 @@ refinement.
 ---
 
 ### A1 · P1 · Stay inside the five type roles
-DESIGN.md sets "Cerveau's five roles only: 9.5 / 11.5 / 13 / 15 / 21", then
+DESIGN.md sets "five roles only: 9.5 / 11.5 / 13 / 15 / 21", then
 itself uses 12.5 (header state label, toast text) and 12 (row value).
 **Change:** header state label → Manrope **13**/600; toast text → Manrope
 **13**/500; row value → Plex Mono **11.5**; alert meta stays mono 11.5.
@@ -22,7 +22,7 @@ invites more. The reference uses only the five roles, and at 11.5 mono the
 values still read as the data column next to 13px names.
 
 ### A2 · P1 · Selected segment is a raised key, not a cherry block
-DESIGN.md lists "selected segment" as an accent use (Cerveau kit
+DESIGN.md lists "selected segment" as an accent use (the original kit's
 `Segmented` fills it with `--accent`).
 **Change:** selected segment = `--s3` fill, `--text` ink, the elev language
 as insets (`0 1px 0 var(--lift) inset, 0 -1px 0 var(--shade) inset, 0 0 0 1px
@@ -46,10 +46,9 @@ nobody needs to read: grip dots, `·` separators, the footer freshness
 stamp, unlit or idle lamps.
 **Why:** `--faint` on `--s1` measures 2.2:1 and `--dim` 3.5:1. The readout
 is the number the dock exists to show, and "if you have to click to find
-out, the widget has failed" also rules out squinting. Cerveau Hub's
-contract says the same thing in the user's words: "Keep essential labels and
-state descriptions legible rather than using the source palette's disabled
-ink."
+out, the widget has failed" also rules out squinting: keep essential labels
+and state descriptions legible rather than using the palette's disabled
+ink.
 
 ### A4 · P1 · Open dial: give "one step darker" a token and move the index tick off the rim
 "The recess darkens one step" has no step below `--bg`, and the index tick
@@ -91,7 +90,7 @@ pixels and the meter looks uneven at 1×.
 DESIGN.md: actions "appear at full opacity only on row hover".
 **Change:** at rest a row or alert action is a **ghost pill**: transparent
 body, 1px `--line` outline, `--dim` ink. On row hover or `:focus-within` it
-takes the Cerveau pill body (`--s2`, `--line2`, `--muted`). A pill's width
+takes the pill body (`--s2`, `--line2`, `--muted`). A pill's width
 is the larger of `label` and `confirm`: both labels sit in the same grid
 cell and the inactive one is `visibility: hidden`. Armed state is the
 confirm label plus accent (or `--err` for `danger`), with no countdown
@@ -150,12 +149,12 @@ title line is 24px tall (the pill height), so an alert is always
 alert's LED and text stay on the panel's 16px inset like every row.
 **Why:** in 440px with two actions, the title line has about 270px. Longer
 meta truncated exactly the words that matter (`unhealthy · 3 checks fa…`).
-The 10px padding in DESIGN.md is off Cerveau's spacing scale, and without
+The 10px padding in DESIGN.md is off the tokens' spacing scale, and without
 the fixed line the alert height was 53, 69 or 74px. This is a rule for the
 core's snapshot writers (research and executor) as much as for the renderer.
 
 ### A13 · P1 · Pin the geometry DESIGN.md leaves open
-All on Cerveau's scale and the 4px grid, and all in `reference.css`:
+All on the tokens' spacing scale and the 4px grid, and all in `reference.css`:
 - panel body inset **16px**; header 48; tab zone = Segmented 28 + 12 below,
   then a `--line` hairline; footer 28.
 - row min-height **32** (not 30, which is off-grid), 40 with a sub line;

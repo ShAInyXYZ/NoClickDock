@@ -22,12 +22,12 @@ decisions), DESIGN.md (7542561, the 17 amendments), `research/tauri-windows.md`,
 
 ### Svelte app — `app/` (SvelteKit 2 + adapter-static, Svelte 5 runes, TS, Vite 8, pnpm)
 
-- `src/lib/tokens.css`: Cerveau's `tokens.css` byte-for-byte, then one NCD block
+- `src/lib/tokens.css`: `docs/rewrite/design/tokens.css` byte-for-byte, then one NCD block
   (`--dial --rim --led --mark --slot-gap --readout-h --ok-led --recess-shade
   --recess-open --inset --row-h --panel-w --r-toast`). `ncd.css`: tone → token
   mapping, 2px/offset-2 focus, density geometry, overlay transparency, and the
   `tabular-nums` invariant last.
-- Fonts self-hosted: Manrope (woff2 + OFL from HubVoice) in `static/fonts`;
+- Fonts self-hosted: Manrope (woff2 + OFL) in `static/fonts`;
   IBM Plex Mono 400/500/600 latin from `@fontsource/ibm-plex-mono` (OFL copied to
   `static/fonts/IBMPlexMono-LICENSE.txt`).
 - `transport.ts`: `TauriTransport` (listen `core` → hold → `invoke('core_state')`
@@ -53,7 +53,7 @@ decisions), DESIGN.md (7542561, the 17 amendments), `research/tauri-windows.md`,
   10 dial specimens, the toast stack, every page of every panel, the disk
   collector-error panel and a stale panel), `data-gallery-ready`, `?surface=`.
 
-### Tauri shell — `app/src-tauri/` (tauri 2.11.5, Cargo.lock from HubVoice)
+### Tauri shell — `app/src-tauri/` (tauri 2.11.5)
 
 - `core.rs`: sidecar via `tauri-plugin-shell` from Rust only (no `shell:*`
   capability), supervised with 250 ms → 10 s backoff, killed on `RunEvent::Exit`;

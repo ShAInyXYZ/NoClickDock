@@ -134,7 +134,7 @@ focusable, decorated-by-us window).
 `set_size()` on a transparent, undecorated WebKitGTK window is clamped to the
 webview's natural size. Measured: rail asked 64×260 → got 211×260; toast
 asked 260×60 → 260×366; panel asked 360×300 → 360×366. `set_size()`
-afterwards changes nothing. The same fix as the sibling apps works
+afterwards changes nothing. The usual fix works
 (measured: exact sizes, grow and shrink, survives hide/show):
 
 ```rust
@@ -165,7 +165,7 @@ pub fn fit(window: &tauri::WebviewWindow, width: i32, height: i32) -> tauri::Res
 }
 ```
 
-A sibling app also notes that WebKitGTK can leave stale pixels on the
+WebKitGTK can also leave stale pixels on the
 transparent surface when DOM content is removed: always shrink the window to
 the content rather than leaving transparent slack.
 
@@ -179,7 +179,7 @@ these held their position (checked again 300–400 ms later):
 - `show()`, then `set_position()` immediately.
 
 Rule for every reveal: `fit()` → `set_position(PhysicalPosition)` → `show()`
-(Windows: `win::show`, below). The sibling app additionally re-applies the placement
+(Windows: `win::show`, below). Re-apply the placement
 60 ms after the map (`gtk::glib::timeout_add_local_once`); cheap insurance,
 recommended for the panel.
 
@@ -231,8 +231,7 @@ and do all geometry in Rust as `css × ui_scale`:
 - Linux initial value: `gtk-xft-dpi / 1024 / 96` (1.5 here), read with
   `gtk::Settings::default().unwrap().gtk_xft_dpi()` on the main thread.
 - Confirm after the first `fit()`+`show()`: the page reports `innerWidth`,
-  Rust divides the physical inner width by it (the sibling app's
-  `src/lib/window.ts` does exactly this). Re-measure on scale/monitor change.
+  Rust divides the physical inner width by it. Re-measure on scale/monitor change.
 - Windows: `ui_scale = window.scale_factor()` (WebView2 follows per-monitor
   DPI; CSS px = logical px). **docs**
 - Snapshot `width` (ARCHITECTURE.md) is therefore **CSS px**, not Tauri
@@ -497,14 +496,13 @@ Rules:
 - All placement math in **physical px**, inputs in CSS px × `ui_scale`
   (section (a)). Snapshot `width` is CSS px.
 - Run monitor queries on the main thread (`app.run_on_main_thread`): Tauri
-  converts GDK monitor properties on the caller thread (the sibling app
-  `desktop.rs:68`).
+  converts GDK monitor properties on the caller thread.
 - A hot-plug can briefly report an empty work area — keep the last valid one
-  when `work_area().size` is 0 (the sibling app's `desktop.rs:120`).
+  when `work_area().size` is 0.
 - Work area changes (panel autohide, monitor add/remove, scale change): watch
   `GdkMonitor` `workarea`/`geometry`/`scale-factor` notifies and
   `monitors-changed`, coalesced with a 150 ms one-shot timer, then re-clamp
-  the rail and re-place any open panel (the sibling app's `observe_monitors`). On
+  the rail and re-place any open panel. On
   Windows, `WM_DISPLAYCHANGE`/`WM_SETTINGCHANGE(SPI_SETWORKAREA)` via a
   subclass, or simply re-clamp on `ScaleChanged` + every panel open.
 - Persist the rail position as `{monitor name, edge, offset along edge}`
@@ -554,12 +552,12 @@ fn dial_menu(window: tauri::WebviewWindow, widget: String, items: Vec<(String, S
 Page side: `contextmenu` → `preventDefault()` → `invoke('dial_menu', …)`.
 Measured: GTK menu opens at the pointer on the non-focusable rail,
 `_NET_ACTIVE_WINDOW` unchanged while open and after Escape; no menu event is
-emitted on dismissal. The menu is themed by GTK (not Cerveau) — acceptable
+emitted on dismissal. The menu is themed by GTK (not by our tokens) — acceptable
 per DESIGN.md.
 
 ### Tray
 
-- Cargo feature `tray-icon`; `TrayIconBuilder::with_id("ncd").icon(app.default_window_icon().unwrap().clone()).menu(&menu).show_menu_on_left_click(false)` (the sibling app's `desktop.rs:tray`).
+- Cargo feature `tray-icon`; `TrayIconBuilder::with_id("ncd").icon(app.default_window_icon().unwrap().clone()).menu(&menu).show_menu_on_left_click(false)`.
 - **Linux, proven**: the icon registered with the StatusNotifierWatcher as
   `/org/ayatana/NotificationItem/tray_icon_tray_app_<id>`. Runtime needs
   `libayatana-appindicator3.so.1` (present here) and a host for

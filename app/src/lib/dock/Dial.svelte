@@ -5,7 +5,7 @@
   import Readout from "./Readout.svelte";
   import type { Side } from "./side";
 
-  // One widget on the rail, after DeadWhispr's microphone: a machined rim, a
+  // One widget on the rail: a machined rim, a
   // recess cut into it holding the widget's mark in monochrome, and a square
   // lamp set into the bezel at 45°. Only a problem (crit) or work in
   // progress (busy) draws a ring; a healthy dial never moves. A widget the

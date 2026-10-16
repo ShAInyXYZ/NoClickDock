@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Tone } from "$lib/protocol";
 
-  // Cerveau's segmented level meter, filling its column: 3px segments 2px
+  // A segmented level meter, filling its column: 3px segments 2px
   // apart, drawn as integer SVG rects with crisp edges — spans at fractional
   // x snap to 3 or 4 device pixels and the meter looks uneven. Lit segments
   // are ink; only a warn or crit tone from the core colours them.

@@ -1,6 +1,6 @@
 # NCD 2 — architecture
 
-NoClickDock is rewritten on the Cerveau / HubVoice stack: a **Go** core that
+NoClickDock 2 is three parts: a **Go** core that
 knows everything, a thin **Tauri 2** shell that owns windows, and a
 **Svelte 5** interface that draws it. One process tree, one install, the same
 code on Linux and Windows.
@@ -154,7 +154,7 @@ core/                     Go module (module path github.com/ShAInyXYZ/NoClickDoc
   internal/sys/           exec with timeouts (hidden console on Windows), paths, fmt helpers
   internal/widgets/<name> one package per widget: collect(), snapshot(), actions(), mock()
 app/                      Tauri 2 + SvelteKit (adapter-static), pnpm
-  src/lib/tokens.css      Cerveau tokens (see DESIGN.md)
+  src/lib/tokens.css      design tokens (see DESIGN.md)
   src/lib/transport.ts
   src/lib/blocks/*.svelte one renderer per block kind
   src/lib/marks.ts        the monochrome brand marks (paths from the Python widgets)

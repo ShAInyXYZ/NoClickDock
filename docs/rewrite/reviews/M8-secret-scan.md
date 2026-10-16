@@ -31,36 +31,23 @@ Tailscale keys, JWTs, bearer tokens.
 | e-mail | only `noreply@anthropic.com` (co-author lines) and `example.org`. Author/committer metadata is the user's public address, as on main. |
 | container names | 40 lines, all product names or ordinary words that happen to be container names here (e.g. `portainer`). None is a private name. |
 | images (104 blobs: icons, fonts, screenshots, evidence) | No PNG `tEXt`/`iTXt`/`zTXt`/`eXIf` chunks at all. SVGs contain no paths or names. Every screenshot I opened shows the mock data ("invented data"; RTX 4090 / Ryzen 9 7950X mock hardware, not this machine's). The power report shots use the invented 25-day test log. |
-| **the user's other project names** | **HubVoice** (24 lines), **DeadWhispr** (10), **Cerveau-Hub** (8) — see must-fix |
+| the user's other project names | 42 lines in the tree and in branch history — **fixed**, see below |
 
 Also clean: the **HEAD tree** (413 files) contains none of the tailnet,
 host or IP values above.
 
-## MUST-FIX (if those projects are private)
+## Fixed before the push
 
-1. **Names of the user's non-public projects appear in the tree and in
-   branch history.**
-   - `gh repo list ShAInyXYZ` shows `Cerveau` public, but no HubVoice,
-     DeadWhispr or Cerveau-Hub.
-   - In the HEAD tree (12 files):
-     - `DESIGN.md` lines 7–8, 55, 78, 262 (`../DeadWhispr2`,
-       `../Cerveau-Hub/HubVoice` paths);
-     - `docs/rewrite/ARCHITECTURE.md:3`;
-     - `docs/rewrite/design/README.md`;
-     - `docs/rewrite/design/reference.css:14` and `docs/rewrite/design/shoot.mjs` (relative paths);
-     - `app/src-tauri/src/dock.rs:477`;
-     - `app/src-tauri/src/overlay.rs:152`;
-     - `app/src/lib/dock/Dial.svelte:8`;
-     - `docs/rewrite/reviews/M1-exec.md`.
-   - My own files (`research/tauri-windows.md`, `reviews/M2-research-r1.md`,
-     `-r2.md`) are scrubbed in the working tree (now "the sibling app");
-     main commits them.
-   - Fix: replace them with neutral words in the tree.
-   - History: the branch has not been pushed (there is no
-     `origin/rewrite/tauri-go-svelte`). A **squash merge** into main
-     publishes only the final tree. Pushing the branch as is would publish
-     the old lines. Rewriting it before a push is main's call.
-   - If these names are meant to be public, drop this item.
+1. **Names of the user's other projects appeared in the tree and in branch
+   history** (code comments, DESIGN.md, the design workbench, review notes,
+   and relative paths outside the repository in `reference.css` and
+   `shoot.mjs`).
+   - The tree now names none of them: the comments and docs describe the
+     design on its own terms, `reference.css` loads Manrope from
+     `app/static/fonts`, and `shoot.mjs` finds Playwright in the project or
+     `$NCD_PLAYWRIGHT`.
+   - History: the branch was never pushed. It lands on main as one squashed
+     commit, so only the clean tree is published.
 
 ## Pre-existing in main's history (report only, nothing rewritten)
 

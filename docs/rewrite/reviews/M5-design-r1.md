@@ -30,11 +30,11 @@ Edge cases were rendered by the real writer in a throwaway scratch test
 
 ## MUST-FIX
 
-1. **The power report is not in the Cerveau identity, and it uses refused
+1. **The power report is not in the dock's identity, and it uses refused
    patterns.** The page opens from the menu and a user reads it
    (`shots/M5/report-top.png`).
    - Wrong identity:
-     - it is the old Emberdeck palette (`#0e0d0b`, amber `#e8873a`);
+     - it is the old palette (`#0e0d0b`, amber `#e8873a`);
      - its fonts are Inter and JetBrains Mono, which are not bundled, so it
        renders in DejaVu here;
      - GPU is green and CPU is blue.

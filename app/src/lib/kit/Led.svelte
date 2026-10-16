@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Tone } from "$lib/protocol";
 
-  // A square TP-7 lamp (Cerveau's Dot). Colour alone never carries meaning:
+  // A square TP-7 lamp. Colour alone never carries meaning:
   // every lamp has its words somewhere on the same surface. Size is --led.
   let { tone }: { tone?: Tone } = $props();
 </script>

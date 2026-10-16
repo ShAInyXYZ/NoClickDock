@@ -12,7 +12,7 @@
   // that has options. Nothing applies until Save: the draft is compared
   // with the config it started from, only what changed is sent, and the core
   // — which owns config.json — validates it and names the field it refuses.
-  // The window chrome is ours (a Cerveau title bar); the gallery shows the
+  // The window chrome is ours (our own title bar); the gallery shows the
   // same component with an invented config and no window.
 
   interface Saved { ok: boolean; field?: string; message?: string }
@@ -486,7 +486,7 @@
   }
   svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 
-  /* Cerveau's title bar: the drag region, the name, minimise and close. */
+  /* The title bar: the drag region, the name, minimise and close. */
   .Settings-bar {
     flex: none;
     display: flex;

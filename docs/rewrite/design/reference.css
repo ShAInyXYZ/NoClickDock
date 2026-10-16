@@ -1,17 +1,17 @@
 /* ============================================================================
    NCD 2 — reference prototype stylesheet
    ----------------------------------------------------------------------------
-   Load order: tokens.css (Cerveau, verbatim) → this file.
+   Load order: tokens.css → this file.
    Every block below is one Svelte component; the executor lifts a block into
    the component's <style> and replaces the data-* attributes with props.
-   Never retype a hex value here: everything resolves to a Cerveau token or to
+   Never retype a hex value here: everything resolves to a tokens.css token or to
    one of the NCD tokens declared in the first block.
    ============================================================================ */
 
 /* ---- fonts: self-hosted, OFL. The app copies these into app/static/fonts. */
 @font-face {
   font-family: 'Manrope Variable';
-  src: url('../../../../Cerveau-Hub/HubVoice/static/fonts/manrope-latin-wght-normal.woff2') format('woff2');
+  src: url('../../../app/static/fonts/manrope-latin-wght-normal.woff2') format('woff2');
   font-weight: 200 800; font-style: normal; font-display: block;
 }
 @font-face {
@@ -31,7 +31,7 @@
 }
 
 /* ============================================================================
-   NCD TOKENS — the only additions to Cerveau's set (DESIGN.md "Tokens").
+   NCD TOKENS — the only additions to tokens.css (DESIGN.md "Tokens").
    ============================================================================ */
 :root {
   /* dial geometry — normal density. Compact and large override below. */
@@ -83,7 +83,7 @@ body { font-variant-numeric: tabular-nums; }
 }
 
 /* ============================================================================
-   Led.svelte — square TP-7 lamp (Cerveau kit Dot, 6px, radius 1px)
+   Led.svelte — square TP-7 lamp (6px, radius 1px)
    ============================================================================ */
 .Led {
   display: inline-block; flex: none;
@@ -294,7 +294,7 @@ body { font-variant-numeric: tabular-nums; }
 .Panel-tabs { padding: 0 var(--inset) 12px; }
 
 /* ============================================================================
-   Segmented.svelte — Cerveau kit toggle bank, hover-to-switch (180 ms)
+   Segmented.svelte — toggle bank, hover-to-switch (180 ms)
    ============================================================================ */
 .Segmented {
   display: inline-flex; gap: 2px; padding: 2px;
@@ -385,7 +385,7 @@ body { font-variant-numeric: tabular-nums; }
 .Row-actions:empty { display: none; }
 
 /* ============================================================================
-   PillButton.svelte — Cerveau pill, 24px, mono lowercase. Two-step when it
+   PillButton.svelte — pill, 24px, mono lowercase. Two-step when it
    carries `confirm`: first click arms (label → confirm text), second sends.
    ============================================================================ */
 .PillButton {
@@ -426,7 +426,7 @@ body { font-variant-numeric: tabular-nums; }
 }
 /* Both labels occupy the same grid cell; the one not showing is hidden, so the
    pill is always as wide as the longer of `label` and `confirm`. Arming never
-   moves the row's value. (Never name a part `.label`: Cerveau's tokens.css
+   moves the row's value. (Never name a part `.label`: tokens.css
    has a global `.label` utility — uppercase, .22em — that would win.) */
 .PillButton { display: inline-grid; place-items: center; }
 .PillButton > span { grid-area: 1 / 1; }
@@ -464,7 +464,7 @@ body { font-variant-numeric: tabular-nums; }
 .Alert-actions { grid-column: 3; grid-row: 1; display: flex; gap: 4px; }
 
 /* ============================================================================
-   Meter.svelte / Limit.svelte — Cerveau segmented level meter
+   Meter.svelte / Limit.svelte — segmented level meter
    3px segments, 2px gap, fills its column; lit in the tone, unlit --line2.
    ============================================================================ */
 .Meter, .Limit {

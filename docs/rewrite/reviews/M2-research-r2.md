@@ -16,7 +16,7 @@ single-panel build `fde7211` ran under the same conditions.
 | S1 | 1×1 input pixel on parked windows | **Fixed** (`overlay::pass_through`, an empty GDK input shape). At a parked panel's corner pixel the pointer now reaches the desktop; the `fde7211` build's parked panel and toast still took it there. |
 | S2 | toast starvation / backlog | Done (`toast.rs`): the newest 3 waiting per widget, 30 s staleness, and a stack that receives no new items while another widget waits. Checked by reading the code; the rotation reasoning holds for the orderings I traced. |
 | S3 | `placing` counter drift | Done: a 400 ms deadline replaces the counter. |
-| S4 | `_GTK_WORKAREAS` not notified | Done: x11rb watcher on its own connection and thread, hands off to the main thread, 150 ms coalescing (a port of the sibling app's). Not runtime-tested: Xvfb has no window manager whose work areas GDK would trust. |
+| S4 | `_GTK_WORKAREAS` not notified | Done: x11rb watcher on its own connection and thread, hands off to the main thread, 150 ms coalescing. Not runtime-tested: Xvfb has no window manager whose work areas GDK would trust. |
 | S5 | Windows display/work-area observer | Still `ScaleFactorChanged` only; stays an M7 item. |
 | S6 | URL prefix test | Done: `url` crate, http/https only, host required, no userinfo, no control characters or spaces; unit test covers `file:`, `javascript:`, userinfo, whitespace, `\n`, BEL, `ftp:`, `smb:`, empty. |
 | S7 | toasts while the dock is hidden | Done: they wait (`toast::set_dock_hidden`). |

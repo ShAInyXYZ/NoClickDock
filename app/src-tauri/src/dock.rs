@@ -474,7 +474,7 @@ fn queue_replace(app: &AppHandle) {
 }
 
 /// Mutter keeps each monitor's work area in the root window's
-/// `_GTK_WORKAREAS_D<n>` without always telling GDK (HubVoice learnt this):
+/// `_GTK_WORKAREAS_D<n>` without always telling GDK:
 /// a top bar or a dock that changes size would leave the rail where it was.
 /// A connection of our own watches the root's properties on a thread of its
 /// own and hands every relevant change to the main thread. It changes no

@@ -47,7 +47,7 @@ labels were right. The defects:
 14. **An idle mark looked alive.** → Idle mark is `--dim`. *(A15)*
 15. **A 6px lamp was heavy on a 32px compact dial.** → 5px. *(A5)*
 
-Found while fixing: a pill part named `.label` inherited Cerveau's global
+Found while fixing: a pill part named `.label` inherited tokens.css's global
 `.label` utility (uppercase, 0.22em) and every pill shouted
 `RESTART STOP`. → Renamed the parts. *(A16)* Also, alert meta truncated
 the words that matter (`unhealthy · 3 checks fa…`). → Meta budget

@@ -1,5 +1,5 @@
 /* ============================================================================
-   CERVEAU — design tokens
+   NOCLICKDOCK — design tokens
    Aesthetic: TP-7 / Japanese old-school-modern · minimalist industrial ·
    Scandinavian. Monochrome surfaces, ONE signal accent, hairlines, mono labels
    with numeric tags, generous negative space, mechanical precision.
@@ -275,7 +275,7 @@ body {
 /* ============================================================================
    NOCLICKDOCK — additions (DESIGN.md "Tokens", lifted from the reference
    prototype, docs/rewrite/design/reference.css). Everything above is
-   Cerveau's tokens.css, verbatim.
+   docs/rewrite/design/tokens.css, verbatim.
    ============================================================================ */
 :root {
   /* dial geometry at normal density; compact and large override in ncd.css */

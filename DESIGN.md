@@ -1,12 +1,11 @@
 # NoClickDock — interface contract
 
-NCD 2 wears **Cerveau's identity**. Visual authority, in order:
-`../Cerveau/panel/src/tokens.css` (palette, type, spacing, radius, depth,
-motion), Cerveau's kit (`kit/Dot.svelte` square LEDs, `kit/Meter.svelte`
-segmented level meters, `kit/Segmented.svelte`, `kit/Panel.svelte` printed
-header strips, `kit/Button.svelte` pills), DeadWhispr / HubVoice's **inset
-circular dial** (`../DeadWhispr2`, `../Cerveau-Hub/HubVoice`), then this file.
-Where they disagree, this file wins for NCD.
+Visual authority, in order: `app/src/lib/tokens.css` (palette, type,
+spacing, radius, depth, motion), the kit in `app/src/lib/kit/` (`Led.svelte`
+square lamps, `Seg.svelte` segmented level meters, `Segmented.svelte`,
+`PillButton.svelte` pills), the **inset circular dial**
+(`app/src/lib/dock/Dial.svelte`), then this file. Where they disagree, this
+file wins.
 
 The **reference prototype** — `docs/rewrite/design/reference.html` +
 `reference.css`, shots in `docs/rewrite/reviews/shots/reference-*.png` — is
@@ -14,7 +13,7 @@ this contract drawn. Its CSS is organised by the Svelte component names and
 its geometry is binding; lift it rather than re-derive it. The rationale for
 each rule marked (A*n*) is in `docs/rewrite/design/amendments.md`.
 
-The aesthetic is Cerveau's: TP-7 / Japanese old-school-modern, minimalist
+The aesthetic: TP-7 / Japanese old-school-modern, minimalist
 industrial. Monochrome surfaces, one signal accent, hairlines, printed mono
 labels, mechanical precision, generous negative space.
 
@@ -30,8 +29,8 @@ lives on lamps only — never on bars or text (A6).
 
 ## Tokens
 
-Copy `tokens.css` from Cerveau verbatim into `app/src/lib/tokens.css`, keeping
-its comments; NCD adds only the tokens below. Never retype a hex value in a
+`app/src/lib/tokens.css` is `docs/rewrite/design/tokens.css` verbatim, comments
+included; NCD adds only the tokens below. Never retype a hex value in a
 component.
 
 | token | value | use |
@@ -51,10 +50,10 @@ section meta, stats keys, reset times, row subs, footer text). `--faint` is
 only for what nobody needs to read: grip dots, `·` separators, the footer
 freshness stamp, unlit or idle lamps.
 
-Fonts: **Manrope Variable** (self-hosted woff2 + OFL licence, copied from
-HubVoice's `static/fonts`) for all prose and names; **IBM Plex Mono** for
+Fonts: **Manrope Variable** (self-hosted woff2 + OFL licence, in
+`app/static/fonts`) for all prose and names; **IBM Plex Mono** for
 every number, readout, label and tag — self-host it too (OFL), do not rely on
-a system install. Type sizes are Cerveau's five roles only: **9.5 / 11.5 /
+a system install. Type sizes are five roles only: **9.5 / 11.5 /
 13 / 15 / 21 px** — no 12 or 12.5 anywhere (A1). `tabular-nums` on every
 number.
 
@@ -75,7 +74,7 @@ A floating capsule, vertical by default, horizontal on request.
   Drag anywhere on the rail body that is not a dial to move it. Snaps to the
   nearest screen edge within 24px.
 - **Slot** = dial + 4px + readout line (12px), 8px between slots (A13).
-- **Dial** (one per widget), after DeadWhispr's microphone: an outer
+- **Dial** (one per widget): an outer
   machined rim (4px, `--s2`, `--elev-1`) and an inset recess (32px at 40,
   `--bg`, `inset 0 2px 4px rgba(0,0,0,.5)`), the widget's **mark in
   monochrome** (18px box at 40; `--muted`, `--text` on hover; `--dim` when
@@ -162,12 +161,12 @@ One surface, no nested cards.
   colour only for `warn`/`crit`).
 - **Actions** (A7): ghost pills at rest (transparent body, 1px `--line`
   outline, `--dim` ink, 24px tall, mono 11.5 lowercase); on row hover or
-  `:focus-within` they take the Cerveau pill body (`--s2`, `--line2`,
+  `:focus-within` they take the pill body (`--s2`, `--line2`,
   `--muted`). A pill's width is the larger of `label` and `confirm` (both in
   one grid cell, the inactive one `visibility:hidden`), so arming never moves
   the row. Armed = confirm label, `--accent-soft` fill, `--accent` ink
   (`--err` for `danger`), no countdown ornament.
-- **Meter** (A6): label · Cerveau segmented level meter (3px segments, 2px
+- **Meter** (A6): label · segmented level meter (3px segments, 2px
   gap, fills the column, drawn as an SVG of integer rects with
   `shape-rendering: crispEdges`) · value in mono. Lit segments are `--muted`
   when the tone is `ok` or absent, `--warn`/`--err` only for warn/crit;
@@ -258,10 +257,9 @@ for the widget whose panel is open is dropped — the panel already says it
 
 ## Settings
 
-A separate, decorated-by-us window (Cerveau title bar with drag region,
-minimise/close), 560 × 680, in the DeadWhispr 2 settings layout: section
-headings in Manrope 15/600, fields 38px with `--r` corners, Cerveau
-`Select`, pill buttons, Save / Discard footer. Sections: **Widgets** (on/off
+A separate, decorated-by-us window (our title bar with drag region,
+minimise/close), 560 × 680: section headings in Manrope 15/600, fields 38px
+with `--r` corners, a custom `Select`, pill buttons, Save / Discard footer. Sections: **Widgets** (on/off
 switch and order per widget, one row each, with its mark), **Dock**
 (orientation, density, readouts on/off, edge), **Start** (launch at login),
 then one section per widget that has options (Tailscale watch list, Power

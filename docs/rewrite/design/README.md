@@ -7,8 +7,8 @@ reviews cite it.
 | file | what it is |
 |---|---|
 | `reference.html` + `reference.css` | High-fidelity static reference: the rail (every dial state, compact, horizontal, healthy), Docker, Power, Claude, Tailscale-empty and Disk-error panels, a toast stack, and the hover choreography drawn to scale. Invented data only. |
-| `tokens.css` | Cerveau's `panel/src/tokens.css`, **byte-for-byte**. `reference.css` adds only the NCD tokens listed at its top. |
-| `fonts/` | IBM Plex Mono 400/500/600 latin woff2 from `@fontsource/ibm-plex-mono` 5.3.0, with `IBMPlexMono-OFL.txt`. Manrope is referenced from `../Cerveau-Hub/HubVoice/static/fonts` (OFL; the app copies both into `app/static/fonts`). |
+| `tokens.css` | The design tokens; `app/src/lib/tokens.css` copies them **byte-for-byte**. `reference.css` adds only the NCD tokens listed at its top. |
+| `fonts/` | IBM Plex Mono 400/500/600 latin woff2 from `@fontsource/ibm-plex-mono` 5.3.0, with `IBMPlexMono-OFL.txt`. Manrope is referenced from `app/static/fonts` (OFL). |
 | `amendments.md` | Proposed changes to DESIGN.md (A1–A17), each with its reason and evidence. Main decides. |
 | `iterations.md` | The prototype's self-critique rounds: what was wrong, and the fix. |
 | `evidence/` | A/B crops the amendments cite. |
@@ -24,13 +24,13 @@ page's script.
 
 ## Viewing the reference
 
-The Manrope URL points at the sibling `Cerveau-Hub` checkout, so serve the
-GitHub directory, not this folder, and never over `file://` (Chromium
-blocks `file://` fonts):
+The Manrope URL points into `app/static/fonts`, so serve the repository
+root, not this folder, and never over `file://` (Chromium blocks `file://`
+fonts):
 
 ```bash
-python3 -m http.server 1431 --bind 127.0.0.1 --directory ~/Documents/GitHub
-# open http://127.0.0.1:1431/NoClickDock/docs/rewrite/design/reference.html
+python3 -m http.server 1431 --bind 127.0.0.1 --directory .
+# open http://127.0.0.1:1431/docs/rewrite/design/reference.html
 ```
 
 ## How I run the app for a review
@@ -108,10 +108,9 @@ This reports 0 findings on every surface and 0 console errors.
   (Manrope, IBM Plex Mono); console errors; text clipped without an
   ellipsis; digits in a proportional face without tabular figures;
   component heights off the 4px grid; elements escaping their surface.
-- Playwright comes from the project, then `$NCD_PLAYWRIGHT`, then
-  `../Cerveau-Hub`. Chromium comes from Playwright, then `$NCD_CHROME`, then
+- Playwright comes from the project, then `$NCD_PLAYWRIGHT`. Chromium comes from Playwright, then `$NCD_CHROME`, then
   the newest `~/.cache/ms-playwright/chromium-*`.
 
 The audit is a floor, not the review. Timings, focus, hover-to-switch, and
-whether it looks like a Cerveau product are checked by hand against
+whether it looks right are checked by hand against
 `reference.html` and DESIGN.md.

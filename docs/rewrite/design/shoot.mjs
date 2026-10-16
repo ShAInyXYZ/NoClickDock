@@ -26,7 +26,7 @@
 //   - <route>?surface=<id> renders only that surface on the --bg canvas
 //
 // Playwright is resolved from: the current project, $NCD_PLAYWRIGHT (a directory
-// containing node_modules/playwright), then ../Cerveau-Hub. Chromium from
+// containing node_modules/playwright). Chromium from
 // $NCD_CHROME, else Playwright's own, else the newest ~/.cache/ms-playwright/chromium-*.
 
 import fs from 'node:fs';
@@ -66,7 +66,6 @@ function loadPlaywright() {
   const tries = [
     process.cwd(),
     process.env.NCD_PLAYWRIGHT,
-    path.resolve(here, '../../../../Cerveau-Hub'),
   ].filter(Boolean);
   for (const dir of tries) {
     try { return createRequire(path.join(dir, 'package.json'))('playwright'); } catch {}

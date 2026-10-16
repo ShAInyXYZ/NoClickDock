@@ -34,7 +34,7 @@ against this verdict.
 
 ## What passes
 
-- **Tokens:** `tokens.css` is byte-for-byte Cerveau, followed by the NCD block.
+- **Tokens:** `tokens.css` is byte-for-byte the design tokens, followed by the NCD block.
   The focus override, tone map, density geometry and the tabular-nums
   invariant come last. No off-role font size anywhere (the DOM holds only
   9.5, 11.5, 13, 15 and 21 px).

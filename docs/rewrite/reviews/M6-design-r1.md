@@ -17,7 +17,7 @@ Shots are in `shots/M6/`.
 - Sections in DESIGN order: Widgets (mark, name, reorder arrows, switch;
   the ends' arrows dimmed), Dock, Start, Tailscale, Power, ComfyUI.
 - Headings are Manrope 15/600, and fields are 38 px with `--r` corners.
-- The segmented controls are the raised key. Selects are Cerveau, not
+- The segmented controls are the raised key. Selects are the custom one, not
   native. Numbers and hosts are in mono. Hints sit inline after labels
   (`where the rail sits`, `W, once for all`).
 - The Save / Discard footer is tied to the state:

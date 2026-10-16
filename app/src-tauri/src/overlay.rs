@@ -149,7 +149,7 @@ pub fn reveal(window: &WebviewWindow, position: PhysicalPosition<i32>) -> tauri:
     window.show()?;
     #[cfg(target_os = "linux")]
     {
-        // Insurance, as HubVoice learnt: the window manager may still move a
+        // Insurance: the window manager may still move a
         // freshly mapped window; put it back once it is on screen.
         let window = window.clone();
         gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(60), move || {

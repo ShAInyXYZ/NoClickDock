@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Select } from "bits-ui";
 
-  // Cerveau's select on bits-ui: a 38px trigger in the field style, a menu
+  // A select on bits-ui: a 38px trigger in the field style, a menu
   // on the floating surface — never the browser's own <select>.
   interface Option { value: string; label: string }
   let {

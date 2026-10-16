@@ -12,7 +12,7 @@ Branch `rewrite/tauri-go-svelte`. Commits:
 ## Settings
 
 - **Window:** made on demand, never at start, and destroyed on close.
-  - 560 × 680, undecorated, with our Cerveau title bar: drag region,
+  - 560 × 680, undecorated, with our own title bar: drag region,
     minimise, close.
   - It runs in the rail's web process, so it costs no extra process.
   - Opened from the tray, the rail's and the dials' menus, and

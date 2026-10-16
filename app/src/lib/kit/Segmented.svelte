@@ -2,7 +2,7 @@
   import type { Tone } from "$lib/protocol";
   import Led from "./Led.svelte";
 
-  // Cerveau's toggle bank as the panel's page tabs. Hovering a segment for
+  // A toggle bank as the panel's page tabs. Hovering a segment for
   // 180 ms switches to it — reading never needs a click — and a click works
   // too. The selected segment is a raised key, not a cherry block: a tab
   // carries a problem's lamp and count, which a cherry fill would drown.

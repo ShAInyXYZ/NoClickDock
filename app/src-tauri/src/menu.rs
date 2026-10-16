@@ -1,6 +1,6 @@
 //! The native menus (DESIGN.md "Right-click and tray"): a dial's
 //! right-click, the rail's own right-click, and the tray. They are secondary
-//! surfaces, so they are the system's menus, not Cerveau's.
+//! surfaces, so they are the system's menus, not ours.
 //!
 //! Menu ids are namespaced: `refresh:<widget>`, `item:<widget>:<id>`,
 //! `dock:<setting>:<value>`, `app:<verb>`. A widget item is looked up in its

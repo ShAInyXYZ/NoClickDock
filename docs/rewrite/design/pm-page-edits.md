@@ -1,9 +1,9 @@
-# Power page (the HTML the core writes to PM-Log): port to the Cerveau identity
+# Power page (the HTML the core writes to PM-Log): port to the dock's identity
 
 This is a single pass over `core/internal/widgets/power/report_template.html`,
 and the layout stays as it is.
 
-- Result on the invented 25-day log: `evidence/report-cerveau.png`.
+- Result on the invented 25-day log: `evidence/report-after.png`.
 - Before: `evidence/report-before.png`.
 
 All 30 edits below were applied to a generated page in scratch. That leaves

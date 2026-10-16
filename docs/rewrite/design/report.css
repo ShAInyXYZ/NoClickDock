@@ -1,8 +1,8 @@
-/* NoClickDock power report — Cerveau identity. Drop-in for the <style> block
+/* NoClickDock power report. Drop-in for the <style> block
    of core/internal/widgets/power/report_template.html (see pm-page-edits.md).
    Same class names as the template; the markup changes are listed there.
 
-   Rules: the Cerveau surfaces and inks; Manrope for prose, IBM Plex Mono for
+   Rules: the dock's surfaces and inks; Manrope for prose, IBM Plex Mono for
    figures; sections on the page itself, separated by hairlines, never boxed;
    charts on a monochrome ramp; a tone only where something needs attention. */
 
@@ -24,7 +24,7 @@
 }
 
 :root {
-  /* Cerveau tokens (docs/rewrite/design/tokens.css) */
+  /* Design tokens (docs/rewrite/design/tokens.css) */
   --bg: #161616; --s1: #1C1C1C; --s2: #242424; --s3: #2B2B2B;
   --line: #2E2E2E; --line2: #3D3D3D;
   --text: #FAFAFA; --muted: #A1A1AA; --dim: #71717A; --faint: #52525B;

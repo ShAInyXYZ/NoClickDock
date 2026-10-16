@@ -94,9 +94,8 @@ are the right regression guard.
    placement).
 4. **GNOME X11 per-monitor work areas may not notify** (`dock.rs:372`). Mutter
    publishes them in `_GTK_WORKAREAS_Dn` without always emitting
-   `GdkMonitor::notify::workarea` (the sibling app's `desktop.rs` watches root
-   `PropertyNotify` with x11rb for exactly this). A top-bar or dock change
-   may not re-place the rail. Port the sibling app's `observe_x11_workareas`.
+   `GdkMonitor::notify::workarea`. A top-bar or dock change may not re-place
+   the rail. Watch the root window's `PropertyNotify` with x11rb instead.
 5. **Windows has no work-area/display observer** (`dock.rs:418`): only
    `ScaleFactorChanged`. A taskbar move or monitor unplug leaves the rail
    where it was. Subclass for `WM_DISPLAYCHANGE` and

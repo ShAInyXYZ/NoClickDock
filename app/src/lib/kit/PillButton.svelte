@@ -2,7 +2,7 @@
   import { actions } from "$lib/actions.svelte";
   import type { Action } from "$lib/protocol";
 
-  // A Cerveau pill that changes the world. With a confirm, the first click
+  // A pill that changes the world. With a confirm, the first click
   // only arms it: the confirm text replaces the label, in the accent (or the
   // error colour for what cannot be undone). Every label shares one grid
   // cell, so the pill is as wide as the longest and arming never moves the
