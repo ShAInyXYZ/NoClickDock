@@ -24,6 +24,12 @@ func render(all []server, other bool, pending, failures, logs map[string]string)
 	now.Blocks = append(now.Blocks, model.Row{Name: "Development servers", Actions: []model.Action{{ID: "refresh", Label: "refresh"}}})
 	running, hidden := 0, 0
 	groups := map[string]string{}
+	icons := map[string]string{}
+	for _, a := range all {
+		if a.Icon != "" && icons[a.Dir] == "" {
+			icons[a.Dir] = a.Icon
+		}
+	}
 	for _, a := range all {
 		if a.Running && a.Dev {
 			running++
@@ -45,7 +51,7 @@ func render(all []server, other bool, pending, failures, logs map[string]string)
 			if !a.Dev {
 				title = "Other services · " + title
 			}
-			page.Blocks = append(page.Blocks, model.Section{Title: title})
+			page.Blocks = append(page.Blocks, model.Section{Title: title, Icon: icons[a.Dir], Initials: projectInitials(a.Name)})
 			if a.Dir != "" {
 				page.Blocks = append(page.Blocks, model.Row{Name: safeText(a.Dir), Mono: true})
 			}

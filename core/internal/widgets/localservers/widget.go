@@ -42,6 +42,7 @@ type backend interface {
 type Widget struct {
 	mu        sync.Mutex
 	backend   backend
+	icons     *iconCache
 	dir       string
 	last      map[string]server
 	history   map[string]server
@@ -53,7 +54,7 @@ type Widget struct {
 }
 
 func New(dir string) *Widget {
-	return &Widget{backend: newBackend(), dir: filepath.Join(dir, "local-servers"), last: map[string]server{}, history: map[string]server{}, pending: map[string]string{}, failures: map[string]string{}, logText: map[string]string{}}
+	return &Widget{backend: newBackend(), icons: newIconCache(), dir: filepath.Join(dir, "local-servers"), last: map[string]server{}, history: map[string]server{}, pending: map[string]string{}, failures: map[string]string{}, logText: map[string]string{}}
 }
 func (*Widget) Meta() hub.Meta        { return meta }
 func (w *Widget) SetRefresh(f func()) { w.mu.Lock(); w.refresh = f; w.mu.Unlock() }
@@ -147,6 +148,11 @@ func (w *Widget) Collect(ctx context.Context) (model.Snapshot, error) {
 	rows := make([]server, 0, len(current))
 	for _, s := range current {
 		rows = append(rows, s)
+	}
+	if w.icons != nil {
+		sortServers(rows)
+		// Show completed icons on the normal poll, without extra process scans.
+		w.icons.decorate(rows, w.backend.Verify, nil)
 	}
 	return render(rows, w.showOther, w.pending, w.failures, w.logText), nil
 }

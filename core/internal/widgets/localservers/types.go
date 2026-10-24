@@ -30,6 +30,7 @@ func (e endpoint) URL() string { return "http://" + net.JoinHostPort(e.Host, fmt
 
 type server struct {
 	Key, Name, Dir, Runtime, Protected, Unit, Invocation, RestartReason, Registration string
+	Icon                                                                              string
 	Proc                                                                              process
 	Endpoints                                                                         []endpoint
 	Dev, Running                                                                      bool

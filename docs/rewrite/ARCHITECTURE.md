@@ -229,3 +229,7 @@ Settings window. They use the existing block/action components and the hub's
 exact snapshot-action argument checks. A row's optional `nameAction` makes its
 name a keyboard-accessible shortcut; URL shortcuts still resolve through the
 snapshot menu, never a frontend-supplied URL or command.
+
+Section blocks may include `icon` (a backend-validated image data URL) and
+`initials` (the image fallback). Their fixed-size slot preserves layout while
+images load; the webview never fetches project icons over the network.

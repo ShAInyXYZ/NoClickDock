@@ -13,7 +13,7 @@ export interface Action {
   args?: Record<string, string>;
 }
 
-export interface SectionBlock { kind: "section"; title: string; meta?: string; tone?: Tone }
+export interface SectionBlock { kind: "section"; title: string; meta?: string; tone?: Tone; icon?: string; initials?: string }
 export interface RowBlock {
   kind: "row"; name: string; sub?: string; value?: string; tone?: Tone; led?: Tone; mono?: boolean; nameAction?: Action; actions?: Action[];
 }

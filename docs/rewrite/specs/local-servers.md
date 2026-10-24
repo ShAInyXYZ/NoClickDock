@@ -119,3 +119,26 @@ Launch registration and missing-launch explanations live in Settings → Local
 Servers, including stopped servers. The private-file editor workflow and
 identity checks are unchanged. Registration requires the existing second click;
 commands are never copied into the snapshot or settings window.
+
+## Project icons
+
+The trusted backend fetches a running development server's HTML, resolves up to
+three `<link rel="icon">` candidates, then tries `/favicon.ico`. Only the same
+loopback host/port is allowed (including a localhost alias); requests use no
+proxy, cookies, credentials, or external redirects. Listener identity is
+verified before each connection and after downloading. Shared supervisors may
+block process controls while still allowing these read-only requests.
+
+Two workers fetch in the background, with at most sixteen pending jobs, a
+three-second job deadline, and bounded page/image sizes (512 KiB / 64 KiB).
+Scans never wait for network requests. Completed icons appear on the next normal
+poll, without extra process scans. The in-memory cache holds at most 128 entries:
+successes for ten minutes, misses for two. Keys include process identity,
+project directory, and endpoint; NCD restart clears the cache.
+
+Project headings use a fixed 18px icon slot, falling back to two initials while
+loading, on failure, or if the webview cannot decode the image. PNG, JPEG, GIF,
+and ICO are accepted with size checks. SVG is reduced to inert geometry:
+scripts, CSS, text, embedded images, and external references are excluded.
+The webview receives only validated image data URLs, never fetched HTML or a
+remote image URL. Projects with multiple servers share the first available icon.

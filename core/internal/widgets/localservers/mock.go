@@ -11,7 +11,7 @@ type Mock struct{}
 func (Mock) Meta() hub.Meta { return meta }
 func (Mock) Mock(time.Time) model.Snapshot {
 	all := []server{
-		{Key: "4100:1", Name: "studio", Dir: "/home/dev/projects/studio", Runtime: "Vite", Dev: true, Running: true, Unit: "studio-web.service", Proc: process{PID: 4100}, Endpoints: []endpoint{{5173, "127.0.0.1", "1"}}},
+		{Key: "4100:1", Name: "studio", Dir: "/home/dev/projects/studio", Runtime: "Vite", Icon: iconData([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="#447eaa"/><path d="M5 7h14v3H5zm0 7h9v3H5z" fill="#ffffff"/></svg>`)), Dev: true, Running: true, Unit: "studio-web.service", Proc: process{PID: 4100}, Endpoints: []endpoint{{5173, "127.0.0.1", "1"}}},
 		{Key: "4101:1", Name: "studio", Dir: "/home/dev/projects/studio", Runtime: "Uvicorn", Dev: true, Running: true, Proc: process{PID: 4101}, Endpoints: []endpoint{{8000, "127.0.0.1", "2"}}, RestartReason: "Launch arguments, environment and terminal setup are not known. Register a direct launch command."},
 		{Key: "4200:1", Name: "notes", Dir: "/home/dev/projects/notes", Runtime: "Next.js", Dev: true, Proc: process{PID: 4200}, Endpoints: []endpoint{{3000, "127.0.0.1", "3"}}},
 		{Key: "500:1", Name: "PostgreSQL", Runtime: "postgres", Running: true, Protected: "Infrastructure service", Endpoints: []endpoint{{5432, "127.0.0.1", "4"}}},

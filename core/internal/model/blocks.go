@@ -41,9 +41,11 @@ func (bs Blocks) MarshalJSON() ([]byte, error) {
 
 // Section is a printed strip that starts a group: "FILESYSTEMS ....... 4".
 type Section struct {
-	Title string `json:"title"`
-	Meta  string `json:"meta,omitempty"`
-	Tone  Tone   `json:"tone,omitempty"`
+	Icon     string `json:"icon,omitempty"` // sanitized image data URL, never a remote URL
+	Initials string `json:"initials,omitempty"`
+	Title    string `json:"title"`
+	Meta     string `json:"meta,omitempty"`
+	Tone     Tone   `json:"tone,omitempty"`
 }
 
 // Row is a name, an optional quiet line under it, and a right-aligned value.
