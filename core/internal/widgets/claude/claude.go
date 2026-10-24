@@ -1,10 +1,9 @@
-// Package claude watches Anthropic's status page, the plan's limits (from
-// the Claude Code CLI, the only authoritative percent-of-limit) and the
-// local token spend (from Claude Code's transcripts). Parity:
+// Package claude watches Anthropic's status page, plan limits from Claude
+// Code's local quota cache, and token spend from its transcripts. Parity:
 // docs/rewrite/specs/claude.md.
 //
-// The status page is public; the CLI keeps its own login; the transcripts
-// are local files. The core never reads, stores or shows a credential.
+// The status page is public; quota observations and transcripts are local.
+// The core never decodes, stores or shows a credential.
 package claude
 
 import (
@@ -21,11 +20,10 @@ import (
 var meta = hub.Meta{ID: "claude", Title: "Claude", Order: 10, PollSecs: 30}
 
 const (
-	limitsEvery   = 5 * time.Minute
-	limitsTimeout = 45 * time.Second
-	usageEvery    = 2 * time.Minute
+	limitsEvery = 30 * time.Second
+	usageEvery  = 2 * time.Minute
 	// A "Refresh now" asks the slow sources again only if they are older
-	// than this, so hammering it cannot spawn the CLI over and over.
+	// than this, so hammering it cannot rescan files over and over.
 	forceAfter = 10 * time.Second
 )
 
@@ -39,8 +37,9 @@ type Widget struct {
 	// Kept across polls and across a "Refresh now": a refresh never blanks
 	// the limits or the usage (the Python widget did).
 	limits      []limit
-	limitsAt    time.Time // when the rows shown were read
-	limitsAsked time.Time // when the CLI was last asked
+	limitsAt    time.Time // when Claude Code observed the rows, not file read time
+	limitsAsked time.Time // when the cache was last read
+	limitsNote  string
 	limitsBusy  bool
 	usage       *usage
 	usageAt     time.Time
@@ -107,7 +106,7 @@ func (w *Widget) Collect(ctx context.Context) (model.Snapshot, error) {
 	w.mu.Lock()
 	w.dueLimits()
 	w.dueUsage()
-	p := poll{page: page, limits: w.limits, limitsAt: w.limitsAt, usage: w.usage, now: now, reading: w.limitsBusy && w.limitsAt.IsZero()}
+	p := poll{page: page, limits: w.limits, limitsAt: w.limitsAt, usage: w.usage, now: now, limitsNote: w.limitsNote, reading: w.limitsBusy && w.limitsAt.IsZero()}
 	var notices []model.Issue
 	if page.Reached {
 		comps := map[string]string{}
@@ -132,31 +131,30 @@ func (w *Widget) Collect(ctx context.Context) (model.Snapshot, error) {
 	return s, nil
 }
 
-// dueLimits starts the CLI when its reading is five minutes old. An empty
-// answer keeps the rows it had. Called with mu held.
+// dueLimits reads a bounded local file on the widget cadence. Transient
+// read errors keep the previous observation until it expires. Called with mu held.
 func (w *Widget) dueLimits() {
 	if !w.limitsDue(time.Now()) {
 		return
 	}
 	w.limitsBusy, w.limitsAsked = true, time.Now()
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), limitsTimeout+5*time.Second)
-		defer cancel()
-		rows := readLimits(ctx, time.Now())
+		reading := readLimits(limitsPath(), time.Now())
 		w.mu.Lock()
 		w.limitsBusy = false
-		if len(rows) > 0 { // nothing read keeps the rows it had
-			w.limits, w.limitsAt = rows, time.Now()
+		w.limitsNote = reading.note
+		if !reading.keep {
+			w.limits, w.limitsAt = reading.rows, reading.at
 		}
 		refresh := w.refresh
 		w.mu.Unlock()
-		if refresh != nil && len(rows) > 0 {
+		if refresh != nil {
 			refresh()
 		}
 	}()
 }
 
-// limitsDue: five minutes since the CLI was asked — or a window has reset
+// limitsDue: thirty seconds since the cache was read — or a window has reset
 // since the rows were read, which is asked about again at once (no faster
 // than a refresh may): until then it can only be said in words. Called
 // with mu held.

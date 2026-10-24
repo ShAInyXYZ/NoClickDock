@@ -20,51 +20,6 @@ import (
 // Every fixture is invented: no real prompt, project, path or incident.
 var now = time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
 
-func TestLimitsFromTheCLI(t *testing.T) {
-	out, err := os.ReadFile("testdata/usage.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	rows := parseLimits(string(out), now)
-	var got []string
-	for _, r := range rows {
-		got = append(got, fmt.Sprintf("%s %.1f %s", r.Label, r.Pct, r.Resets.UTC().Format(time.RFC3339)))
-	}
-	want := []string{
-		`Session 46.0 2026-09-26T18:30:00Z`,
-		`Week 78.0 2026-09-28T09:00:00Z`,
-		`Week · Fable 23.5 2026-09-28T09:00:00Z`,
-		`Week · Opus 0.0 0001-01-01T00:00:00Z`,
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("limits:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
-	}
-	if parseLimits("Weekly limit: 78% used · resets soon\nnothing here", now) != nil {
-		t.Error("changed wording must not match")
-	}
-
-	// Reset times: with and without minutes or a date, the year rolling over.
-	for raw, want := range map[string]string{
-		"Sep 26, 6:30pm (Etc/UTC)": "2026-09-26T18:30:00Z",
-		"Sep 27, 3pm (Etc/UTC)":    "2026-09-27T15:00:00Z",
-		"11:15pm (Etc/UTC)":        "2026-09-26T23:15:00Z",
-		"9am (Etc/UTC)":            "2026-09-27T09:00:00Z", // already past today
-	} {
-		got, ok := parseReset(raw, now)
-		if !ok || got.UTC().Format(time.RFC3339) != want {
-			t.Errorf("parseReset(%q) = %v %v, want %s", raw, got, ok, want)
-		}
-	}
-	december := time.Date(2026, 12, 30, 12, 0, 0, 0, time.UTC)
-	if got, _ := parseReset("Jan 2, 9am (Etc/UTC)", december); got.Year() != 2027 {
-		t.Errorf("January read in December is next year: %v", got)
-	}
-	rows = parseLimits("Current session: 5% used · resets whenever it likes", now)
-	if len(rows) != 1 || rows[0].Pct != 5 || !rows[0].Resets.IsZero() {
-		t.Errorf("an unreadable reset is left out, the percentage kept: %+v", rows)
-	}
-}
-
 // line is one transcript line as Claude Code writes it (invented content).
 func line(typ, ts, session, msgID, reqID, uuid, model string, in, out, cacheW, cacheR int) string {
 	return fmt.Sprintf(`{"type":%q,"timestamp":%q,"sessionId":%q,"requestId":%q,"uuid":%q,"message":{"id":%q,"model":%q,"role":"assistant","content":[{"type":"text","text":"(invented)"}],"usage":{"input_tokens":%d,"output_tokens":%d,"cache_creation_input_tokens":%d,"cache_read_input_tokens":%d}}}`,
@@ -346,7 +301,7 @@ func TestPanelProblemsFirst(t *testing.T) {
 	// Nothing ran this week, all well: the sentence, no zeros.
 	s = render(poll{page: statuspage.Page{Reached: true, Indicator: "none", Components: page.Components[:1]}, now: now, usage: &usage{}})
 	if got := rows(s.Pages[0].Blocks); !reflect.DeepEqual(got, []string{
-		"# Usage  ", "  (No Claude Code sessions on this machine in the last 7 days.)", "# Services 1 operational ", "  [claude.ai]",
+		"# Usage  ", "  " + limitsMissing, "  (No Claude Code sessions on this machine in the last 7 days.)", "# Services 1 operational ", "  [claude.ai]",
 	}) || s.StateLabel != "operational" || s.Glance.Text != "—" {
 		t.Errorf("empty: %q %q %q", got, s.StateLabel, s.Glance.Text)
 	}
@@ -365,106 +320,6 @@ func TestStatusPageFetchIsPartial(t *testing.T) {
 	p := statuspage.Source{Base: srv.URL, UserAgent: "test", Incidents: "/api/v2/incidents/unresolved.json"}.Fetch(context.Background())
 	if !p.Reached || p.Indicator != "major" || len(p.Components) != 0 || statuspage.State(p) != model.StateCrit {
 		t.Errorf("partial: %+v", p)
-	}
-}
-
-func TestTheCLIIsRunWithAFixedArgv(t *testing.T) {
-	none := func(string) bool { return false }
-	noNode := func() string { return "" }
-	name, prefix := commandWith(`C:\Users\someone\AppData\Roaming\npm\claude.cmd`, none, noNode)
-	if name != "cmd.exe" || !reflect.DeepEqual(prefix, []string{"/d", "/c", `C:\Users\someone\AppData\Roaming\npm\claude.cmd`}) {
-		t.Errorf("npm shim: %q %q", name, prefix)
-	}
-	// The shim's target, run directly: node beside it, else on PATH.
-	shim := filepath.Join("npm", "claude.cmd")
-	cli := filepath.Join("npm", "node_modules", "@anthropic-ai", "claude-code", "cli.js")
-	has := func(set ...string) func(string) bool {
-		return func(p string) bool {
-			for _, s := range set {
-				if p == s {
-					return true
-				}
-			}
-			return false
-		}
-	}
-	if name, prefix := commandWith(shim, has(cli), func() string { return "node" }); name != "node" || !reflect.DeepEqual(prefix, []string{cli}) {
-		t.Errorf("node + cli.js: %q %q", name, prefix)
-	}
-	if name, _ := commandWith(shim, has(cli, filepath.Join("npm", "node.exe")), noNode); name != filepath.Join("npm", "node.exe") {
-		t.Errorf("node beside the shim: %q", name)
-	}
-	// A path cmd.exe would misread is never handed to it.
-	if name, _ := commandWith(`C:\Users\A&B\AppData\Roaming\npm\claude.cmd`, none, noNode); name != "" {
-		t.Errorf("a path with & went to cmd.exe: %q", name)
-	}
-	if name, prefix := command("/home/someone/.local/bin/claude"); name != "/home/someone/.local/bin/claude" || prefix != nil {
-		t.Errorf("native: %q %q", name, prefix)
-	}
-	if name, _ := command(""); name != "" {
-		t.Error("no CLI, nothing to run")
-	}
-}
-
-func TestUsageIsAskedWithoutPersistence(t *testing.T) {
-	if got := usageArgs(nil, true); !reflect.DeepEqual(got, []string{"-p", "/usage", "--no-session-persistence"}) {
-		t.Errorf("native argv %q", got)
-	}
-	shim := []string{"/d", "/c", `C:\Users\someone\AppData\Roaming\npm\claude.cmd`}
-	if got := usageArgs(shim, true); !reflect.DeepEqual(got, append(append([]string{}, shim...), "-p", "/usage", "--no-session-persistence")) {
-		t.Errorf("shim argv %q", got)
-	}
-	if got := usageArgs(nil, false); !reflect.DeepEqual(got, []string{"-p", "/usage"}) {
-		t.Errorf("fallback argv %q", got)
-	}
-	for _, a := range usageArgs(shim, true) {
-		if a == "--bare" {
-			t.Error("--bare skips the login")
-		}
-	}
-}
-
-func TestACLIThatRefusesTheFlagIsAskedOnceWithoutIt(t *testing.T) {
-	answer, err := os.ReadFile("testdata/usage.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	flagRefused.Store(false)
-	defer flagRefused.Store(false)
-	var calls [][]string
-	old := func(_ context.Context, dir string, _ time.Duration, name string, args ...string) (string, string, error) {
-		calls = append(calls, append([]string{dir, name}, args...))
-		for _, a := range args {
-			if a == noPersist {
-				return "", "error: unknown option '--no-session-persistence'\n", fmt.Errorf("claude: error: unknown option '--no-session-persistence'")
-			}
-		}
-		return string(answer), "", nil
-	}
-	if out := askUsage(context.Background(), old, "/home/someone", "claude", nil); out != string(answer) {
-		t.Fatalf("the retry's answer is read: %q", out)
-	}
-	if !reflect.DeepEqual(calls, [][]string{
-		{"/home/someone", "claude", "-p", "/usage", "--no-session-persistence"},
-		{"/home/someone", "claude", "-p", "/usage"},
-	}) {
-		t.Errorf("calls %q", calls)
-	}
-	calls = nil
-	askUsage(context.Background(), old, "/home/someone", "claude", nil)
-	if len(calls) != 1 || len(calls[0]) != 4 {
-		t.Errorf("the refusal is remembered: %q", calls)
-	}
-
-	// Any other failure is not a refusal: no retry, the flag stays.
-	flagRefused.Store(false)
-	calls = nil
-	down := func(_ context.Context, dir string, _ time.Duration, name string, args ...string) (string, string, error) {
-		calls = append(calls, args)
-		return "", "", fmt.Errorf("claude timed out after 45s")
-	}
-	if out := askUsage(context.Background(), down, "/home/someone", "claude", nil); out != "" || len(calls) != 1 || flagRefused.Load() {
-		t.Errorf("a timeout is not a refusal: %q %q", out, calls)
 	}
 }
 
@@ -489,13 +344,13 @@ func TestRefreshKeepsLimitsAndUsage(t *testing.T) {
 	w.limitsAsked = time.Now()
 	w.Force()
 	if w.limitsAsked.IsZero() {
-		t.Error("a second refresh within 10 s does not run the CLI again")
+		t.Error("a second refresh within 10 s does not reread the cache again")
 	}
 }
 
 // DESIGN "time only moves forward": a limit read before its reset shows no
 // percentage and no reset ahead, stays out of the glance, and makes the
-// CLI due again.
+// cache due again.
 func TestAPassedResetIsSaidInWords(t *testing.T) {
 	p := poll{
 		page: statuspage.Page{Reached: true, Indicator: "none"},
@@ -517,13 +372,13 @@ func TestAPassedResetIsSaidInWords(t *testing.T) {
 	}
 	w := &Widget{limits: p.limits, limitsAt: now.Add(-40 * time.Minute), limitsAsked: now.Add(-time.Minute)}
 	if !w.limitsDue(now) {
-		t.Error("a reset since the reading makes the CLI due")
+		t.Error("a reset since the reading makes the cache due")
 	}
 	w.limitsAsked = now.Add(-5 * time.Second)
 	if w.limitsDue(now) {
 		t.Error("but no faster than a refresh may ask")
 	}
-	w.limitsAsked, w.limitsAt = now.Add(-time.Minute), now.Add(-10*time.Minute) // read after the reset
+	w.limitsAsked, w.limitsAt = now.Add(-20*time.Second), now.Add(-10*time.Minute) // read after the reset
 	if w.limitsDue(now) {
 		t.Error("a reading taken after the reset is current")
 	}

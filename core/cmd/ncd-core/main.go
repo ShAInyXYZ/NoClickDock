@@ -111,7 +111,7 @@ func main() {
 		collectors = widgets.Mocks(*live)
 	}
 
-	// No command the core started outlives it (a `claude -p` reading limits).
+	// No collector command the core started outlives it.
 	defer sys.StopAll()
 
 	if *once != "" {

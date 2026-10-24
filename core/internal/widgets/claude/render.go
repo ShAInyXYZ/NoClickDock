@@ -81,18 +81,22 @@ func limitTone(pct float64) model.Tone {
 	return model.ToneNone
 }
 
-// poll is one collect: the status page now, the CLI's limits and the
+// poll is one collect: the status page now, the cached limits and the
 // transcripts' spend as last read on their own cadences.
 type poll struct {
-	page     statuspage.Page
-	limits   []limit
-	limitsAt time.Time
-	usage    *usage // nil until the first scan has finished
-	now      time.Time
-	reading  bool // the CLI is being asked for the first time
+	page       statuspage.Page
+	limits     []limit
+	limitsAt   time.Time
+	usage      *usage // nil until the first scan has finished
+	now        time.Time
+	reading    bool // the cache is being read for the first time
+	limitsNote string
 }
 
 func render(p poll) model.Snapshot {
+	if !p.limitsAt.IsZero() && (p.now.Sub(p.limitsAt) > limitsMaxAge || p.limitsAt.After(p.now)) {
+		p.limits, p.limitsNote = nil, limitsStale
+	}
 	s := model.Snapshot{
 		Width:      440,
 		State:      statuspage.State(p.page),
@@ -132,24 +136,17 @@ func lapsed(l limit, now time.Time) bool { return !l.Resets.IsZero() && !l.Reset
 
 func usageBlocks(p poll) model.Blocks {
 	has := p.usage != nil && p.usage.Available
-	if len(p.limits) == 0 && p.reading {
-		// Not "no plan limits": the CLI has not answered yet.
-		out := model.Blocks{model.Section{Title: "Usage"}, model.Note{Text: "Plan limits · reading…", Tone: model.ToneIdle}}
-		if !has {
-			return out
-		}
-		return append(out, spendBlocks(p.usage)...)
-	}
-	if len(p.limits) == 0 && !has {
-		if p.usage == nil {
-			return nil // the first scan has not finished: nothing to say yet
-		}
-		return model.Blocks{
-			model.Section{Title: "Usage"},
-			model.Empty{Text: "No Claude Code sessions on this machine in the last 7 days."},
-		}
-	}
 	out := model.Blocks{model.Section{Title: "Usage"}}
+	if len(p.limits) == 0 && p.reading {
+		out = append(out, model.Note{Text: "Plan limits · reading…", Tone: model.ToneIdle})
+	} else if p.limitsNote != "" {
+		out = append(out, model.Note{Text: p.limitsNote, Tone: model.ToneIdle})
+	} else if len(p.limits) == 0 {
+		out = append(out, model.Note{Text: limitsMissing, Tone: model.ToneIdle})
+	}
+	if len(p.limits) == 0 && !has && p.usage != nil {
+		out = append(out, model.Empty{Text: "No Claude Code sessions on this machine in the last 7 days."})
+	}
 	for _, l := range p.limits {
 		if lapsed(l, p.now) {
 			// Read before its reset: what is used now is unknown until the

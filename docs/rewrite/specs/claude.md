@@ -37,27 +37,37 @@ code`, `Claude Cowork` → `cowork`, `Claude for Government` → `gov`,
 the page. N: skip Statuspage group containers (`"group": true`) if they ever
 appear, keep the rest.
 
-### 2. Plan limits — `claude -p /usage` (every 300 s, own goroutine)
+### 2. Plan limits — local quota cache (every 30 s, own goroutine)
 
-- Command `claude -p /usage`, timeout **45 s**, stdout parsed line by line
-  (trimmed) with (case-insensitive):
-  `^Current\s+(session|week)\s*(?:\(([^)]+)\))?\s*:\s*(\d+(?:\.\d+)?)\s*%\s*used(?:\s*[·•-]\s*resets\s+(.+?))?\s*$`
-- Label: qualifier starting with `all` → `WEEK`; other qualifier → the
-  qualifier upper-cased (a per-model week, e.g. `FABLE`); no qualifier →
-  `SESSION` or `WEEK`. N: `Session`, `Week`, `Week · <model>` in the UI.
-- Resets: trailing `(Time/Zone)` stripped (`Sep 5, 3:59pm (Europe/Paris)` →
-  `Sep 5, 3:59pm`).
-- Order as printed (session, all-model week, per-model weeks).
-- Empty result (CLI missing, timeout, wording changed) → **keep the previous
-  rows** (P only replaces on a non-empty parse) and omit the section when
-  there never were any.
-- Binary: Linux `claude` on PATH (also `~/.local/bin/claude`, `~/.claude/local/claude`).
-  Windows: `claude.exe` (native installer, `%USERPROFILE%\.local\bin`) or the
-  npm shim `%APPDATA%\npm\claude.cmd`; a `.cmd` must be run as `cmd.exe /d /c
-  claude.cmd -p /usage` (fixed argv, no user input) with `CREATE_NO_WINDOW`.
-  The CLI's working directory: the user's home (P: inherited cwd).
-- **M4 must re-verify the output format** against the installed CLI and store
-  a fixture (numbers only, invented reset times, no timezone of the user).
+Read `cachedUsageUtilization` from `~/.claude.json` on Linux or
+`%USERPROFILE%\.claude.json` on Windows. An explicit `CLAUDE_CONFIG_DIR`
+selects `<dir>/.claude.json`; never fall back to another profile. This is the
+numeric observation Claude Code persists for `/usage`, verified with Claude
+Code 2.1.303. Its internal schema may change in later versions.
+
+- `fetchedAtMs` supplies the observation time; reading the file never makes
+  an old value look fresh. Honor the CLI's one-hour persisted-cache lifetime.
+- Check the cache's `accountUuid` against `oauthAccount.accountUuid`. Clear
+  old limits on logout, account change, cache removal, or expiration.
+- `utilization.five_hour` → Session; `seven_day` → Week; optional
+  `seven_day_opus`, `seven_day_sonnet`, `seven_day_oauth_apps`, and
+  `seven_day_cowork` → scoped weekly rows. Each contains `utilization`
+  (0–100, including a genuine zero) and optional RFC3339 `resets_at`.
+- Null, malformed, or absent windows are skipped independently. Unknown
+  fields are ignored. A reset that has passed shows a note, never an old bar.
+- Transient read/partial-write failures keep the last unexpired observation
+  with an error note. Empty, unavailable, and stale caches explain how to
+  obtain a reading, including when local token totals are already available.
+- Open `/usage` in an up-to-date, signed-in Claude Code to populate/refresh
+  the cache; NCD's Refresh now rereads it. Older versions without this cache,
+  API-only accounts without plan quotas, and WSL profiles separate from the
+  Windows user's profile may have no bars. NCD does not install hooks or
+  change Claude settings.
+- The reader is bounded to 8 MiB, decodes only usage/account fields and never
+  logs raw configuration or JSON errors. It does not read credential stores,
+  call private authenticated APIs, or run `claude -p /usage`. The latter is
+  prompt mode, not a stable machine-readable usage endpoint, and was the
+  source of silently missing bars and unnecessary CLI sessions.
 
 ### 3. Token spend — local transcripts (every 120 s)
 
@@ -142,7 +152,7 @@ N mapping onto the hub rule (dock-core §5.4):
 P → N blocks:
 
 1. P badge = description upper-cased → N header LED + stateLabel.
-2. **Usage** (`section "Usage"`, only when limits or usage exist):
+2. **Usage** (`section "Usage"`, including a note when plan limits are unavailable):
    - per limit row: P one line `LABEL | pill meter | 54% | resets Sep 5,
      3:59pm`, colour by 75/90 → N `limit {label, pct, resets, tone}` (tone
      `warn` ≥ 75, `crit` ≥ 90, else none — DESIGN A6: no green bars).
@@ -184,15 +194,15 @@ None (no legacy file). Possible N option (not P): hide the Usage section.
 
 ## Windows
 
-Status page identical. Transcripts `%USERPROFILE%\.claude\projects`. CLI as
-above (`claude.exe` or `claude.cmd` through `cmd.exe /d /c`, never a shell
-string). Everything else identical.
+Status page and quota-cache reader are identical. Transcripts live in
+`%USERPROFILE%\.claude\projects`. No CLI, npm shim, Bash, or PowerShell
+process is needed to read usage limits.
 
 ## Subtle behaviours to keep
 
-- Limits come only from the CLI (the only authoritative percent-of-limit);
-  token counts are local and never presented as a percentage.
-- Limits refresh on their own slow cadence and survive failed CLI calls.
+- Limits come only from Claude Code’s numeric quota observations; token
+  counts are local and never presented as a percentage.
+- Limits survive transient cache read failures until the observation expires.
 - Usage before services before incidents (the headline is how much of the plan
   is gone).
 - `<synthetic>` model entries excluded from the model split.
@@ -208,7 +218,8 @@ string). Everything else identical.
 ## Tests (M4)
 
 Fixtures: status/components/incidents JSON (invented incident), unreachable;
-`/usage` output lines (session, all-models week, per-model week, with/without
-resets, with timezone suffix, a changed wording that must not match); a
+numeric cache windows (session, week, scoped weeks, zero/null/malformed
+percentages, optional resets), observation freshness, logout/account changes,
+partial writes, bounded reads, and default/override profile paths; a
 transcript directory with duplicated streamed lines, `<synthetic>` model, a
 subagents file, a line > 64 KB, an unparsable line. Assert de-dup totals.
