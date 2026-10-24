@@ -168,6 +168,7 @@
         <figure class="Sheet-window" data-surface="settings">
           <Settings
             config={core.config}
+            serverSettings={core.snapshots.localservers?.settings}
             {titles}
             platform={core.platform}
             save={async () => ({ ok: true })}

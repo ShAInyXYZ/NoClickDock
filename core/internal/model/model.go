@@ -63,6 +63,7 @@ type Snapshot struct {
 	Error     string     `json:"error,omitempty"`
 	Width     int        `json:"width,omitempty"` // preferred panel width, logical px; 0 = the UI default
 	Pages     []Page     `json:"pages"`
+	Settings  Blocks     `json:"settings,omitempty"` // secondary controls, shown only in Settings
 	Footer    string     `json:"footer,omitempty"`
 	Menu      []MenuItem `json:"menu,omitempty"`
 

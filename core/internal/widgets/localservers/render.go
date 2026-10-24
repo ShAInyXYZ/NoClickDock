@@ -88,31 +88,47 @@ func render(all []server, other bool, pending, failures, logs map[string]string)
 		if a.Protected != "" {
 			sub += " · protected"
 		}
-		page.Blocks = append(page.Blocks, model.Row{Name: port, Sub: sub, Value: status, LED: led, Actions: controls})
-		if msg := failures[a.Key]; msg != "" {
-			page.Blocks = append(page.Blocks, model.Note{Text: msg, Tone: model.ToneCrit})
-			s.State = model.StateWarn
-		}
+		// The address is the server identity and its browser shortcut. Keep one
+		// row per endpoint; process controls occur only on the first endpoint.
 		if a.Running {
-			for _, e := range a.Endpoints {
+			for i, e := range a.Endpoints {
 				id := a.Key + ":" + strconv.Itoa(e.Port)
 				open, copy := "open:"+id, "copy:"+id
 				s.Menu = append(s.Menu, model.MenuItem{ID: open, Label: "Open " + safeText(a.Name) + " :" + strconv.Itoa(e.Port), URL: e.URL()}, model.MenuItem{ID: copy, Label: "Copy local URL", Copy: e.URL()})
-				page.Blocks = append(page.Blocks, model.Row{Name: e.URL(), Actions: []model.Action{{ID: open, Label: "open"}, {ID: copy, Label: "copy"}}})
+				buttons := []model.Action{{ID: copy, Label: "copy"}}
+				if i == 0 {
+					buttons = append(buttons, controls...)
+				}
+				page.Blocks = append(page.Blocks, model.Row{Name: strings.TrimPrefix(e.URL(), "http://"), Sub: sub, Value: status, LED: led, NameAction: &model.Action{ID: open, Label: "Open " + e.URL()}, Actions: buttons})
 			}
+		} else {
+			page.Blocks = append(page.Blocks, model.Row{Name: port, Sub: sub, Value: status, LED: led, Actions: controls})
+		}
+		if msg := failures[a.Key]; msg != "" {
+			page.Blocks = append(page.Blocks, model.Note{Text: msg, Tone: model.ToneCrit})
+			s.State = model.StateWarn
 		}
 		if a.Protected != "" {
 			page.Blocks = append(page.Blocks, model.Note{Text: a.Protected})
 		} else if a.Dev {
 			if a.Unit != "" {
 				if a.RestartReason != "" {
-					page.Blocks = append(page.Blocks, model.Note{Text: a.RestartReason})
+					s.Settings = append(s.Settings, model.Section{Title: safeText(a.Name) + " · " + port}, model.Note{Text: a.RestartReason})
 				}
 				page.Blocks = append(page.Blocks, model.Row{Name: "User service", Sub: safeText(a.Unit), Actions: []model.Action{action("logs", "logs", a.Key)}})
 			} else {
-				page.Blocks = append(page.Blocks, model.Row{Name: "Launch command", Sub: map[bool]string{true: "registered · clean environment", false: "not registered"}[a.RestartReason == ""], Actions: []model.Action{control("register", "register", a.Key)}})
+				// Registration is configuration, not part of the running preview.
+				label := "not registered"
+				if a.RestartReason == "" {
+					label = "registered · clean environment"
+				}
+				s.Settings = append(s.Settings,
+					model.Section{Title: safeText(a.Name) + " · " + port},
+					model.Row{Name: safeText(a.Dir), Mono: true},
+					model.Row{Name: "Launch command", Sub: label, Actions: []model.Action{control("register", "edit launch", a.Key)}},
+				)
 				if a.RestartReason != "" {
-					page.Blocks = append(page.Blocks, model.Note{Text: a.RestartReason})
+					s.Settings = append(s.Settings, model.Note{Text: a.RestartReason})
 				}
 			}
 		}
@@ -133,6 +149,9 @@ func render(all []server, other bool, pending, failures, logs map[string]string)
 	if len(stopped.Blocks) == 0 {
 		stopped.Blocks = append(stopped.Blocks, model.Empty{Text: "No development servers have stopped since NCD started."})
 	}
+	if len(s.Settings) == 0 {
+		s.Settings = model.Blocks{model.Empty{Text: "No servers need a launch command. Servers managed by a user service use their existing configuration."}}
+	}
 	s.StateLabel = fmt.Sprintf("%d running", running)
 	s.Glance = model.Glance{Text: strconv.Itoa(running)}
 	if s.State == model.StateBusy {
@@ -150,5 +169,5 @@ func render(all []server, other bool, pending, failures, logs map[string]string)
 	return s
 }
 func unavailable(reason string) model.Snapshot {
-	return model.Snapshot{Width: 440, State: model.StateIdle, StateLabel: "discovery unavailable", Glance: model.Glance{Text: "—", Tone: model.ToneIdle}, Pages: []model.Page{{ID: "now", Blocks: model.Blocks{model.Empty{Text: strings.TrimSpace(reason)}, model.Row{Name: "Local Servers", Actions: []model.Action{{ID: "refresh", Label: "refresh"}}}}}}, Footer: "retrying every 10 s"}
+	return model.Snapshot{Settings: model.Blocks{model.Empty{Text: strings.TrimSpace(reason)}}, Width: 440, State: model.StateIdle, StateLabel: "discovery unavailable", Glance: model.Glance{Text: "—", Tone: model.ToneIdle}, Pages: []model.Page{{ID: "now", Blocks: model.Blocks{model.Empty{Text: strings.TrimSpace(reason)}, model.Row{Name: "Local Servers", Actions: []model.Action{{ID: "refresh", Label: "refresh"}}}}}}, Footer: "retrying every 10 s"}
 }

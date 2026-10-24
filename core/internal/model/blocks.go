@@ -48,13 +48,14 @@ type Section struct {
 
 // Row is a name, an optional quiet line under it, and a right-aligned value.
 type Row struct {
-	Name    string   `json:"name"`
-	Sub     string   `json:"sub,omitempty"`
-	Value   string   `json:"value,omitempty"`
-	Tone    Tone     `json:"tone,omitempty"` // the value's tone
-	LED     Tone     `json:"led,omitempty"`  // a leading LED, when set
-	Mono    bool     `json:"mono,omitempty"` // the name is an identifier, not prose
-	Actions []Action `json:"actions,omitempty"`
+	Name       string   `json:"name"`
+	Sub        string   `json:"sub,omitempty"`
+	Value      string   `json:"value,omitempty"`
+	Tone       Tone     `json:"tone,omitempty"`       // the value's tone
+	LED        Tone     `json:"led,omitempty"`        // a leading LED, when set
+	Mono       bool     `json:"mono,omitempty"`       // the name is an identifier, not prose
+	NameAction *Action  `json:"nameAction,omitempty"` // optional shortcut on the row name
+	Actions    []Action `json:"actions,omitempty"`
 }
 
 // Meter is anything bounded: label, a segmented level, the value spelled out.

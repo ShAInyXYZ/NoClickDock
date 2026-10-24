@@ -573,7 +573,7 @@ func actionKey(req model.Request) string {
 }
 
 // offered reports whether a snapshot carries this action with exactly these
-// arguments, as a button on some page or as a menu item.
+// arguments, as a button on a page, in Settings, or as a menu item.
 func offered(s model.Snapshot, action string, args map[string]string) bool {
 	for _, m := range s.Menu {
 		if m.ID == action && m.URL == "" && m.Copy == "" && len(args) == 0 {
@@ -585,7 +585,7 @@ func offered(s model.Snapshot, action string, args map[string]string) bool {
 			return true
 		}
 	}
-	return false
+	return offeredIn(s.Settings, action, args)
 }
 
 func offeredIn(blocks model.Blocks, action string, args map[string]string) bool {
@@ -593,7 +593,10 @@ func offeredIn(blocks model.Blocks, action string, args map[string]string) bool 
 		var acts []model.Action
 		switch v := b.(type) {
 		case model.Row:
-			acts = v.Actions
+			acts = append(acts, v.Actions...)
+			if v.NameAction != nil {
+				acts = append(acts, *v.NameAction)
+			}
 		case model.Alert:
 			acts = v.Actions
 		case model.Split:

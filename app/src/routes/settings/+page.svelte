@@ -38,6 +38,7 @@
   {#if core.config}
     <Settings
       config={core.config}
+      serverSettings={core.snapshots.localservers?.settings}
       {titles}
       platform={core.platform}
       debugBuild={import.meta.env.DEV}

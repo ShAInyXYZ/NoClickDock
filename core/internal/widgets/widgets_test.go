@@ -52,6 +52,7 @@ func check(t *testing.T, id string, s model.Snapshot) {
 	for _, p := range s.Pages {
 		walk(t, id, p.Blocks)
 	}
+	walk(t, id, s.Settings)
 	if _, err := json.Marshal(s); err != nil {
 		t.Errorf("%s: %v", id, err)
 	}
@@ -88,6 +89,9 @@ func walk(t *testing.T, id string, blocks model.Blocks) {
 func actionsOf(b model.Block) []model.Action {
 	switch v := b.(type) {
 	case model.Row:
+		if v.NameAction != nil {
+			return append(append([]model.Action{}, v.Actions...), *v.NameAction)
+		}
 		return v.Actions
 	case model.Alert:
 		return v.Actions

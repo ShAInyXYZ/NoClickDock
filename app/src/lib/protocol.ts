@@ -15,7 +15,7 @@ export interface Action {
 
 export interface SectionBlock { kind: "section"; title: string; meta?: string; tone?: Tone }
 export interface RowBlock {
-  kind: "row"; name: string; sub?: string; value?: string; tone?: Tone; led?: Tone; mono?: boolean; actions?: Action[];
+  kind: "row"; name: string; sub?: string; value?: string; tone?: Tone; led?: Tone; mono?: boolean; nameAction?: Action; actions?: Action[];
 }
 export interface MeterBlock {
   kind: "meter"; label: string; frac: number; value?: string; note?: string; tone?: Tone; mono?: boolean;
@@ -69,6 +69,8 @@ export interface WidgetSnapshot {
   /** Preferred panel width in logical px; absent means --panel-w. */
   width?: number;
   pages: Page[];
+  /** Secondary widget controls, shown only in Settings. */
+  settings?: Block[];
   footer?: string;
   /** Right-click entries; one with `url` or `copy` is handled by the shell itself. */
   menu?: { id: string; label: string; url?: string; copy?: string }[];

@@ -223,3 +223,9 @@ Core's cached menu, and validates web URLs with the existing `web_page` guard.
 It cannot accept commands or paths. All process controls remain hub-validated
 stdio actions; Local Servers actions and asks are refused by the development
 HTTP transport. See [Local Servers](specs/local-servers.md).
+
+Widget snapshots may carry optional `settings` blocks, rendered only in the
+Settings window. They use the existing block/action components and the hub's
+exact snapshot-action argument checks. A row's optional `nameAction` makes its
+name a keyboard-accessible shortcut; URL shortcuts still resolve through the
+snapshot menu, never a frontend-supplied URL or command.

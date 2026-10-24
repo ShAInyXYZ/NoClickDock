@@ -1,7 +1,8 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import Blocks from "$lib/panel/Blocks.svelte";
   import { marks } from "$lib/marks";
-  import type { Config, DeepPartial, Edge, PowerConfig, WidgetConfig } from "$lib/protocol";
+  import type { Block, Config, DeepPartial, Edge, PowerConfig, WidgetConfig } from "$lib/protocol";
   import Choice from "./Choice.svelte";
   import Field from "./Field.svelte";
   import { presets } from "./presets";
@@ -31,8 +32,10 @@
     controls,
     platform = "linux",
     debugBuild = false,
+    serverSettings,
   }: {
     config: Config;
+    serverSettings?: Block[];
     titles: Record<string, string>;
     save: (patch: DeepPartial<Config>) => Promise<Saved>;
     ask: (widget: string, what: string, args?: Record<string, string>) => Promise<Answer>;
@@ -334,6 +337,22 @@
           {#if draft.start}<Switch bind:checked={draft.start.launchAtLogin} label="Launch NoClickDock at login" onchange={() => changed()} />{/if}
         </div>
       </section>
+
+      {#if draft.widgets?.localservers}
+        <section aria-labelledby="s-localservers">
+          <h2 id="s-localservers">Local Servers</h2>
+          <p class="Line-hint">Register launch commands here to enable restart. Edit launch opens a private file; save it in your editor. NCD checks it on the next refresh.</p>
+          {#if platform !== "linux"}
+            <p class="Probe">Local server discovery currently requires Linux.</p>
+          {:else if !draft.widgets.localservers.enabled}
+            <p class="Probe">Enable Local Servers and save to discover servers.</p>
+          {:else if serverSettings}
+            <Blocks blocks={serverSettings} widget="localservers" />
+          {:else}
+            <p class="Probe">Waiting for local server discovery…</p>
+          {/if}
+        </section>
+      {/if}
 
       {#if tailscale}
         <section aria-labelledby="s-tailscale">

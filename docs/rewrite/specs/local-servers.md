@@ -107,3 +107,15 @@ sibling preservation, exit races, stale identity/socket refusal, port reuse,
 registered handoff and start-after-stop, manager restart, stopped journal access,
 registration validation, credential exclusion and HTTP action denial. Systemd
 tests skip if the host has no user manager. No existing server is controlled.
+
+## Compact preview and launch settings
+
+Each running endpoint has one address row, with runtime/PID, status, copy and
+available process controls. The address opens its full local URL through the
+same snapshot-owned native menu shortcut. Multiple ports share process controls
+on the first endpoint only. No separate port-only row is drawn.
+
+Launch registration and missing-launch explanations live in Settings → Local
+Servers, including stopped servers. The private-file editor workflow and
+identity checks are unchanged. Registration requires the existing second click;
+commands are never copied into the snapshot or settings window.

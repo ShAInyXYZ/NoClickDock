@@ -10,14 +10,20 @@
   // `mono` means the name is a path (A18).
   let { block, widget }: { block: RowBlock; widget: string } = $props();
   // A failed action says why under the row that ran it (M2-a).
-  const failure = $derived(actions.failureOf(widget, block.actions));
+  const failure = $derived(actions.failureOf(widget, [...(block.actions ?? []), ...(block.nameAction ? [block.nameAction] : [])]));
 </script>
 
 <div class="Row">
   <div class="Row-line">
     <span class="Row-text" class:has-led={!!block.led}>
       {#if block.led}<Led tone={block.led} />{/if}
-      <span class="Row-name" class:is-mono={block.mono} title={block.name}>{block.name}</span>
+      {#if block.nameAction}
+        <button type="button" class="Row-name Row-link" class:is-mono={block.mono}
+          title={block.nameAction.label} aria-label={block.nameAction.label}
+          onclick={() => actions.press(widget, block.nameAction!)}>{block.name}</button>
+      {:else}
+        <span class="Row-name" class:is-mono={block.mono} title={block.name}>{block.name}</span>
+      {/if}
       {#if block.sub}<span class="Row-sub" title={block.sub}>{block.sub}</span>{/if}
     </span>
     {#if block.value}<span class="Row-value" data-tone={block.tone} title={block.value}>{block.value}</span>{/if}
@@ -73,6 +79,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .Row-link { max-width: 100%; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line2); text-underline-offset: 3px; }
+  .Row-link:hover { text-decoration-color: currentColor; }
+  .Row-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r); }
   .Row-name.is-mono { font: 400 var(--fs-small)/18px var(--font-mono); }
   .Row-sub {
     display: block;

@@ -732,3 +732,18 @@ func TestAsksAreAnswered(t *testing.T) {
 		t.Error("an ask without an id")
 	}
 }
+
+func TestSettingsActionsRemainSnapshotBound(t *testing.T) {
+	args := map[string]string{"server": "123:1"}
+	s := model.Snapshot{Settings: model.Blocks{model.Row{Name: "Launch command", Actions: []model.Action{{ID: "register", Args: args}}}}}
+	if !offered(s, "register", args) {
+		t.Fatal("Settings action refused")
+	}
+	if offered(s, "register", map[string]string{"server": "456:1"}) || offered(s, "restart", args) {
+		t.Fatal("unoffered Settings action authorized")
+	}
+	s.Settings = nil
+	if offered(s, "register", args) {
+		t.Fatal("stale Settings action authorized")
+	}
+}
