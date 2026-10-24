@@ -42,7 +42,7 @@
     debugBuild?: boolean;
   } = $props();
 
-  const IDS = ["claude", "codex", "comfyui", "disk", "docker", "power", "tailscale"] as const;
+  const IDS = ["claude", "codex", "comfyui", "disk", "docker", "localservers", "power", "tailscale"] as const;
   type Id = (typeof IDS)[number];
 
   const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));

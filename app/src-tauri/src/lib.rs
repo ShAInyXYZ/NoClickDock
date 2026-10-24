@@ -135,6 +135,7 @@ pub fn run() {
             toast::toast_layout,
             toast::toast_dismiss,
             menu::dial_menu,
+            menu::widget_menu_action,
             menu::rail_menu,
             page_error,
         ])

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/hub"
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/model"
 )
 
 // DevOrigins are the Vite dev servers allowed to read the development API:
@@ -81,6 +82,12 @@ func Handler(ctx context.Context, h *hub.Hub, addr string) http.Handler {
 		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxLine))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+			return
+		}
+		// Local process management is desktop stdio only, even in --dev.
+		var request model.Request
+		if json.Unmarshal(body, &request) == nil && request.Widget == "localservers" && (request.Type == "action" || request.Type == "ask") {
+			http.Error(w, "Local Servers controls require the desktop app", http.StatusForbidden)
 			return
 		}
 		if err := h.Handle(ctx, body); err != nil {

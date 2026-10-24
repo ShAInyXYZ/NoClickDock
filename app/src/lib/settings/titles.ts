@@ -6,6 +6,7 @@ export const titles: Record<string, string> = {
   comfyui: "ComfyUI",
   disk: "Disk",
   docker: "Docker",
+  localservers: "Local Servers",
   power: "Power",
   tailscale: "Tailscale",
 };

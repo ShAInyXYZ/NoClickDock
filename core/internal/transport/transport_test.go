@@ -180,3 +180,16 @@ func TestStdioWritesStateAndReadsRequests(t *testing.T) {
 		t.Fatal("stdin EOF did not end the transport")
 	}
 }
+
+func TestLocalServerControlsNeverReachHTTP(t *testing.T) {
+	h, ctx := running(t)
+	for _, origin := range []string{"", "http://localhost:1420"} {
+		for _, action := range []string{"stop", "restart", "register", "logs"} {
+			body := `{"type":"action","id":"fixture","widget":"localservers","action":"` + action + `","args":{"server":"1:1"}}`
+			w := request(t, Handler(ctx, h, addr), "POST", "/v1/send", origin, body)
+			if w.Code != http.StatusForbidden {
+				t.Fatalf("%s with origin %q reached HTTP: %d", action, origin, w.Code)
+			}
+		}
+	}
+}

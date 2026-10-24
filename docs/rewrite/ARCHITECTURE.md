@@ -213,3 +213,13 @@ Windows is a first-class target, not a port afterwards:
   `~/.local/share/noclickdock` or the running Python widgets.
 - The repository is public: fixtures and mocks use invented names only —
   no real hostnames, tailnet addresses, container names, GPU UUIDs or serials.
+
+### Local Servers row shortcuts
+
+Local Servers uses the existing Row/Section/Note blocks and Action shape. A row
+Action whose ID matches a snapshot MenuItem with `url` or `copy` invokes that
+same shell shortcut. `widget_menu_action` accepts only widget/item IDs, re-reads
+Core's cached menu, and validates web URLs with the existing `web_page` guard.
+It cannot accept commands or paths. All process controls remain hub-validated
+stdio actions; Local Servers actions and asks are refused by the development
+HTTP transport. See [Local Servers](specs/local-servers.md).

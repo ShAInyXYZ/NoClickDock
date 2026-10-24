@@ -2,6 +2,8 @@
 package widgets
 
 import (
+	"path/filepath"
+
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/config"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/hub"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/widgets/claude"
@@ -9,6 +11,7 @@ import (
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/widgets/comfyui"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/widgets/disk"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/widgets/docker"
+	"github.com/ShAInyXYZ/NoClickDock/core/internal/widgets/localservers"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/widgets/power"
 	"github.com/ShAInyXYZ/NoClickDock/core/internal/widgets/tailscale"
 )
@@ -25,7 +28,7 @@ func Real(cfg *config.Store, powerLog string) []hub.Collector {
 	endpoint := func() config.ComfyUI { return cfg.Get().Widgets.ComfyUI }
 	tariff := func() config.Power { return cfg.Get().Widgets.Power }
 	return []hub.Collector{
-		claude.New(), codex.New(), comfyui.New(endpoint), disk.New(), docker.New(),
+		claude.New(), codex.New(), comfyui.New(endpoint), disk.New(), docker.New(), localservers.New(filepath.Dir(cfg.Path())),
 		power.New(tariff, powerLog), tailscale.New(watch),
 	}
 }
@@ -37,7 +40,7 @@ func Mocks(live bool) []hub.Collector {
 	var out []hub.Collector
 	for _, m := range []hub.Mocker{
 		claude.Mock{}, codex.Mock{}, comfyui.Mock{}, disk.New(),
-		docker.Mock{}, power.Mock{}, tailscale.Mock{},
+		docker.Mock{}, localservers.Mock{}, power.Mock{}, tailscale.Mock{},
 	} {
 		out = append(out, hub.Mocked(m, live))
 	}

@@ -110,6 +110,7 @@ export interface Config {
     comfyui?: WidgetConfig & { host: string; port: number };
     disk?: WidgetConfig;
     docker?: WidgetConfig;
+    localservers?: WidgetConfig;
     power?: PowerConfig;
     /** watch: null watches every peer seen online since the core started. */
     tailscale?: WidgetConfig & { watch: string[] | null };

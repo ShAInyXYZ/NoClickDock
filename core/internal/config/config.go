@@ -29,13 +29,14 @@ type Start struct {
 
 // Widgets holds each widget's place on the rail and its own options.
 type Widgets struct {
-	Claude    Widget    `json:"claude"`
-	Codex     Widget    `json:"codex"`
-	ComfyUI   ComfyUI   `json:"comfyui"`
-	Disk      Widget    `json:"disk"`
-	Docker    Widget    `json:"docker"`
-	Power     Power     `json:"power"`
-	Tailscale Tailscale `json:"tailscale"`
+	Claude       Widget    `json:"claude"`
+	Codex        Widget    `json:"codex"`
+	ComfyUI      ComfyUI   `json:"comfyui"`
+	Disk         Widget    `json:"disk"`
+	Docker       Widget    `json:"docker"`
+	LocalServers Widget    `json:"localservers"`
+	Power        Power     `json:"power"`
+	Tailscale    Tailscale `json:"tailscale"`
 }
 
 // Widget is what every widget has: whether it runs (a disabled widget has
@@ -58,6 +59,8 @@ func (w Widgets) Of(id string) (Widget, bool) {
 		return w.Disk, true
 	case "docker":
 		return w.Docker, true
+	case "localservers":
+		return w.LocalServers, true
 	case "power":
 		return w.Power.Widget, true
 	case "tailscale":
@@ -81,7 +84,7 @@ func (w Widgets) Section(id string) any {
 }
 
 // IDs is every widget, in the default rail order.
-var IDs = []string{"claude", "codex", "comfyui", "disk", "docker", "power", "tailscale"}
+var IDs = []string{"claude", "codex", "comfyui", "disk", "docker", "localservers", "power", "tailscale"}
 
 // ComfyUI is the server the ComfyUI widget watches.
 type ComfyUI struct {
@@ -144,11 +147,12 @@ func Default() Config {
 		Dock:  Dock{Orientation: "vertical", Density: "normal", Readouts: true},
 		Start: Start{LaunchAtLogin: true},
 		Widgets: Widgets{
-			Claude:  on(10),
-			Codex:   on(20),
-			ComfyUI: ComfyUI{Widget: on(30), Host: "127.0.0.1", Port: 8188},
-			Disk:    on(40),
-			Docker:  on(50),
+			Claude:       on(10),
+			Codex:        on(20),
+			ComfyUI:      ComfyUI{Widget: on(30), Host: "127.0.0.1", Port: 8188},
+			Disk:         on(40),
+			Docker:       on(50),
+			LocalServers: on(55),
 			Power: Power{
 				Widget:      on(60),
 				PricePerKWh: 0.30, Currency: "EUR", OverheadWatts: 30, PeripheralWatts: 5,

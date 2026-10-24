@@ -2,6 +2,7 @@
 // arguments rather than held by the button: a snapshot rebuilds every row,
 // and an arming that vanished with the old row would silently eat the
 // user's first click on a destructive action.
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { core } from "./core.svelte";
 import type { Action } from "./protocol";
 
@@ -59,6 +60,21 @@ class Actions {
     delete this.armed[key];
     this.#started(widget, key);
     try {
+      // Row shortcuts use the same snapshot-owned URL/copy entries as the native menu.
+      const item = core.snapshots[widget]?.menu?.find((item) => item.id === action.id);
+      if (item?.url || item?.copy) {
+        if (isTauri()) {
+          await invoke("widget_menu_action", { widget, id: action.id });
+        } else if (item.copy) {
+          await navigator.clipboard.writeText(item.copy);
+        } else if (item.url) {
+          const url = new URL(item.url);
+          if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) throw new Error("Invalid web address");
+          window.open(url.href, "_blank", "noopener,noreferrer");
+        }
+        delete this.running[key];
+        return;
+      }
       // The broadcast result settles running and failed in every window.
       await core.act(widget, action);
     } catch (error) {

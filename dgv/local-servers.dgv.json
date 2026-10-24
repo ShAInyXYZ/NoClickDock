@@ -1,0 +1,309 @@
+{
+  "dgv": 1,
+  "meta": {
+    "title": "Local Servers",
+    "description": "Passive Linux socket discovery; identity-bound controls over existing stdio. No process actions over the development HTTP transport.",
+    "updated": "2026-10-24",
+    "colorBy": "kind"
+  },
+  "frames": [],
+  "nodes": [
+    {
+      "ports": [
+        {
+          "id": "actions",
+          "protocol": "stdio",
+          "dir": "out"
+        }
+      ],
+      "tags": [],
+      "id": "panel",
+      "kind": "ui",
+      "label": "Shared Docker-style panel",
+      "path": "app/src/lib/panel/Panel.svelte",
+      "position": {
+        "x": 0,
+        "y": 135
+      },
+      "status": "done"
+    },
+    {
+      "ports": [
+        {
+          "id": "ui",
+          "protocol": "stdio",
+          "dir": "in"
+        },
+        {
+          "id": "proc",
+          "protocol": "fs",
+          "dir": "out"
+        },
+        {
+          "id": "manager",
+          "protocol": "exec",
+          "dir": "out"
+        },
+        {
+          "id": "launches",
+          "protocol": "fs",
+          "dir": "out"
+        }
+      ],
+      "tags": [],
+      "id": "servers",
+      "kind": "module",
+      "label": "Local Servers collector and actor",
+      "path": "core/internal/widgets/localservers",
+      "position": {
+        "x": 324,
+        "y": 129
+      },
+      "status": "done"
+    },
+    {
+      "ports": [
+        {
+          "id": "read",
+          "protocol": "fs",
+          "dir": "in"
+        }
+      ],
+      "tags": [],
+      "id": "proc",
+      "kind": "storage",
+      "label": "Linux /proc + pidfd",
+      "position": {
+        "x": 648,
+        "y": 278
+      },
+      "status": "done"
+    },
+    {
+      "ports": [
+        {
+          "id": "control",
+          "protocol": "exec",
+          "dir": "in"
+        }
+      ],
+      "tags": [],
+      "id": "manager",
+      "kind": "program",
+      "label": "Verified systemd user services",
+      "position": {
+        "x": 648,
+        "y": 143
+      },
+      "status": "done"
+    },
+    {
+      "ports": [
+        {
+          "id": "read",
+          "protocol": "fs",
+          "dir": "in"
+        }
+      ],
+      "tags": [],
+      "id": "launches",
+      "kind": "storage",
+      "label": "User-edited launch registrations",
+      "position": {
+        "x": 648,
+        "y": 0
+      },
+      "status": "done"
+    }
+  ],
+  "edges": [
+    {
+      "kind": "sync",
+      "id": "ui",
+      "source": "panel",
+      "target": "servers",
+      "protocol": "stdio",
+      "label": "Offered actions only",
+      "sourcePort": "actions",
+      "targetPort": "ui"
+    },
+    {
+      "kind": "data",
+      "id": "proc",
+      "source": "servers",
+      "target": "proc",
+      "protocol": "fs",
+      "label": "Passive scan; verify identity",
+      "sourcePort": "proc",
+      "targetPort": "read"
+    },
+    {
+      "kind": "control",
+      "id": "manager",
+      "source": "servers",
+      "target": "manager",
+      "protocol": "exec",
+      "label": "Validated unit / direct argv",
+      "sourcePort": "manager",
+      "targetPort": "control"
+    },
+    {
+      "kind": "data",
+      "id": "launches",
+      "source": "servers",
+      "target": "launches",
+      "protocol": "fs",
+      "label": "Private config; no shell RPC",
+      "sourcePort": "launches",
+      "targetPort": "read"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-24T14:55:10.464Z",
+      "by": "agent",
+      "type": "node",
+      "id": "panel",
+      "op": "add",
+      "kind": "ui",
+      "label": "Shared Docker-style panel"
+    },
+    {
+      "at": "2026-10-24T14:55:10.464Z",
+      "by": "agent",
+      "type": "node",
+      "id": "servers",
+      "op": "add",
+      "kind": "module",
+      "label": "Local Servers collector and actor"
+    },
+    {
+      "at": "2026-10-24T14:55:10.464Z",
+      "by": "agent",
+      "type": "node",
+      "id": "proc",
+      "op": "add",
+      "kind": "storage",
+      "label": "Linux /proc + pidfd"
+    },
+    {
+      "at": "2026-10-24T14:55:10.464Z",
+      "by": "agent",
+      "type": "node",
+      "id": "manager",
+      "op": "add",
+      "kind": "program",
+      "label": "Verified systemd user services"
+    },
+    {
+      "at": "2026-10-24T14:55:10.464Z",
+      "by": "agent",
+      "type": "node",
+      "id": "launches",
+      "op": "add",
+      "kind": "storage",
+      "label": "User-edited launch registrations"
+    },
+    {
+      "at": "2026-10-24T14:55:10.464Z",
+      "by": "agent",
+      "type": "edge",
+      "id": "ui",
+      "op": "add",
+      "kind": "sync",
+      "label": "panel → servers"
+    },
+    {
+      "at": "2026-10-24T14:55:10.464Z",
+      "by": "agent",
+      "type": "edge",
+      "id": "proc",
+      "op": "add",
+      "kind": "data",
+      "label": "servers → proc"
+    },
+    {
+      "at": "2026-10-24T14:55:10.464Z",
+      "by": "agent",
+      "type": "edge",
+      "id": "manager",
+      "op": "add",
+      "kind": "control",
+      "label": "servers → manager"
+    },
+    {
+      "at": "2026-10-24T14:55:10.464Z",
+      "by": "agent",
+      "type": "edge",
+      "id": "launches",
+      "op": "add",
+      "kind": "data",
+      "label": "servers → launches"
+    },
+    {
+      "at": "2026-10-24T15:13:24.666Z",
+      "by": "agent",
+      "type": "node",
+      "id": "panel",
+      "op": "change",
+      "fields": [
+        {
+          "field": "status",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-24T15:13:24.666Z",
+      "by": "agent",
+      "type": "node",
+      "id": "servers",
+      "op": "change",
+      "fields": [
+        {
+          "field": "status",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-24T15:13:24.666Z",
+      "by": "agent",
+      "type": "node",
+      "id": "proc",
+      "op": "change",
+      "fields": [
+        {
+          "field": "status",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-24T15:13:24.666Z",
+      "by": "agent",
+      "type": "node",
+      "id": "manager",
+      "op": "change",
+      "fields": [
+        {
+          "field": "status",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-24T15:13:24.666Z",
+      "by": "agent",
+      "type": "node",
+      "id": "launches",
+      "op": "change",
+      "fields": [
+        {
+          "field": "status",
+          "to": "done"
+        }
+      ]
+    }
+  ]
+}

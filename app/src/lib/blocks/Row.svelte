@@ -17,8 +17,8 @@
   <div class="Row-line">
     <span class="Row-text" class:has-led={!!block.led}>
       {#if block.led}<Led tone={block.led} />{/if}
-      <span class="Row-name" class:is-mono={block.mono}>{block.name}</span>
-      {#if block.sub}<span class="Row-sub">{block.sub}</span>{/if}
+      <span class="Row-name" class:is-mono={block.mono} title={block.name}>{block.name}</span>
+      {#if block.sub}<span class="Row-sub" title={block.sub}>{block.sub}</span>{/if}
     </span>
     {#if block.value}<span class="Row-value" data-tone={block.tone} title={block.value}>{block.value}</span>{/if}
     {#if block.actions?.length}

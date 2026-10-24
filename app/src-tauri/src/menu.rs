@@ -322,6 +322,23 @@ fn widget_item(app: &AppHandle, widget: &str, id: &str) {
     }
 }
 
+/// Row shortcut to a URL/copy item already offered in the latest snapshot.
+/// The webview supplies an ID, never a URL, file path or command.
+#[tauri::command]
+pub fn widget_menu_action(app: AppHandle, widget: String, id: String) -> Result<(), String> {
+    let items = app.state::<core::Core>().menu_of(&widget);
+    let item = items.iter().find(|i| i.get("id").and_then(Value::as_str) == Some(id.as_str()))
+        .ok_or("This shortcut is no longer available; refresh")?;
+    if let Some(raw) = item.get("url").and_then(Value::as_str) {
+        let url = web_page(raw).ok_or("Invalid web address")?;
+        app.opener().open_url(url.as_str(), None::<&str>).map_err(|_| "Could not open the browser".to_string())
+    } else if let Some(text) = item.get("copy").and_then(Value::as_str) {
+        app.clipboard().write_text(text).map_err(|_| "Could not copy the URL".to_string())
+    } else {
+        Err("This item is not a web or clipboard shortcut".into())
+    }
+}
+
 /// Only web pages: a snapshot never gets to launch a program or open a file.
 /// Parsed, not prefix-matched: http or https exactly, a host, no user or
 /// password, nothing hidden in control characters or spaces.
